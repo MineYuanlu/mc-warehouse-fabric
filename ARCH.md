@@ -41,7 +41,7 @@
 │  ┌──────────────────────────────────────────────┐ │
 │  │              Mixin 层                         │ │
 │  │  ContainerScreenMixin / WorldRenderMixin     │ │
-│  │  MultiPlayerGameModeMixin / MinecraftMixin    │ │
+│  │  MultiPlayerGameModeMixin                     │ │
 │  └──────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────┘
 ```
@@ -57,7 +57,8 @@ bid.yuanlu.mcwarehouse
 │   ├── RuleController.java             # 物品规则 CRUD
 │   ├── WarehouseController.java        # 仓库管理（激活/显示）
 │   ├── PathfindingController.java      # 寻路/搬运流程编排
-│   └── ContainerController.java        # 容器记忆/交互
+│   ├── ContainerController.java        # 容器记忆/交互
+│   └── HighlightController.java       # 高亮管理
 │
 ├── command                             # View: 命令层
 │   ├── WarehouseCommand.java           # /warehouse 命令入口注册
@@ -66,7 +67,7 @@ bid.yuanlu.mcwarehouse
 │       ├── RuleSubCommand.java         # /warehouse rule
 │       ├── ContainerSubCommand.java    # /warehouse container
 │       ├── RunSubCommand.java          # /warehouse run
-│       ├── HighlightSubCommand.java    # /warehouse highlight
+│       ├── WarehouseSubCommand.java    # /warehouse warehouse (CRUD + 高亮)
 │       └── ConfigSubCommand.java       # /warehouse config
 │
 ├── engine                              # Service/Engine 层
@@ -81,10 +82,10 @@ bid.yuanlu.mcwarehouse
 │   ├── pathfinder
 │   │   ├── PathExecutor.java           # 路径执行器接口
 │   │   └── executors/
-│   │       ├── SimpleWalkExecutor.java   # 步行寻路
-│   │       ├── CreativeFlightExecutor.java # 创造飞行
-│   │       ├── PortalExecutor.java      # 跨维度传送门
-│   │       └── HybridExecutor.java      # 可配置的复合执行器
+│   │       ├── SimpleWalkExecutor.java   # 步行寻路 (已实现，状态机完成但不控制移动)
+│   │       ├── CreativeFlightExecutor.java # 创造飞行 TODO
+│   │       ├── PortalExecutor.java      # 跨维度传送门 TODO
+│   │       └── HybridExecutor.java      # 可配置的复合执行器 TODO
 │   └── highlight
 │       ├── HighlightManager.java       # 高亮管理器
 │       └── ContainerOutlineRenderer.java # WorldRenderer 渲染
@@ -94,6 +95,7 @@ bid.yuanlu.mcwarehouse
 │   ├── ContainerInfo.java              # 容器信息
 │   ├── ContainerType.java              # INPUT / OUTPUT / RELAY / IGNORE
 │   ├── ContainerMemory.java            # 容器内容记忆
+│   ├── ContainerSnapshot.java          # 容器快照 (内存快照)
 │   ├── rule
 │   │   ├── ItemRule.java               # 单条规则 = Selector + Quantifier
 │   │   ├── ItemRules.java              # 命名规则组，包含多个 ItemRule
@@ -120,7 +122,7 @@ bid.yuanlu.mcwarehouse
 │   ├── WorldConfigStorage.java         # world.json 读写
 │   └── PathfinderDataStorage.java      # 路径数据读写
 │
-├── mixin                               # Mixin 注入
+├── mixin                               # Mixin 注入 (TODO / 待实现)
 │   ├── ContainerScreenMixin.java       # 容器 GUI 操作
 │   ├── WorldRendererMixin.java         # 高亮渲染
 │   └── MultiPlayerGameModeMixin.java   # 交互发包
@@ -143,6 +145,7 @@ public class Warehouse {
     BlockPos anchor;                    // 基准点（绝对坐标）
     boolean active;                     // 是否激活（用于搬运）
     List<ContainerInfo> containers;     // 容器列表
+    Map<String, ItemRules> rules;       // 命名规则组 (详见 2.3)
 }
 ```
 
@@ -368,7 +371,7 @@ public interface PathExecutor {
 - `FAILED`：无法继续前进（超时/卡住/路径不可达）
 - `DONE`：所有目标点均已到达，任务完成
 
-#### 外部编排流程
+#### 外部编排流程 (设计目标)
 
 ```
 1. Controller.setTargets(容器坐标列表)
@@ -385,6 +388,8 @@ public interface PathExecutor {
    e. 如果 DONE → 结束
 3. 所有目标点均完成 → 结束
 ```
+
+> **当前实现状态：** `PathfindingController` 尚未接入 `PathExecutor` 接口，而是自有一套简化版 tick 循环直接调用 `ContainerController.executeTransfer()` 依次处理容器，跳过了实际玩家移动。后续需重构为上述编排流程。
 
 #### 执行器类型
 
@@ -423,7 +428,7 @@ public class ContainerInteractor {
     int speed;
     
     /** 对一个容器执行搬运（调用方在 ARRIVED 后调用） */
-    void execute(ContainerInfo info, ContainerSnapshot actual);
+    void execute(ContainerInfo info, ContainerSnapshot actual);  // TODO: 空桩
     
     /** 计算输入/输出方案 */
     TransferPlan calculatePlan(ContainerInfo info, ContainerSnapshot actual);
@@ -432,6 +437,8 @@ public class ContainerInteractor {
     void applyPlan(TransferPlan plan);
 }
 ```
+
+> **当前实现状态：** `execute()` 和 `applyPlan()` 是空桩 (`// Stub — will be driven by ContainerScreenMixin`)。`captureCurrentScreen()` 和 `capturePlayerInventory()` 已实现。核心物品移动逻辑需等 `ContainerScreenMixin` 完成后补充。
 
 **搬运逻辑：**
 
@@ -445,6 +452,8 @@ public class ContainerInteractor {
 ### 4.3 高亮系统 (HighlightManager)
 
 通过 WorldRenderer Mixin 实现 BlockPos 级别的轮廓渲染。
+
+> **当前实现状态：** `ContainerOutlineRenderer.render()` 是空桩 (`// Stub — WorldRendererMixin will wire up rendering`)。颜色映射和 `HighlightManager` 管理逻辑已完整实现。实际渲染需等 `WorldRendererMixin` 完成后恢复（之前有完整实现但被临时打桩，详见 `plan/summary.md` 的 commit 分析）。
 
 ```java
 public class HighlightManager {
@@ -674,11 +683,13 @@ public interface WarehouseEventBus {
 
 ## 九、里程碑建议
 
-| 阶段 | 内容 | 产出 |
-|------|------|------|
-| **M1** | 数据模型 + 存储层 | 可创建/编辑/保存仓库和规则 |
-| **M2** | 命令系统 + Controller | 完整的 `/warehouse` 命令 |
-| **M3** | 容器交互 + 记忆 | 可执行容器内物品搬运 |
-| **M4** | 高亮渲染 | 容器可视化 |
-| **M5** | 路径执行器 | 完整的自动搬运流程 |
-| **M6** | 优化 + UI 接口 | EventBus + 为 UI 做好准备 |
+| 阶段 | 内容 | 产出 | 当前进度 |
+|------|------|------|---------|
+| **M1** | 数据模型 + 存储层 | 可创建/编辑/保存仓库和规则 | **~95%** ✅ |
+| **M2** | 命令系统 + Controller | 完整的 `/warehouse` 命令 | **~90%** ✅ (命令端缺部分Selector类型) |
+| **M3** | 容器交互 + 记忆 | 可执行容器内物品搬运 | **~50%** 🟡 (记忆完成，execute空桩) |
+| **M4** | 高亮渲染 | 容器可视化 | **~40%** 🟡 (Manager完成，render空桩) |
+| **M5** | 路径执行器 | 完整的自动搬运流程 | **~20%** 🔴 (仅SimpleWalk，未接PathExecutor) |
+| **M6** | 优化 + UI 接口 | EventBus + 为 UI 做好准备 | **0%** ⚪ |
+
+> 详见 [`plan/summary.md`](plan/summary.md) 的完整分析及后续开发优先级建议。
