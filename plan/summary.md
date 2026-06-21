@@ -1,94 +1,117 @@
-# 项目代码与 ARCH.md 实现进度对比 (2026-06-21 更新)
+# 项目进度总结
 
-## 代码现状总结 vs ARCH.md
+## 项目状态
 
-### 📊 整体进度
+- 构建通过 ✅
+- 可以进游戏测试部分功能（数据管理：创建仓库、选择区域、添加容器、创建规则、列出信息、数据持久化）
+- 核心自动化功能不能正常工作（不会自动移动玩家、不会渲染高亮、不会合理搬运物品、规则无法绑定到容器）
 
-| M# | 里程碑 | 进度 | 说明 |
-|----|--------|------|------|
-| **M1** | 数据模型 + 存储层 | **~95%** | 模型20个文件全部就位，存储4个文件完整，JSON序列化/反序列化完全实现 |
-| **M2** | 命令系统 + Controller | **~90%** | 6个Controller + 7个命令文件全部实现；命令树完整可用 |
-| **M3** | 容器交互 + 记忆 | **~70%** | 🟡 execute() 已完整实现，ContainerScreenMixin 已存在并注册，但旧版 `ClickType` API 导致编译失败 |
-| **M4** | 高亮渲染 | **~60%** | 🟡 render() 已完整实现，HighlightManager 完成，但 MC 26.1 渲染 API 变更导致编译失败，缺 WorldRendererMixin |
-| **M5** | 路径执行器 | **~25%** | 🔴 PathfindingController 已接入 PathExecutor 接口，但仅 SimpleWalkExecutor 可用且不控制玩家移动 |
-| **M6** | UI接口+EventBus | **0%** | ⚪ 没有任何 EventBus、UI 友好接口或监听系统 |
+## ARCH.md 变化
 
-### 🔴 关键差异 (实际代码 vs ARCH.md 设计)
+从 d340b38 (Init) 到 ff2328d8 (当前版本)，主要变化：
 
-| 差异项 | ARCH.md 设计 | 实际代码 |
-|--------|-------------|---------|
-| **包结构** | `src/client/java/` + `src/main/java/` 分离 | **全部在 `src/main/java/` 下** |
-| **Mixin 基础设施** | 无 mixins.json，Mixin 待实现 | **已就位**：`mc-warehouse.mixins.json` + `fabric.mod.json` mixins 声明已配齐 |
-| **Mixin 完成度** | 3个 Mixin 均未实现 | **2/3 已实现**：`ContainerScreenMixin` + `MultiPlayerGameModeMixin`，仅缺 `WorldRendererMixin` |
-| **ContainerInteractor** | execute()/applyPlan() 是空桩 | **execute() 已完整实现**（调用 `menu.clicked()` 执行 `QUICK_MOVE`），但使用已移除的 `ClickType` API |
-| **ContainerOutlineRenderer** | render() 是空桩 | **render() 已完整实现**（调用 `LevelRenderer.renderLineBox()`），但使用已移除的旧版 API |
-| **PathfindingController** | 未接入 PathExecutor | **已接入**：使用 `executor.tick()` 状态机处理 MOVING/ARRIVED/FAILED/DONE |
-| **HighlightSubCommand** | 独立的 `HighlightSubCommand.java` | **不存在**，功能合并到 `WarehouseSubCommand.java` |
-| **DataStorage<T> 接口** | 存储层实现该接口 | **定义了但无人实现**，各 Storage 自己定义方法签名 |
-| **ContainerSnapshot.java** | 未在模型树中列出 | **真实存在**，被 ContainerMemory 引用 |
-| **ContainerInfo.mode** | 字段名 `mode` | **字段名 `ruleMode`**，另含内部枚举 `RuleMode` 和 `defaultMode()` 静态方法 |
-| **[--pathfinder]** | RunSubCommand 接受参数 | 确实接受并传入 `PathfindingController`，但 switch 仅 `default -> SimpleWalkExecutor`，始终忽略该参数 |
-| **命令端规则创建** | 应支持所有 Selector/Quantifier 类型 | **仅支持 IdSelector + CountSelector**，其他类型只能 JSON 编辑 |
-| **Mixin `compatibilityLevel`** | 无要求 | 设为 `JAVA_21`，与项目目标 Java 25 不完全一致（但向下兼容） |
-| **ContainerController.onScreenClosed()** | 应记录记忆 | 捕获快照后**直接返回**，未实际更新记忆 |
+| 区域                 | 变化                                                                           |
+| -------------------- | ------------------------------------------------------------------------------ |
+| **§1.2 包结构**      | 扩展为"源集与包结构"，明确 `src/client/java/` 全部代码 + `src/main/java/` 为空 |
+| **controller 包**    | 新增 `HighlightController`                                                     |
+| **model 包**         | 新增 `ContainerSnapshot`，新增 `ContainerMemory` 描述                          |
+| **Mixin 标注**       | 从纯描述改为 "3/3 已完成 ✅"，标注注入方法和具体 API                           |
+| **§4.1 路径执行器**  | 新增实现状态段落（硬编码为 SimpleWalk、不控制移动）                            |
+| **§4.2 容器交互**    | 新增说明：`execute()` 已实现，`ClickType`→`ContainerInput`，构建通过           |
+| **§4.3 高亮**        | 新增说明：Gizmos API 重构完成，`WorldRendererMixin` 新建，构建通过             |
+| **§2.1 Warehouse**   | 新增 `Map<String, ItemRules> rules` 字段                                       |
+| **§八 技术决策**     | 新增"源集分离"行                                                               |
+| **§九 源集分离说明** | 新增完整一节：`splitEnvironmentSourceSets()` 配置详解                          |
+| **§里程碑**          | 从纯规划表变为进度跟踪表，M1~M6 全部标注百分比和状态图标                       |
 
-### ✅ 完整实现的部分（无编译问题）
+---
 
-- **Model层全20文件** — 全部完整实现，包括5个ItemSelector + 4个QuantitySelector + 4个config子包
-- **Storage层全4文件** — 包括带自定义类型适配器的 Gson 序列化（多态反序列化完整支持6+4种类型）
-- **Controller层全6文件** — 全部完整实现 (Selection/Rule/Warehouse/Pathfinding/Container/Highlight)
-- **Command层7/8文件** — 除HighlightSubCommand外全部存在且完整，命令树与设计基本一致
-- **Engine核心规则引擎** — RuleApplicator（196行，TransferPlan完整计算逻辑）/ ItemMatcher / QuantityCalculator 全部完成
-- **ContainerMemory/Scanner/HighlightManager** — 管理类全实现
-- **Util全3文件** — Constants / CoordinateUtils / CommandUtils 全部完成
-- **MCWarehouseClient入口** — 命令注册 + 事件接入
-- **Mixin基础设施** — `mc-warehouse.mixins.json` + `fabric.mod.json` mixins声明已就位
-- **ContainerScreenMixin** — 注入 `onClose` 到 `AbstractContainerScreen`
-- **MultiPlayerGameModeMixin** — 注入 `useItemOn` 到 `MultiPlayerGameMode`
+## 当前代码进度（探索结果综合）
 
-### ⚠️ 部分实现 / 需API迁移
+**`./gradlew build` ✅ 通过，不会崩溃。**
 
-- **ContainerInteractor.execute()** — 逻辑完整但使用已移除的 `ClickType` API（需改为 `ContainerInput`）
-- **ContainerOutlineRenderer.render()** — 逻辑完整但使用已移除的 API（`RenderType.LINES`、`LevelRenderer.renderLineBox()`、`Camera.getPosition()`）
-- **MCWarehouseClient** — `WorldRenderEvents.AFTER_ENTITIES` 注册失败（Fabric API 版本问题）
-- **SimpleWalkExecutor** — 有完整状态机但不控制实际移动（只检测距离）
-- **ContainerController.onScreenClosed()** — 捕获快照后未更新记忆
-- **PathfindingController.onBlockInteraction()** — 方法体为空
+但核心自动化**还不能用**。可以把它当成"仓库数据管理工具"先测试，不能当成"自动搬运 mod"用。
 
-### ❌ 完全未实现
+### ✅ 可以测试的部分（数据管理工具）
 
-- **WorldRendererMixin** — 不存在（渲染改由 `WorldRenderEvents` 事件驱动，不再需要此 Mixin）
-- **CreativeFlightExecutor / PortalExecutor / HybridExecutor** — 3个路径执行器未实现
-- **EventBus / UI接口** — 未开始
+```
+/warehouse warehouse create test      → 创建并激活仓库，锚点设为当前位置
+/warehouse select pos1 / pos2          → 设置选择区域
+/warehouse container add INPUT          → 扫描区域内的容器并加入仓库
+/warehouse rule create myrule          → 创建规则组
+/warehouse rule add myrule --id minecraft:diamond --count 64
+/warehouse warehouse list              → 列出仓库
+/warehouse container list              → 列出容器
+/warehouse config show                 → 查看配置
+```
 
-### 🏗️ 构建状态 (已修复 ✅)
+**所有数据都会保存到 `<game-dir>/mc-warehouse/` 的 JSON 文件中，重启后还在。**
 
-**构建已通过**。8个编译错误全部修复：
+### ❌ 还不能用的核心功能（4个关键阻塞）
 
-| # | 文件 | 错误 | 修复方案 |
-|---|------|------|---------|
-| 1 | `ContainerInteractor.java` | `ClickType` 不存在 | 改为 `ContainerInput` + `ContainerInput.QUICK_MOVE` |
-| 2 | `ContainerOutlineRenderer.java` | 多处 API 不兼容 (`RenderType`, `renderLineBox`, `camera.getPosition`) | 整体改用 MC 26.1 **Gizmos API**：`Gizmos.cuboid()` + `GizmoStyle.stroke()` |
-| 3 | `MCWarehouseClient.java` | `WorldRenderEvents` 在 Fabric API 26.1 中已移除 | 删除旧注册逻辑，改为 `WorldRendererMixin` |
-| 4 | 新增 `WorldRendererMixin` | 无（新文件） | 注入 `LevelRenderer.collectPerFrameGizmos()`（@At("RETURN")），调用 `ContainerOutlineRenderer.renderGizmos()` |
+| 阻塞项               | 严重程度 | 说明                                                                                                                          |
+| -------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **不会自动移动玩家** | **P0**   | `SimpleWalkExecutor` 只检测距离（2格内算到达），从不发送移动输入/数据包。跑 `/warehouse run` 后你需要**手动走到每个容器旁边** |
+| **高亮不渲染**       | **P0**   | `HighlightController.showWarehouse()` 计算出位置列表但**从没推给 `HighlightManager`**，WorldRenderer Mixin 读不到任何数据     |
+| **物品操作瞬间连点** | **P1**   | `ContainerInteractor.execute()` 在一帧内发完所有 `menu.clicked()`，没做 tick 间隔控制，容易被反作弊拦截                       |
+| **规则无法绑定容器** | **P1**   | 命令端没有 `/warehouse container rules add <ruleName>` 之类的指令，`ContainerInfo.rulesNames` 永远是空的                      |
 
-### 📈 总结
+### 其他小问题
 
-项目处于 **M2→M3 过渡阶段**，相比上次评估的重大变化：
+- `onScreenClosed()`（Mixin 注入容器关闭时）捕获了快照后什么都不做
+- `MultiPlayerGameModeMixin` 注入的 `onBlockInteraction()` 是空方法
+- 命令端 rule parser 只支持 `--id/--count/--negate`，不支持 tag/name/nbt/fill/group/percent
 
-1. **Mixin 层全部就位**：3个Mixin全部实现并注册（新增 `WorldRendererMixin`），不再缺失
-2. **ContainerInteractor 和 ContainerOutlineRenderer 已有完整逻辑**：不再是空桩，已适配 MC 26.1 API
-3. **构建已通过**：无编译错误
-4. **核心矛盾**：从"构建失败/API不兼容" → "核心交互逻辑仍需完善"（`onBlockInteraction` 为空的、路径执行器不控制移动等）
+---
 
-### 📈 后续开发优先级建议（更新版）
+## 结论和建议
 
-| 优先级 | 任务 | 涉及里程碑 | 前置依赖 |
-|--------|------|-----------|---------|
-| **P1** | 修复 `ContainerController.onScreenClosed()` — 实际更新记忆 | M3 | 无 |
-| **P1** | 实现 `PathfindingController.onBlockInteraction()` — 拦截手动交互 | M3 | 无 |
-| **P1** | 命令端 `RuleSubCommand` 支持更多 Selector/Quantifier 类型 | M2 | 无 |
-| **P2** | `PathfindingController` 支持切换 `PathExecutor` 类型（switch 添加分支） | M5 | 无 |
-| **P3** | 实现 `CreativeFlightExecutor` / `PortalExecutor` / `HybridExecutor` | M5 | P2 |
-| **P4** | EventBus 事件系统 + Controller UI 友好接口 | M6 | 稳定后 |
-| **P4** | `DataStorage<T>` 接口落地（或废弃） | — | 无 |
+**现在可以先进游戏做一次"数据管理"测试**，验证这些链路：
+
+1. 命令是否正常注册和响应
+2. 区域选择是否能正确扫描容器
+3. 仓库/容器/规则的数据是否正确写入 JSON
+4. 数据重启后是否加载正常
+
+**但不建议现在做"自动搬运"测试**，因为 `/warehouse run` 需要玩家手动走到每个容器旁边，且搬运逻辑因为没有绑定的规则而不生效。
+
+如果你想继续开发，优先级最高的两件事是：
+
+1. **让 `SimpleWalkExecutor` 真正控制移动**（输入模拟或发包）
+2. **修复高亮渲染**（`HighlightController.showWarehouse()` 把位置推给 `HighlightManager`）
+
+---
+
+# 附录
+
+## 可用命令
+
+```
+/warehouse warehouse create <name>     → Creates + activates warehouse at player pos
+/warehouse warehouse list               → Lists warehouses
+/warehouse warehouse activate <name>    → Activates warehouse
+/warehouse warehouse deactivate         → Deactivates
+/warehouse warehouse delete <name>      → Deletes warehouse
+/warehouse select pos1                  → Sets selection corner 1
+/warehouse select pos2                  → Sets selection corner 2
+/warehouse select expand <dir> <amount> → Expands selection
+/warehouse select show                  → Shows selection bounds
+/warehouse container add <type>         → Scans selection, adds containers
+/warehouse container remove             → Removes containers in selection
+/warehouse container list               → Lists containers in active warehouse
+/warehouse container type <type>        → Changes type of selected containers
+/warehouse container mode <mode>        → Changes mode of selected containers
+/warehouse container info               → Info for block player is looking at
+/warehouse container memory show        → Shows cached snapshot for container
+/warehouse container memory clear       → Clears all cached snapshots
+/warehouse rule create <name>           → Creates rule group
+/warehouse rule delete <name>           → Deletes rule group
+/warehouse rule list                    → Lists rule groups
+/warehouse rule show <name>             → Shows rules in group
+/warehouse rule add <name> <args>       → Adds rule (only --id/--count/--negate)
+/warehouse rule remove <name> <index>   → Removes rule by index
+/warehouse rule edit <name> <index>     → Edits rule by index
+/warehouse config show                  → Shows world config JSON
+/warehouse config set interaction.speed <n>
+/warehouse config reload                → Reloads config
+```

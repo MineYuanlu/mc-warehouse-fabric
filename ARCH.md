@@ -83,7 +83,7 @@ bid.yuanlu.mcwarehouse
 │   │   └── RuleApplicator.java         # 规则应用引擎（计算哪些物品该放/该拿）
 │   ├── container
 │   │   ├── ContainerInteractor.java    # 容器GUI自动化操作
-│   │   ├── ContainerMemoryManager.java # 容器记忆管理（纯内存）
+│   │   ├── ContainerMemoryManager.java # 容器记忆管理（包装层，⚠️ 当前未被使用）
 │   │   └── ContainerScanner.java       # 扫描区域内容器
 │   ├── pathfinder
 │   │   ├── PathExecutor.java           # 路径执行器接口
@@ -128,10 +128,10 @@ bid.yuanlu.mcwarehouse
 │   ├── WorldConfigStorage.java         # world.json 读写
 │   └── PathfinderDataStorage.java      # 路径数据读写
 │
-├── mixin                               # Mixin 注入 (3/3 已完成 ✅)
+├── mixin                               # Mixin 注入
 │   ├── ContainerScreenMixin.java       # 容器 GUI 操作 ✅ (注入 onClose)
 │   ├── WorldRendererMixin.java         # 高亮渲染 ✅ (注入 collectPerFrameGizmos，使用 Gizmos API)
-│   └── MultiPlayerGameModeMixin.java   # 交互发包 ✅ (注入 useItemOn)
+│   └── MultiPlayerGameModeMixin.java   # 交互发包 ⚠️ (注入 useItemOn，但 onBlockInteraction() 回调为空，未实现交互逻辑)
 │
 └── util
     ├── CoordinateUtils.java            # 坐标转换（相对↔绝对）
@@ -444,7 +444,9 @@ public class ContainerInteractor {
 }
 ```
 
-> **当前实现状态：** `execute()` 已完整实现（调用 `menu.clicked()` 执行 `QUICK_MOVE` 操作），`captureCurrentScreen()` 和 `capturePlayerInventory()` 均已实现。注意：`applyPlan()` 不存在作为独立方法，逻辑已合并入 `execute()`。当前代码使用旧版 `ClickType` API（已被 MC 26.1 的 `ContainerInput` 替代），**构建失败**，需进行 API 迁移。
+> **当前实现状态：** `execute()` 已完整实现（调用 `menu.clicked()` 执行 `QUICK_MOVE` 操作），`captureCurrentScreen()` 和 `capturePlayerInventory()` 均已实现。注意：`applyPlan()` 不存在作为独立方法，逻辑已合并入 `execute()`。MC 26.1 中 `ClickType` 已替换为 `ContainerInput`，**构建已通过**。
+>
+> ⚠️ **待完善：** `execute()` 在一帧内发送所有 `menu.clicked()` 调用，`speed` 字段和 `tick()` 方法存在但**未被调用来控制 tick 间隔**，可能导致服务器反作弊拦截。需将单次执行改为基于 `interaction.speed` 的逐 tick 调度。
 
 **搬运逻辑：**
 
@@ -459,7 +461,9 @@ public class ContainerInteractor {
 
 通过 WorldRenderer Mixin 实现 BlockPos 级别的轮廓渲染。
 
-> **当前实现状态：** `ContainerOutlineRenderer.render()` 已完整实现（遍历高亮列表，调用 `LevelRenderer.renderLineBox()` 渲染线框）。但当前 MC 26.1.2 中 `RenderType` 包路径已变更、`LevelRenderer.renderLineBox()` 已移除、`Camera.getPosition()` 已更名为 `position()`，因此 **构建失败**。`WorldRendererMixin` 确实不存在（渲染改由 `WorldRenderEvents` 事件驱动）。
+> **当前实现状态：** `ContainerOutlineRenderer.render()` 已完整实现（遍历高亮列表，调用 `Gizmos` API 渲染线框）。MC 26.1 中 `RenderType` 包路径已变更、`LevelRenderer.renderLineBox()` 已移除，均已适配 Gizmos API，`WorldRendererMixin` 已新建并注入 `collectPerFrameGizmos`，**构建已通过**。
+>
+> 🔴 **阻塞：** `HighlightController.showWarehouse()` 计算出位置列表后**未调用 `HighlightManager.setWarehouseHighlights()`**，导致 `HighlightManager` 始终为空，`WorldRendererMixin` 读不到任何数据，高亮**实际上不渲染**。
 
 ```java
 public class HighlightManager {
@@ -500,6 +504,8 @@ public class ContainerMemoryManager {
 }
 ```
 
+> ⚠️ **实现状态：** `ContainerMemoryManager` 为 `ContainerMemory` 的包装层，但 `ContainerController` 已直接持有 `ContainerMemory` 实例，该 Manager **当前未被使用**。`ContainerScreenMixin.onClose()` 回调至 `ContainerController.onScreenClosed()`，但后者捕获快照后**未执行存储或触发搬运逻辑**。
+
 ---
 
 ## 五、命令体系
@@ -528,12 +534,13 @@ public class ContainerMemoryManager {
 │   └── memory
 │       ├── show                # 查看记忆
 │       └── clear               # 清空记忆
+│   # 缺少：规则绑定命令（ContainerInfo.rulesNames 无命令写入）
 │
 ├── rule
 │   ├── list                    # 列出所有规则组
 │   ├── create <name>           # 创建规则组
 │   ├── delete <name>           # 删除规则组
-│   ├── add <name>              # 为规则组添加规则
+│   ├── add <name>              # 为规则组添加规则 ⚠️ (仅支持 --id / --count / --negate)
 │   ├── remove <name> <index>   # 删除规则组内规则
 │   ├── edit <name> <index>     # 修改规则
 │   └── show <name>             # 显示规则组详情
@@ -684,17 +691,43 @@ public interface WarehouseEventBus {
 | 坐标系统 | 相对坐标 + 基准点 | 方便整体平移，复用仓库配置 |
 | 规则匹配 | 单方法接口 + 策略选择器 | 简洁，易扩展 |
 | 寻路 | Executor 模式 + 状态机 | 支持多种移动方式，可扩展 |
+| **源集分离** | `splitEnvironmentSourceSets()` | 纯 client 模组，所有代码在 `src/client/java/`，`src/main/java/` 为空，具备编译期隔离 |
 
 ---
 
-## 九、里程碑建议
+## 九、源集分离说明
+
+本模组为 `environment: client` 纯客户端模组，无服务端逻辑。通过 Loom 的 `splitEnvironmentSourceSets()` 启用真正的源集分离：
+
+| 源集 | 目录 | 内容 |
+|------|------|------|
+| **client** | `src/client/java/` | 全部 54 个 `.java` 文件（MVC 分层 + Mixin + Engine + Storage + Util） |
+| **main (common)** | `src/main/java/` | **空** — 无跨环境共享代码 |
+| **main resources** | `src/main/resources/` | `fabric.mod.json`、assets、mixin 配置等资源文件 |
+
+`build.gradle` 中通过 `mods {}` 块将两个源集注册到同一模组 ID：
+```groovy
+loom {
+    splitEnvironmentSourceSets()
+    mods {
+        "mc-warehouse" {
+            sourceSet sourceSets.main
+            sourceSet sourceSets.client
+        }
+    }
+}
+```
+
+---
+
+## 十、里程碑建议
 
 | 阶段 | 内容 | 产出 | 当前进度 |
 |------|------|------|---------|
 | **M1** | 数据模型 + 存储层 | 可创建/编辑/保存仓库和规则 | **~95%** ✅ |
 | **M2** | 命令系统 + Controller | 完整的 `/warehouse` 命令 | **~90%** ✅ (命令端缺部分Selector类型) |
-| **M3** | 容器交互 + 记忆 | 可执行容器内物品搬运 | **~75%** 🟡 (execute完整实现，3个Mixin全部就位，构建已通过) |
-| **M4** | 高亮渲染 | 容器可视化 | **~70%** 🟡 (使用MC 26.1 Gizmos API重构完成，构建已通过) |
+| **M3** | 容器交互 + 记忆 | 可执行容器内物品搬运 | **~60%** 🟡 (execute 已实现，但 tick 间隔控制未接入 speed；onScreenClosed 回调为空) |
+| **M4** | 高亮渲染 | 容器可视化 | **~50%** 🟡 (Gizmos API 渲染层已实现，但 HighlightController 未推送给 HighlightManager，实际不渲染) |
 | **M5** | 路径执行器 | 完整的自动搬运流程 | **~25%** 🔴 (PathfindingController已接入PathExecutor接口，但仅SimpleWalk且不控制移动) |
 | **M6** | 优化 + UI 接口 | EventBus + 为 UI 做好准备 | **0%** ⚪ |
 
