@@ -1,0 +1,27 @@
+{
+	"schemaVersion": 1,
+	"id": "${mod_id}",
+	"version": "${mod_version}",
+	"name": "${mod_name}",
+	"description": "${mod_description}",
+	"authors": [
+		"${mod_author}"
+	],
+	"contact": {
+		"homepage": "https://yuanlu.bid",
+		"sources": "https://github.com/yuanlu/mc-warehouse"
+	},
+	"license": "${mod_license}",
+	"icon": "assets/${mod_id}/icon.png",
+	"environment": "client",
+	"entrypoints": {
+		"client": [
+			"${mod_group}.mcwarehouse.MCWarehouseClient"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.18.0",
+		"minecraft": "${minecraft_version_range}",
+		"java": ">=25"
+	}
+}
