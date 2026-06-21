@@ -19,6 +19,8 @@ src/
   client/java/bid/yuanlu/mcwarehouse/   # client-only code (entrypoint + mixins)
   main/java/bid/yuanlu/mcwarehouse/     # shared/common code (empty)
   main/resources/fabric.mod.json
+
+ref/doc/ # reference documentation
 ```
 
 - Mod ID: `mc-warehouse`, environment: `client` (pure client-side, no server logic).
