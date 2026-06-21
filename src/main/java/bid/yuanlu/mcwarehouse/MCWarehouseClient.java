@@ -1,11 +1,13 @@
 package bid.yuanlu.mcwarehouse;
 
-import bid.yuanlu.mcwarehouse.command.WarehouseCommand;
-import bid.yuanlu.mcwarehouse.controller.PathfindingController;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import bid.yuanlu.mcwarehouse.command.WarehouseCommand;
+import bid.yuanlu.mcwarehouse.controller.PathfindingController;
 
 public class MCWarehouseClient implements ClientModInitializer {
 
@@ -14,9 +16,11 @@ public class MCWarehouseClient implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
 		WarehouseCommand.register();
+
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			PathfindingController.getInstance().tick();
 		});
+
 		LOGGER.info("MC Warehouse client mod initialized!");
 	}
 }

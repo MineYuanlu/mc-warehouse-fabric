@@ -10,6 +10,9 @@ import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.ItemStack;
 
+import bid.yuanlu.mcwarehouse.engine.container.ContainerInteractor;
+import bid.yuanlu.mcwarehouse.engine.rule.RuleApplicator;
+import bid.yuanlu.mcwarehouse.engine.rule.RuleApplicator.TransferPlan;
 import bid.yuanlu.mcwarehouse.model.ContainerInfo;
 import bid.yuanlu.mcwarehouse.model.ContainerMemory;
 import bid.yuanlu.mcwarehouse.model.ContainerSnapshot;
@@ -55,27 +58,36 @@ public class ContainerController {
 		return null;
 	}
 
+	public void onScreenClosed() {
+		ContainerSnapshot snapshot = captureCurrentScreen();
+		if (snapshot == null) return;
+	}
+
 	public boolean executeTransfer(ContainerInfo info, BlockPos absolutePos, String warehouseName) {
 		Warehouse warehouse = storage.loadWarehouse(warehouseName);
-		if (warehouse == null) {
-			return false;
-		}
+		if (warehouse == null) return false;
+
 		ContainerSnapshot snapshot = memory.get(absolutePos);
 		if (snapshot == null) {
 			snapshot = captureCurrentScreen();
-			if (snapshot == null) {
-				return false;
-			}
+			if (snapshot == null) return false;
 		}
+
 		List<ItemRules> ruleSets = new ArrayList<>();
 		if (info.rulesNames != null && warehouse.rules != null) {
 			for (String name : info.rulesNames) {
 				ItemRules r = warehouse.rules.get(name);
-				if (r != null) {
-					ruleSets.add(r);
-				}
+				if (r != null) ruleSets.add(r);
 			}
 		}
+
+		ContainerSnapshot playerInv = new ContainerInteractor(2).capturePlayerInventory();
+		TransferPlan plan = RuleApplicator.calculatePlan(info, snapshot, warehouse.rules, playerInv);
+
+		if (plan != null) {
+			new ContainerInteractor(2).execute(plan);
+		}
+
 		boolean changed = false;
 		if (info.type == ContainerType.INPUT || info.type == ContainerType.RELAY) {
 			changed = processInput(snapshot, info.ruleMode, ruleSets);
@@ -83,7 +95,8 @@ public class ContainerController {
 		if (info.type == ContainerType.OUTPUT || info.type == ContainerType.RELAY) {
 			changed = processOutput(snapshot, info.ruleMode, ruleSets) || changed;
 		}
-		if (changed) {
+
+		if (changed || plan != null) {
 			memory.snapshot(absolutePos, snapshot);
 		}
 		return true;
@@ -95,9 +108,7 @@ public class ContainerController {
 		while (iter.hasNext()) {
 			Map.Entry<Integer, ItemStack> entry = iter.next();
 			ItemStack stack = entry.getValue();
-			if (stack.isEmpty()) {
-				continue;
-			}
+			if (stack.isEmpty()) continue;
 			if (shouldRemoveFromInput(stack, mode, ruleSets)) {
 				iter.remove();
 				changed = true;
@@ -109,9 +120,7 @@ public class ContainerController {
 	private boolean shouldRemoveFromInput(ItemStack stack, ContainerInfo.RuleMode mode, List<ItemRules> ruleSets) {
 		boolean anyMatch = false;
 		for (ItemRules rules : ruleSets) {
-			if (rules.rules == null) {
-				continue;
-			}
+			if (rules.rules == null) continue;
 			for (ItemRule rule : rules.rules) {
 				if (rule.selector != null && rule.selector.matches(stack)) {
 					anyMatch = !rule.negate;
@@ -127,15 +136,12 @@ public class ContainerController {
 
 	private boolean processOutput(ContainerSnapshot snapshot, ContainerInfo.RuleMode mode, List<ItemRules> ruleSets) {
 		Minecraft mc = Minecraft.getInstance();
-		if (mc.player == null) {
-			return false;
-		}
+		if (mc.player == null) return false;
+
 		boolean changed = false;
 		for (int i = 0; i < mc.player.getInventory().getContainerSize(); i++) {
 			ItemStack stack = mc.player.getInventory().getItem(i);
-			if (stack.isEmpty()) {
-				continue;
-			}
+			if (stack.isEmpty()) continue;
 			if (shouldAddToOutput(stack, mode, ruleSets)) {
 				mc.player.getInventory().setItem(i, ItemStack.EMPTY);
 				changed = true;
@@ -147,9 +153,7 @@ public class ContainerController {
 	private boolean shouldAddToOutput(ItemStack stack, ContainerInfo.RuleMode mode, List<ItemRules> ruleSets) {
 		boolean anyMatch = false;
 		for (ItemRules rules : ruleSets) {
-			if (rules.rules == null) {
-				continue;
-			}
+			if (rules.rules == null) continue;
 			for (ItemRule rule : rules.rules) {
 				if (rule.selector != null && rule.selector.matches(stack)) {
 					anyMatch = !rule.negate;

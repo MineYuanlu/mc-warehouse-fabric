@@ -1,0 +1,14 @@
+{
+	"required": true,
+	"minVersion": "0.8",
+	"package": "bid.yuanlu.mcwarehouse.mixin",
+	"compatibilityLevel": "JAVA_21",
+	"client": [
+		"ContainerScreenMixin",
+		"MultiPlayerGameModeMixin",
+		"WorldRendererMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

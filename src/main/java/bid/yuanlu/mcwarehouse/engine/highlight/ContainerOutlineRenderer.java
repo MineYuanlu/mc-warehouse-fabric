@@ -2,9 +2,9 @@ package bid.yuanlu.mcwarehouse.engine.highlight;
 
 import java.util.Map;
 
-import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.client.Camera;
-import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.core.BlockPos;
+import net.minecraft.gizmos.Gizmos;
+import net.minecraft.gizmos.GizmoStyle;
 
 import bid.yuanlu.mcwarehouse.engine.highlight.HighlightManager.HighlightType;
 
@@ -24,7 +24,14 @@ public class ContainerOutlineRenderer {
 		return COLORS.getOrDefault(type, 0xFFFFFF);
 	}
 
-	public static void render(PoseStack poseStack, MultiBufferSource bufferSource, Camera camera) {
-		// Stub — WorldRendererMixin will wire up rendering
+	public static void renderGizmos() {
+		Map<BlockPos, HighlightType> highlights = HighlightManager.getInstance().getHighlights();
+		if (highlights.isEmpty()) return;
+
+		for (var entry : highlights.entrySet()) {
+			BlockPos pos = entry.getKey();
+			int color = getColor(entry.getValue());
+			Gizmos.cuboid(pos, GizmoStyle.stroke(color));
+		}
 	}
 }
