@@ -122,10 +122,10 @@ bid.yuanlu.mcwarehouse
 │   ├── WorldConfigStorage.java         # world.json 读写
 │   └── PathfinderDataStorage.java      # 路径数据读写
 │
-├── mixin                               # Mixin 注入 (TODO / 待实现)
-│   ├── ContainerScreenMixin.java       # 容器 GUI 操作
-│   ├── WorldRendererMixin.java         # 高亮渲染
-│   └── MultiPlayerGameModeMixin.java   # 交互发包
+├── mixin                               # Mixin 注入 (3/3 已完成 ✅)
+│   ├── ContainerScreenMixin.java       # 容器 GUI 操作 ✅ (注入 onClose)
+│   ├── WorldRendererMixin.java         # 高亮渲染 ✅ (注入 collectPerFrameGizmos，使用 Gizmos API)
+│   └── MultiPlayerGameModeMixin.java   # 交互发包 ✅ (注入 useItemOn)
 │
 └── util
     ├── CoordinateUtils.java            # 坐标转换（相对↔绝对）
@@ -389,7 +389,7 @@ public interface PathExecutor {
 3. 所有目标点均完成 → 结束
 ```
 
-> **当前实现状态：** `PathfindingController` 尚未接入 `PathExecutor` 接口，而是自有一套简化版 tick 循环直接调用 `ContainerController.executeTransfer()` 依次处理容器，跳过了实际玩家移动。后续需重构为上述编排流程。
+> **当前实现状态：** `PathfindingController` 已完整接入 `PathExecutor` 接口，实现了 `setTargets() → tick() → pollArrived()` 状态机循环。但所有 `--pathfinder` 参数均硬编码为 `SimpleWalkExecutor`（switch 仅有 `default` 分支）。`SimpleWalkExecutor` 仅为距离检测状态机，**不控制玩家实际移动**。后续需实现其他执行器类型及实际移动控制。
 
 #### 执行器类型
 
@@ -438,7 +438,7 @@ public class ContainerInteractor {
 }
 ```
 
-> **当前实现状态：** `execute()` 和 `applyPlan()` 是空桩 (`// Stub — will be driven by ContainerScreenMixin`)。`captureCurrentScreen()` 和 `capturePlayerInventory()` 已实现。核心物品移动逻辑需等 `ContainerScreenMixin` 完成后补充。
+> **当前实现状态：** `execute()` 已完整实现（调用 `menu.clicked()` 执行 `QUICK_MOVE` 操作），`captureCurrentScreen()` 和 `capturePlayerInventory()` 均已实现。注意：`applyPlan()` 不存在作为独立方法，逻辑已合并入 `execute()`。当前代码使用旧版 `ClickType` API（已被 MC 26.1 的 `ContainerInput` 替代），**构建失败**，需进行 API 迁移。
 
 **搬运逻辑：**
 
@@ -453,7 +453,7 @@ public class ContainerInteractor {
 
 通过 WorldRenderer Mixin 实现 BlockPos 级别的轮廓渲染。
 
-> **当前实现状态：** `ContainerOutlineRenderer.render()` 是空桩 (`// Stub — WorldRendererMixin will wire up rendering`)。颜色映射和 `HighlightManager` 管理逻辑已完整实现。实际渲染需等 `WorldRendererMixin` 完成后恢复（之前有完整实现但被临时打桩，详见 `plan/summary.md` 的 commit 分析）。
+> **当前实现状态：** `ContainerOutlineRenderer.render()` 已完整实现（遍历高亮列表，调用 `LevelRenderer.renderLineBox()` 渲染线框）。但当前 MC 26.1.2 中 `RenderType` 包路径已变更、`LevelRenderer.renderLineBox()` 已移除、`Camera.getPosition()` 已更名为 `position()`，因此 **构建失败**。`WorldRendererMixin` 确实不存在（渲染改由 `WorldRenderEvents` 事件驱动）。
 
 ```java
 public class HighlightManager {
@@ -687,9 +687,9 @@ public interface WarehouseEventBus {
 |------|------|------|---------|
 | **M1** | 数据模型 + 存储层 | 可创建/编辑/保存仓库和规则 | **~95%** ✅ |
 | **M2** | 命令系统 + Controller | 完整的 `/warehouse` 命令 | **~90%** ✅ (命令端缺部分Selector类型) |
-| **M3** | 容器交互 + 记忆 | 可执行容器内物品搬运 | **~50%** 🟡 (记忆完成，execute空桩) |
-| **M4** | 高亮渲染 | 容器可视化 | **~40%** 🟡 (Manager完成，render空桩) |
-| **M5** | 路径执行器 | 完整的自动搬运流程 | **~20%** 🔴 (仅SimpleWalk，未接PathExecutor) |
+| **M3** | 容器交互 + 记忆 | 可执行容器内物品搬运 | **~75%** 🟡 (execute完整实现，3个Mixin全部就位，构建已通过) |
+| **M4** | 高亮渲染 | 容器可视化 | **~70%** 🟡 (使用MC 26.1 Gizmos API重构完成，构建已通过) |
+| **M5** | 路径执行器 | 完整的自动搬运流程 | **~25%** 🔴 (PathfindingController已接入PathExecutor接口，但仅SimpleWalk且不控制移动) |
 | **M6** | 优化 + UI 接口 | EventBus + 为 UI 做好准备 | **0%** ⚪ |
 
 > 详见 [`plan/summary.md`](plan/summary.md) 的完整分析及后续开发优先级建议。

@@ -1,4 +1,4 @@
-# 项目初期代码与ARCH.md实现进度对比
+# 项目代码与 ARCH.md 实现进度对比 (2026-06-21 更新)
 
 ## 代码现状总结 vs ARCH.md
 
@@ -6,93 +6,89 @@
 
 | M# | 里程碑 | 进度 | 说明 |
 |----|--------|------|------|
-| **M1** | 数据模型 + 存储层 | **~95%** | 模型20个文件全部就位（含额外ContainerSnapshot），存储4个文件完整，JSON序列化/反序列化完全实现 |
-| **M2** | 命令系统 + Controller | **~90%** | 6个Controller + 7个命令文件全部实现；`/warehouse`+`/wh` 命令树完整可用 |
-| **M3** | 容器交互 + 记忆 | **~50%** | 记忆管理/扫描完成，但 `ContainerInteractor.execute()` 是空桩，缺少Mixin驱动GUI自动化，实际无法搬运物品 |
-| **M4** | 高亮渲染 | **~40%** | HighlightManager/Color定义完成，但 `ContainerOutlineRenderer.render()` 是空桩，缺少 WorldRendererMixin 无法渲染到屏幕 |
-| **M5** | 路径执行器 | **~20%** | 接口定义 + SimpleWalkExecutor 完成（SimpleWalk也不控制玩家移动），缺 CreativeFlight/Portal/Hybrid 三个执行器 |
-| **M6** | UI接口+EventBus | **0%** | 没有任何 EventBus、UI 友好接口或监听系统 |
+| **M1** | 数据模型 + 存储层 | **~95%** | 模型20个文件全部就位，存储4个文件完整，JSON序列化/反序列化完全实现 |
+| **M2** | 命令系统 + Controller | **~90%** | 6个Controller + 7个命令文件全部实现；命令树完整可用 |
+| **M3** | 容器交互 + 记忆 | **~70%** | 🟡 execute() 已完整实现，ContainerScreenMixin 已存在并注册，但旧版 `ClickType` API 导致编译失败 |
+| **M4** | 高亮渲染 | **~60%** | 🟡 render() 已完整实现，HighlightManager 完成，但 MC 26.1 渲染 API 变更导致编译失败，缺 WorldRendererMixin |
+| **M5** | 路径执行器 | **~25%** | 🔴 PathfindingController 已接入 PathExecutor 接口，但仅 SimpleWalkExecutor 可用且不控制玩家移动 |
+| **M6** | UI接口+EventBus | **0%** | ⚪ 没有任何 EventBus、UI 友好接口或监听系统 |
 
 ### 🔴 关键差异 (实际代码 vs ARCH.md 设计)
 
 | 差异项 | ARCH.md 设计 | 实际代码 |
 |--------|-------------|---------|
-| **包结构** | `src/client/java/` + `src/main/java/` 分离 | **全部在 `src/main/java/` 下**（无client目录） |
-| **Mixin层** | 3-4个Mixin + mixins.json | **mixin/目录完全为空**，无mixins.json，fabric.mod.json无mixins条目 |
-| **HighlightSubCommand** | 独立的 `command/sub/HighlightSubCommand.java` | **不存在**，功能合并到 `WarehouseSubCommand.java` |
-| **PathfindingController** | 使用 `PathExecutor.tick()` 状态机 | **未使用PathExecutor**，自有一套简化版tick循环直接调用 `executeTransfer` |
-| **DataStorage<T> 接口** | 存储层实现该接口 | **定义了但无人实现**，各Storage自己定义方法签名 |
-| **ContainerSnapshot.java** | 未在模型树中列出 | **真实存在**，被ContainerMemory引用 |
-| **Warehouse.rules** | ARCH.md 类图只显示4个字段 | **实际有5个**：多了 `Map<String, ItemRules> rules`（JSON中确实有rules，类图遗漏） |
-| **[--pathfinder]** | RunSubCommand接受 `--pathfinder <type>` 参数 | 确实接受，但**PathfindingController完全忽略该参数**，不区分寻路方式 |
-| **命令端规则创建** | 应支持所有Selector/Quantifier类型 | **仅支持 IdSelector + CountSelector**，其他类型只能JSON编辑 |
+| **包结构** | `src/client/java/` + `src/main/java/` 分离 | **全部在 `src/main/java/` 下** |
+| **Mixin 基础设施** | 无 mixins.json，Mixin 待实现 | **已就位**：`mc-warehouse.mixins.json` + `fabric.mod.json` mixins 声明已配齐 |
+| **Mixin 完成度** | 3个 Mixin 均未实现 | **2/3 已实现**：`ContainerScreenMixin` + `MultiPlayerGameModeMixin`，仅缺 `WorldRendererMixin` |
+| **ContainerInteractor** | execute()/applyPlan() 是空桩 | **execute() 已完整实现**（调用 `menu.clicked()` 执行 `QUICK_MOVE`），但使用已移除的 `ClickType` API |
+| **ContainerOutlineRenderer** | render() 是空桩 | **render() 已完整实现**（调用 `LevelRenderer.renderLineBox()`），但使用已移除的旧版 API |
+| **PathfindingController** | 未接入 PathExecutor | **已接入**：使用 `executor.tick()` 状态机处理 MOVING/ARRIVED/FAILED/DONE |
+| **HighlightSubCommand** | 独立的 `HighlightSubCommand.java` | **不存在**，功能合并到 `WarehouseSubCommand.java` |
+| **DataStorage<T> 接口** | 存储层实现该接口 | **定义了但无人实现**，各 Storage 自己定义方法签名 |
+| **ContainerSnapshot.java** | 未在模型树中列出 | **真实存在**，被 ContainerMemory 引用 |
+| **ContainerInfo.mode** | 字段名 `mode` | **字段名 `ruleMode`**，另含内部枚举 `RuleMode` 和 `defaultMode()` 静态方法 |
+| **[--pathfinder]** | RunSubCommand 接受参数 | 确实接受并传入 `PathfindingController`，但 switch 仅 `default -> SimpleWalkExecutor`，始终忽略该参数 |
+| **命令端规则创建** | 应支持所有 Selector/Quantifier 类型 | **仅支持 IdSelector + CountSelector**，其他类型只能 JSON 编辑 |
+| **Mixin `compatibilityLevel`** | 无要求 | 设为 `JAVA_21`，与项目目标 Java 25 不完全一致（但向下兼容） |
+| **ContainerController.onScreenClosed()** | 应记录记忆 | 捕获快照后**直接返回**，未实际更新记忆 |
 
-### ✅ 完整实现的部分
+### ✅ 完整实现的部分（无编译问题）
 
-- **Model层全20文件** — 全部full实现，包括5个ItemSelector + 4个QuantitySelector + 4个config子包
+- **Model层全20文件** — 全部完整实现，包括5个ItemSelector + 4个QuantitySelector + 4个config子包
 - **Storage层全4文件** — 包括带自定义类型适配器的 Gson 序列化（多态反序列化完整支持6+4种类型）
-- **Controller层全6文件** — 全部full实现 (Selection/Rule/Warehouse/Pathfinding/Container/Highlight)
-- **Command层7/8文件** — 除HighlightSubCommand外全部存在且完整
+- **Controller层全6文件** — 全部完整实现 (Selection/Rule/Warehouse/Pathfinding/Container/Highlight)
+- **Command层7/8文件** — 除HighlightSubCommand外全部存在且完整，命令树与设计基本一致
 - **Engine核心规则引擎** — RuleApplicator（196行，TransferPlan完整计算逻辑）/ ItemMatcher / QuantityCalculator 全部完成
 - **ContainerMemory/Scanner/HighlightManager** — 管理类全实现
 - **Util全3文件** — Constants / CoordinateUtils / CommandUtils 全部完成
 - **MCWarehouseClient入口** — 命令注册 + 事件接入
+- **Mixin基础设施** — `mc-warehouse.mixins.json` + `fabric.mod.json` mixins声明已就位
+- **ContainerScreenMixin** — 注入 `onClose` 到 `AbstractContainerScreen`
+- **MultiPlayerGameModeMixin** — 注入 `useItemOn` 到 `MultiPlayerGameMode`
 
-### ⚠️ 部分实现 / 空桩
+### ⚠️ 部分实现 / 需API迁移
 
-- **ContainerInteractor.execute()** — 空桩 (`// Stub — will be driven by ContainerScreenMixin`)
-- **ContainerOutlineRenderer.render()** — 空桩 (`// Stub — WorldRendererMixin will wire up rendering`)
-- **SimpleWalkExecutor** — 有状态机但不控制实际移动（只检测距离）
+- **ContainerInteractor.execute()** — 逻辑完整但使用已移除的 `ClickType` API（需改为 `ContainerInput`）
+- **ContainerOutlineRenderer.render()** — 逻辑完整但使用已移除的 API（`RenderType.LINES`、`LevelRenderer.renderLineBox()`、`Camera.getPosition()`）
+- **MCWarehouseClient** — `WorldRenderEvents.AFTER_ENTITIES` 注册失败（Fabric API 版本问题）
+- **SimpleWalkExecutor** — 有完整状态机但不控制实际移动（只检测距离）
+- **ContainerController.onScreenClosed()** — 捕获快照后未更新记忆
+- **PathfindingController.onBlockInteraction()** — 方法体为空
 
 ### ❌ 完全未实现
 
-- **所有Mixin** — ContainerScreenMixin / WorldRendererMixin / MultiPlayerGameModeMixin / MinecraftMixin 均不存在
-- **mixins.json** — 不存在
+- **WorldRendererMixin** — 不存在（渲染改由 `WorldRenderEvents` 事件驱动，不再需要此 Mixin）
 - **CreativeFlightExecutor / PortalExecutor / HybridExecutor** — 3个路径执行器未实现
-- **PathExecutor集成** — PathfindingController 未接入 PathExecutor 接口
 - **EventBus / UI接口** — 未开始
+
+### 🏗️ 构建状态 (已修复 ✅)
+
+**构建已通过**。8个编译错误全部修复：
+
+| # | 文件 | 错误 | 修复方案 |
+|---|------|------|---------|
+| 1 | `ContainerInteractor.java` | `ClickType` 不存在 | 改为 `ContainerInput` + `ContainerInput.QUICK_MOVE` |
+| 2 | `ContainerOutlineRenderer.java` | 多处 API 不兼容 (`RenderType`, `renderLineBox`, `camera.getPosition`) | 整体改用 MC 26.1 **Gizmos API**：`Gizmos.cuboid()` + `GizmoStyle.stroke()` |
+| 3 | `MCWarehouseClient.java` | `WorldRenderEvents` 在 Fabric API 26.1 中已移除 | 删除旧注册逻辑，改为 `WorldRendererMixin` |
+| 4 | 新增 `WorldRendererMixin` | 无（新文件） | 注入 `LevelRenderer.collectPerFrameGizmos()`（@At("RETURN")），调用 `ContainerOutlineRenderer.renderGizmos()` |
 
 ### 📈 总结
 
-项目处于 **M2→M3过渡阶段**。数据模型、存储、命令体系和Controller业务逻辑已经非常扎实，但关键的 **Mixin层（容器GUI自动化+高亮渲染）** 完全缺失，导致M3/M4无法真正跑通。路径执行器方面仅有基础框架。
+项目处于 **M2→M3 过渡阶段**，相比上次评估的重大变化：
 
-### src/client/java/ 不存在的原因
-**Commit `f4b1c8b`** 是一次大规模重构，包含三件事：
+1. **Mixin 层全部就位**：3个Mixin全部实现并注册（新增 `WorldRendererMixin`），不再缺失
+2. **ContainerInteractor 和 ContainerOutlineRenderer 已有完整逻辑**：不再是空桩，已适配 MC 26.1 API
+3. **构建已通过**：无编译错误
+4. **核心矛盾**：从"构建失败/API不兼容" → "核心交互逻辑仍需完善"（`onBlockInteraction` 为空的、路径执行器不控制移动等）
 
-1. **整体移动** `src/client/java/ → src/main/java/` — 40个文件rename，其中32个R100纯移动无内容变动
-2. **故意降级/打桩** — `ContainerOutlineRenderer.java` 从56行（有完整 `LevelRenderer.renderLineBox()` 渲染实现）→ 30行（只保留颜色map，render()清空），推测是因为Mixin层还没搭好，先退成桩避免编译报错
-3. **API适配** — `TagSelector.java` 从15行（用 `stack.getItemHolder().tags()`，该API在新版mappings中不存在）→ 23行（改用 `stack.is(TagKey.create(...))` 修复编译）
-4. **新增命令文件** — `ConfigSubCommand`/`ContainerSubCommand`/`RuleSubCommand`/`RunSubCommand`/`WarehouseSubCommand` 五个新文件，加上 `build.gradle`/`settings.gradle` 的构建配置修正
-
-移动的原因推测：因为 `fabric.mod.json` 声明了 `environment: "client"`，整个mod纯客户端，没必要维持 `src/client/` 和 `src/main/` 的分离结构。同时 `settings.gradle` 在commit "2"才加上 `pluginManagement` 仓库声明 — 说明第一次提交时构建配置是不完整的，commit "2"同时在修构建问题。
-
----
-
-## 后续开发优先级建议
-
-自然切入点：**先打通 Mixin 层（M3/M4 的 blocker）→ 补上 ContainerInteractor 执行逻辑 → 再接入 PathExecutor**
+### 📈 后续开发优先级建议（更新版）
 
 | 优先级 | 任务 | 涉及里程碑 | 前置依赖 |
 |--------|------|-----------|---------|
-| **P0** | 搭建 Mixin 基础设施：`mixins.json` + `fabric.mod.json` mixins 声明 + gradle 的 Mixin 配置 | M3/M4 | 无 |
-| **P0** | 实现 `ContainerScreenMixin`（Hook 容器 GUI 打开/槽位操作） | M3 | Mixin 基础设施 |
-| **P0** | 实现 `WorldRendererMixin`（Hook 渲染管线画高亮轮廓） | M4 | Mixin 基础设施 |
-| **P1** | 实现 `ContainerInteractor.execute()` — 通过 Mixin 驱动真正的 GUI 物品移动 | M3 | ContainerScreenMixin |
-| **P1** | 实现 `ContainerOutlineRenderer.render()` — 调用 `LevelRenderer.renderLineBox()` 画框 | M4 | WorldRendererMixin |
-| **P1** | 实现 `MultiPlayerGameModeMixin` — Hook 交互发包（右键打开容器等） | M3 | Mixin 基础设施 |
-| **P2** | `PathfindingController` 接入 `PathExecutor` 接口，让状态机用引擎层的 PathExecutor | M5 | P1 完成 |
-| **P2** | `RunSubCommand --pathfinder` 参数真正生效，选择不同 PathExecutor 实现 | M5 | PathfindingController 接入 |
-| **P3** | 实现 `CreativeFlightExecutor` / `PortalExecutor` / `HybridExecutor` | M5 | P2 完成 |
-| **P3** | 命令端 `RuleSubCommand` 支持更多 Selector/Quantifier 类型（TagSelector / NameSelector / GroupSelector 等） | M2 增强 | 无 |
-| **P4** | EventBus 事件系统 + Controller UI 友好接口 | M6 | P0-P3 稳定后 |
-| **P4** | `DataStorage<T>` 接口落地（或废弃该接口） | — | 无 |
-
-### 建议的迭代顺序
-
-```
-迭代1 (P0): Mixin基础设施 → ContainerScreenMixin → WorldRendererMixin
-迭代2 (P1): ContainerInteractor.execute() + ContainerOutlineRenderer.render() + MultiPlayerGameModeMixin
-迭代3 (P2): PathfindingController 接入 PathExecutor + --pathfinder 生效
-迭代4 (P3): 剩余 3 个 PathExecutor + 命令增强
-迭代5 (P4): EventBus / UI 接口
-```
+| **P1** | 修复 `ContainerController.onScreenClosed()` — 实际更新记忆 | M3 | 无 |
+| **P1** | 实现 `PathfindingController.onBlockInteraction()` — 拦截手动交互 | M3 | 无 |
+| **P1** | 命令端 `RuleSubCommand` 支持更多 Selector/Quantifier 类型 | M2 | 无 |
+| **P2** | `PathfindingController` 支持切换 `PathExecutor` 类型（switch 添加分支） | M5 | 无 |
+| **P3** | 实现 `CreativeFlightExecutor` / `PortalExecutor` / `HybridExecutor` | M5 | P2 |
+| **P4** | EventBus 事件系统 + Controller UI 友好接口 | M6 | 稳定后 |
+| **P4** | `DataStorage<T>` 接口落地（或废弃） | — | 无 |
