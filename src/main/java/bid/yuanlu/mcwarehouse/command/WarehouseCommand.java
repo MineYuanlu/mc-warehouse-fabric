@@ -7,7 +7,8 @@ import net.minecraft.network.chat.Component;
 
 import bid.yuanlu.mcwarehouse.command.sub.*;
 
-import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.literal;
+import static net.fabricmc.fabric.api.client.command.v2.ClientCommands.literal;
+import static net.fabricmc.fabric.api.client.command.v2.ClientCommands.argument;
 
 public class WarehouseCommand {
 
@@ -22,8 +23,9 @@ public class WarehouseCommand {
 			cmd.then(ConfigSubCommand.build());
 			cmd.then(help());
 			dispatcher.register(cmd);
-			dispatcher.register(literal("wh").redirect(cmd.build()));
-			return true;
+			var whCmd = literal("wh");
+			whCmd.redirect(dispatcher.getRoot().getChild("warehouse"));
+			dispatcher.register(whCmd);
 		});
 	}
 

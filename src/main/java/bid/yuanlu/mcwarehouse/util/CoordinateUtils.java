@@ -27,7 +27,7 @@ public final class CoordinateUtils {
 	public static List<BlockPos> toAbsolute(List<ContainerInfo> containers, BlockPos anchor) {
 		List<BlockPos> result = new ArrayList<>(containers.size());
 		for (ContainerInfo info : containers) {
-			result.add(toAbsolute(info.relativePos(), anchor));
+			result.add(toAbsolute(info.relativePos, anchor));
 		}
 		return result;
 	}

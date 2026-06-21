@@ -8,12 +8,12 @@ import net.minecraft.network.chat.Component;
 
 import bid.yuanlu.mcwarehouse.controller.SelectionController;
 
-import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.literal;
-import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.argument;
-import static net.minecraft.commands.arguments.StringArgument.word;
-import static net.minecraft.commands.arguments.StringArgument.getString;
-import static net.minecraft.commands.arguments.IntegerArgument.integer;
-import static net.minecraft.commands.arguments.IntegerArgument.getInteger;
+import static net.fabricmc.fabric.api.client.command.v2.ClientCommands.literal;
+import static net.fabricmc.fabric.api.client.command.v2.ClientCommands.argument;
+import static com.mojang.brigadier.arguments.StringArgumentType.word;
+import static com.mojang.brigadier.arguments.StringArgumentType.getString;
+import static com.mojang.brigadier.arguments.IntegerArgumentType.integer;
+import static com.mojang.brigadier.arguments.IntegerArgumentType.getInteger;
 
 public class SelectSubCommand {
 

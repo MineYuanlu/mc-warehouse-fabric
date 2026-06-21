@@ -17,7 +17,6 @@ repositories {
 
 dependencies {
 	minecraft "com.mojang:minecraft:${minecraft_version}"
-	mappings minecraft.officialMojangMappings()
 	implementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
 	implementation "net.fabricmc.fabric-api:fabric-api:${fabric_version}"
 }
@@ -28,6 +27,7 @@ processResources {
 	filesMatching("fabric.mod.json") {
 		expand(
 			"version": version,
+			"mod_group": mod_group,
 			"mod_id": mod_id,
 			"mod_version": mod_version,
 			"mod_name": mod_name,
@@ -45,8 +45,6 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 java {
-	sourceCompatibility = JavaVersion.VERSION_25
-	targetCompatibility = JavaVersion.VERSION_25
 	withSourcesJar()
 }
 

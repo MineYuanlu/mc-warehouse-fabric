@@ -40,12 +40,13 @@ public class ContainerInteractor {
 
 		var inv = player.getInventory();
 		Map<Integer, ItemStack> slots = new HashMap<>();
-		for (int i = 0; i < inv.items.size(); i++) {
-			ItemStack stack = inv.items.get(i);
+		int size = inv.getContainerSize();
+		for (int i = 0; i < size; i++) {
+			ItemStack stack = inv.getItem(i);
 			if (!stack.isEmpty()) {
 				slots.put(i, stack.copy());
 			}
 		}
-		return new ContainerSnapshot(slots, inv.items.size());
+		return new ContainerSnapshot(slots, size);
 	}
 }

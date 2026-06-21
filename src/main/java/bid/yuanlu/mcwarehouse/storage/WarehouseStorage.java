@@ -21,9 +21,10 @@ import com.google.gson.JsonSerializationContext;
 import com.google.gson.JsonSerializer;
 
 import bid.yuanlu.mcwarehouse.model.Warehouse;
+import bid.yuanlu.mcwarehouse.model.rule.ItemSelector;
+import bid.yuanlu.mcwarehouse.model.rule.QuantitySelector;
 import bid.yuanlu.mcwarehouse.model.selector.CompositeSelector;
 import bid.yuanlu.mcwarehouse.model.selector.IdSelector;
-import bid.yuanlu.mcwarehouse.model.selector.ItemSelector;
 import bid.yuanlu.mcwarehouse.model.selector.NameSelector;
 import bid.yuanlu.mcwarehouse.model.selector.NbtSelector;
 import bid.yuanlu.mcwarehouse.model.selector.TagSelector;
@@ -31,7 +32,6 @@ import bid.yuanlu.mcwarehouse.model.quantifier.CountSelector;
 import bid.yuanlu.mcwarehouse.model.quantifier.FillSlotsSelector;
 import bid.yuanlu.mcwarehouse.model.quantifier.GroupSelector;
 import bid.yuanlu.mcwarehouse.model.quantifier.PercentSelector;
-import bid.yuanlu.mcwarehouse.model.quantifier.QuantitySelector;
 import net.minecraft.client.Minecraft;
 
 public class WarehouseStorage {
@@ -79,7 +79,7 @@ public class WarehouseStorage {
 	}
 
 	public void saveWarehouse(Warehouse warehouse) {
-		File file = getDataFile(warehouse.name());
+		File file = getDataFile(warehouse.name);
 		File parent = file.getParentFile();
 		if (!parent.exists()) {
 			parent.mkdirs();
@@ -87,7 +87,7 @@ public class WarehouseStorage {
 		try (FileWriter writer = new FileWriter(file)) {
 			gson.toJson(warehouse, writer);
 		} catch (IOException e) {
-			throw new RuntimeException("Failed to save warehouse: " + warehouse.name(), e);
+			throw new RuntimeException("Failed to save warehouse: " + warehouse.name, e);
 		}
 	}
 
