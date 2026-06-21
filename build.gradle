@@ -3,6 +3,17 @@ plugins {
 	id 'net.fabricmc.fabric-loom' version '1.15-SNAPSHOT'
 }
 
+loom {
+	splitEnvironmentSourceSets()
+
+	mods {
+		"mc-warehouse" {
+			sourceSet sourceSets.main
+			sourceSet sourceSets.client
+		}
+	}
+}
+
 base {
 	archivesName = mod_id
 }

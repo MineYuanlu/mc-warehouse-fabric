@@ -46,9 +46,15 @@
 └─────────────────────────────────────────────────┘
 ```
 
-### 1.2 包结构
+### 1.2 源集与包结构
+
+> **源集约定：** 本模组为 `environment: client` 纯客户端模组，所有 Java 代码均位于 `src/client/java/`。`src/main/java/` 为空（无跨环境共享逻辑），`src/main/resources/` 保留资源文件（fabric.mod.json、mixin 配置等）。
 
 ```
+src/
+  client/java/bid/yuanlu/mcwarehouse/      # 所有 Java 代码
+  main/resources/                          # fabric.mod.json、assets、mixin 配置
+
 bid.yuanlu.mcwarehouse
 ├── MCWarehouseClient.java              # Mod 入口
 │
