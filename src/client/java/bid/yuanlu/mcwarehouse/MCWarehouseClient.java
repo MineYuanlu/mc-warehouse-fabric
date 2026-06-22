@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 
 import bid.yuanlu.mcwarehouse.command.WarehouseCommand;
 import bid.yuanlu.mcwarehouse.controller.PathfindingController;
+import bid.yuanlu.mcwarehouse.storage.ModConfigStorage;
 
 public class MCWarehouseClient implements ClientModInitializer {
 
@@ -16,6 +17,8 @@ public class MCWarehouseClient implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
 		WarehouseCommand.register();
+
+		new ModConfigStorage().load();
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			PathfindingController.getInstance().tick();

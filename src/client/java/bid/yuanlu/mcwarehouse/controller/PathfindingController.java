@@ -17,6 +17,7 @@ import bid.yuanlu.mcwarehouse.model.ContainerInfo;
 import bid.yuanlu.mcwarehouse.model.ContainerSnapshot;
 import bid.yuanlu.mcwarehouse.model.ContainerType;
 import bid.yuanlu.mcwarehouse.model.Warehouse;
+import bid.yuanlu.mcwarehouse.storage.WorldConfigStorage;
 import bid.yuanlu.mcwarehouse.util.CoordinateUtils;
 
 public class PathfindingController {
@@ -35,6 +36,7 @@ public class PathfindingController {
 	private ContainerInteractor interactor;
 	private boolean interacting;
 	private BlockPos interactionPos;
+	private int interactionSpeed;
 
 	public static PathfindingController getInstance() {
 		return INSTANCE;
@@ -94,6 +96,7 @@ public class PathfindingController {
 		running = true;
 		interacting = false;
 		interactor = null;
+		interactionSpeed = WorldConfigStorage.getInstance().getInteractionSpeed();
 		return true;
 	}
 
@@ -113,6 +116,11 @@ public class PathfindingController {
 			interactor = null;
 		}
 		interactionPos = null;
+		interactionSpeed = 2;
+	}
+
+	public BlockPos getInteractionPos() {
+		return interactionPos;
 	}
 
 	public void tick() {
@@ -186,7 +194,7 @@ public class PathfindingController {
 		ContainerSnapshot snapshot = cc.captureCurrentScreen();
 		if (snapshot == null) return false;
 
-		var tempInteractor = new ContainerInteractor(2);
+		var tempInteractor = new ContainerInteractor(interactionSpeed);
 		ContainerSnapshot playerInv = tempInteractor.capturePlayerInventory();
 
 		TransferPlan plan = RuleApplicator.calculatePlan(info, snapshot, warehouse.rules, playerInv);
@@ -196,7 +204,8 @@ public class PathfindingController {
 			return true;
 		}
 
-		this.interactor = new ContainerInteractor(2);
+		cc.setLastInteractionPos(pos);
+		this.interactor = new ContainerInteractor(interactionSpeed);
 		this.interactor.startExecution(plan);
 		this.interacting = true;
 		this.interactionPos = pos;

@@ -21,6 +21,7 @@ import bid.yuanlu.mcwarehouse.model.Warehouse;
 import bid.yuanlu.mcwarehouse.model.rule.ItemRule;
 import bid.yuanlu.mcwarehouse.model.rule.ItemRules;
 import bid.yuanlu.mcwarehouse.storage.WarehouseStorage;
+import bid.yuanlu.mcwarehouse.storage.WorldConfigStorage;
 
 public class ContainerController {
 
@@ -28,6 +29,7 @@ public class ContainerController {
 
 	private final ContainerMemory memory;
 	private final WarehouseStorage storage;
+	private BlockPos lastInteractionPos;
 
 	public static ContainerController getInstance() {
 		return INSTANCE;
@@ -54,6 +56,10 @@ public class ContainerController {
 		memory.snapshot(pos, snapshot);
 	}
 
+	public void setLastInteractionPos(BlockPos pos) {
+		this.lastInteractionPos = pos;
+	}
+
 	public ContainerSnapshot captureCurrentScreen() {
 		Minecraft mc = Minecraft.getInstance();
 		if (mc.screen instanceof AbstractContainerScreen<?> screen) {
@@ -65,6 +71,9 @@ public class ContainerController {
 	public void onScreenClosed() {
 		ContainerSnapshot snapshot = captureCurrentScreen();
 		if (snapshot == null) return;
+		if (lastInteractionPos != null) {
+			memory.snapshot(lastInteractionPos, snapshot);
+		}
 	}
 
 	public boolean executeTransfer(ContainerInfo info, BlockPos absolutePos, String warehouseName) {
@@ -85,11 +94,12 @@ public class ContainerController {
 			}
 		}
 
-		ContainerSnapshot playerInv = new ContainerInteractor(2).capturePlayerInventory();
+		int speed = WorldConfigStorage.getInstance().getInteractionSpeed();
+		ContainerSnapshot playerInv = new ContainerInteractor(speed).capturePlayerInventory();
 		TransferPlan plan = RuleApplicator.calculatePlan(info, snapshot, warehouse.rules, playerInv);
 
 		if (plan != null) {
-			new ContainerInteractor(2).execute(plan);
+			new ContainerInteractor(speed).execute(plan);
 		}
 
 		boolean changed = false;

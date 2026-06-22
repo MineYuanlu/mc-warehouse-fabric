@@ -280,6 +280,8 @@ public class ContainerMemory {
         └── ...
 ```
 
+> ✅ **mod.json 已实现**：`model/config/ModConfig.java` + `storage/ModConfigStorage.java`，启动时自动加载/创建默认配置。
+
 ### 3.2 worlds.json 结构
 
 ```json
@@ -433,20 +435,23 @@ public class ContainerInteractor {
     /** 交互速度 (tick) */
     int speed;
     
-    /** 对一个容器执行搬运（调用方在 ARRIVED 后调用） */
-    void execute(ContainerInfo info, ContainerSnapshot actual);  // TODO: 空桩
+    /** 状态机状态 */
+    enum State { IDLE, WORKING, COMPLETED }
     
-    /** 计算输入/输出方案 */
-    TransferPlan calculatePlan(ContainerInfo info, ContainerSnapshot actual);
+    /** 启动异步执行（状态机方式，每 speed tick 处理一次移动） */
+    void startExecution(TransferPlan plan);
     
-    /** 执行具体的物品移动（通过 Mixin 操作 GUI 槽位） */
-    void applyPlan(TransferPlan plan);
+    /** 每帧调用，返回 WORKING 或 COMPLETED */
+    State tick();
+    
+    /** 同步执行（旧方式，一次性完成所有移动） */
+    void execute(TransferPlan plan);
 }
 ```
 
-> **当前实现状态：** `execute()` 已完整实现（调用 `menu.clicked()` 执行 `QUICK_MOVE` 操作），`captureCurrentScreen()` 和 `capturePlayerInventory()` 均已实现。注意：`applyPlan()` 不存在作为独立方法，逻辑已合并入 `execute()`。MC 26.1 中 `ClickType` 已替换为 `ContainerInput`，**构建已通过**。
+> **当前实现状态：** `execute()` 已完整实现（调用 `menu.clicked()` 执行 `QUICK_MOVE` 操作），`captureCurrentScreen()` 和 `capturePlayerInventory()` 均已实现。MC 26.1 中 `ClickType` 已替换为 `ContainerInput`，**构建已通过**。
 >
-> ✅ **已修复：** `startExecution(plan) + tick()` 状态机替换了单次 `execute()` 调用。每 `speed` tick 处理一次移动，`PathfindingController` 在交互期间暂停路径执行，交互完成后再推进到下一目标容器。`interaction.speed` 配置值将在后续整合。
+> ✅ **已修复：** `startExecution(plan) + tick()` 状态机替换了单次 `execute()` 调用。每 `speed` tick 处理一次移动，`PathfindingController` 在交互期间暂停路径执行，交互完成后再推进到下一目标容器。`interaction.speed` 配置值已整合（通过 `WorldConfigStorage.getInstance().getInteractionSpeed()` 读取 `config/worlds.json` 中当前世界的条目）。
 
 **搬运逻辑：**
 
@@ -504,7 +509,7 @@ public class ContainerMemoryManager {
 }
 ```
 
-> ⚠️ **实现状态：** `ContainerMemoryManager` 为 `ContainerMemory` 的包装层，但 `ContainerController` 已直接持有 `ContainerMemory` 实例，该 Manager **当前未被使用**。`ContainerScreenMixin.onClose()` 回调至 `ContainerController.onScreenClosed()`，但后者捕获快照后**未执行存储或触发搬运逻辑**。
+> ⚠️ **实现状态：** `ContainerMemoryManager` 为 `ContainerMemory` 的包装层，但 `ContainerController` 已直接持有 `ContainerMemory` 实例，该 Manager **当前未被使用**。`ContainerScreenMixin.onClose()` 回调至 `ContainerController.onScreenClosed()`，后者通过 `lastInteractionPos`（由 `PathfindingController.processContainer()` 设置）将快照存入 `ContainerMemory`。`onScreenClosed()` 不再为空。
 
 ---
 
@@ -603,7 +608,7 @@ PathExecutor.tick() 循环
     ├── ARRIVED ──→ ContainerInteractor
     │                   │ 读取容器记忆 + 规则
     │                   │ 计算 TransferPlan
-    │                   │ 打开容器 GUI 执行
+    │                   │ 等待玩家打开容器 GUI（或通过外部 SDK 自动打开）
     │                   │ 交互完成后 → snapshot()
     │                   └──→ 继续 tick 前往下个目标
     │
@@ -679,6 +684,8 @@ public interface WarehouseEventBus {
 
 未来 UI 层只需监听 EventBus 即可实时响应状态变化。
 
+> ✅ **接口文件已创建**：`event/WarehouseEventBus.java`，预留全部方法签名。当前无事件触发器绑定，等待 UI 层接入。
+
 ---
 
 ## 八、关键技术决策
@@ -728,7 +735,7 @@ loom {
 |------|------|------|---------|
 | **M1** | 数据模型 + 存储层 | 可创建/编辑/保存仓库和规则 | **~95%** ✅ |
 | **M2** | 命令系统 + Controller | 完整的 `/warehouse` 命令 | **~90%** ✅ (命令端缺部分Selector类型) |
-| **M3** | 容器交互 + 记忆 | 可执行容器内物品搬运 | **~85%** 🟡 (tick 驱动的异步交互已实现，onScreenClosed 回调仍为空；interaction.speed 配置值待整合) |
+| **M3** | 容器交互 + 记忆 | 可执行容器内物品搬运 | **~92%** 🟢 (tick 驱动的异步交互 + onScreenClosed 快照存储 + interaction.speed 配置整合均已完成) |
 | **M4** | 高亮渲染 | 容器可视化 | **~95%** ✅ (Gizmos API 渲染层已实现，Controller→Manager 连接已打通) |
 | **M5** | 路径执行器 | 完整的自动搬运流程 | **~25%** 🔴 (PathfindingController已接入PathExecutor接口，但仅SimpleWalk且不控制移动) |
 | **M6** | 优化 + UI 接口 | EventBus + 为 UI 做好准备 | **0%** ⚪ |

@@ -57,11 +57,13 @@
 - **高亮渲染已修复**：`HighlightController.showWarehouse()` 调用 `HighlightManager.setWarehouseHighlights()`，`hideAll()` 同时清空 Manager。`/warehouse warehouse show` 现可正常渲染容器高亮。
 - **物品操作 tick 间隔已修复**：`ContainerInteractor` 新增 `startExecution() + tick()` 状态机，每 `speed` tick 执行一次移动。`PathfindingController` 在交互期间暂停路径执行，交互完成后再推进到下一目标容器。
 - **规则绑定命令已添加**：`/warehouse container rules add <name>` 和 `remove <name>`，玩家看向目标容器即可绑定/解绑规则组。
+- **交互速度从配置读取**：`ContainerInteractor` 速度改为通过 `WorldConfigStorage.getInstance().getInteractionSpeed()` 读取 `config/worlds.json`，可通过 `/warehouse config set interaction.speed <n>` 调整。
+- **onScreenClosed() 已实现**：关闭容器屏幕时通过 `lastInteractionPos` 将最终快照存入 `ContainerMemory`。
+- **ARCH.md 文档同步**：§4.2 mock 代码签名、§4.4 onScreenClosed 状态、§6.1 流程图、§七 EventBus 说明、§三 mod.json 实现状态、§十 M3 里程碑进度均已与代码保持一致。
 
 ### 其他小问题
 
-- `onScreenClosed()`（Mixin 注入容器关闭时）捕获了快照后什么都不做
-- `MultiPlayerGameModeMixin` 注入的 `onBlockInteraction()` 是空方法
+- `MultiPlayerGameModeMixin` 注入的 `onBlockInteraction()` 是空方法（等待 SDK 接入）
 - 命令端 rule parser 只支持 `--id/--count/--negate`，不支持 tag/name/nbt/fill/group/percent
 
 ---
@@ -79,7 +81,7 @@
 
 如果你想继续开发，优先级最高的事是：
 
-1. **让 `SimpleWalkExecutor` 真正控制移动**（输入模拟或发包）
+1. **接入外部 SDK 实现移动控制**（`SimpleWalkExecutor` 暂不开发，等待 SDK 方案）
 
 ---
 
