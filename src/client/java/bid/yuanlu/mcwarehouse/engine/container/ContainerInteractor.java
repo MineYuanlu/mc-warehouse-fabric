@@ -16,16 +16,75 @@ import bid.yuanlu.mcwarehouse.model.ContainerSnapshot;
 
 public class ContainerInteractor {
 
+	public enum State { IDLE, WORKING, COMPLETED }
+
 	private final int speed;
+	private State state;
+	private TransferPlan currentPlan;
+	private int moveIndex;
 	private int tickTimer;
 
 	public ContainerInteractor(int speed) {
 		this.speed = speed;
-		this.tickTimer = 0;
+		resetState();
 	}
 
 	public int getSpeed() {
 		return this.speed;
+	}
+
+	public State getState() {
+		return state;
+	}
+
+	public boolean isCompleted() {
+		return state == State.COMPLETED;
+	}
+
+	public void startExecution(TransferPlan plan) {
+		this.currentPlan = plan;
+		this.moveIndex = 0;
+		this.tickTimer = 0;
+		this.state = State.WORKING;
+	}
+
+	public State tick() {
+		if (state != State.WORKING) return state;
+
+		Minecraft mc = Minecraft.getInstance();
+		if (!(mc.screen instanceof AbstractContainerScreen<?> screen) || mc.player == null) {
+			state = State.COMPLETED;
+			return state;
+		}
+
+		tickTimer++;
+		if (tickTimer < speed) return state;
+		tickTimer = 0;
+
+		if (currentPlan == null || moveIndex >= currentPlan.moves.size()) {
+			state = State.COMPLETED;
+			return state;
+		}
+
+		var menu = screen.getMenu();
+		var player = mc.player;
+		var playerInv = player.getInventory();
+
+		int containerSlots = 0;
+		for (Slot s : menu.slots) {
+			if (s.container == playerInv) break;
+			containerSlots++;
+		}
+
+		ItemMove move = currentPlan.moves.get(moveIndex);
+		moveIndex++;
+
+		int menuSlot = mapSlot(move, currentPlan.direction, containerSlots);
+		if (menuSlot >= 0 && menuSlot < menu.slots.size() && !menu.slots.get(menuSlot).getItem().isEmpty()) {
+			menu.clicked(menuSlot, 0, ContainerInput.QUICK_MOVE, player);
+		}
+
+		return state;
 	}
 
 	public void execute(TransferPlan plan) {
@@ -50,6 +109,13 @@ public class ContainerInteractor {
 
 			menu.clicked(menuSlot, 0, ContainerInput.QUICK_MOVE, player);
 		}
+	}
+
+	public void resetState() {
+		this.state = State.IDLE;
+		this.currentPlan = null;
+		this.moveIndex = 0;
+		this.tickTimer = 0;
 	}
 
 	private static int mapSlot(ItemMove move, Direction dir, int containerSlots) {
@@ -94,9 +160,5 @@ public class ContainerInteractor {
 		if (mc.player != null) {
 			ctrl.onScreenClosed();
 		}
-	}
-
-	public void tick() {
-		tickTimer++;
 	}
 }

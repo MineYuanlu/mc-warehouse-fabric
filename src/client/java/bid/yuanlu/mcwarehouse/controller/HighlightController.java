@@ -5,6 +5,7 @@ import java.util.List;
 
 import net.minecraft.core.BlockPos;
 
+import bid.yuanlu.mcwarehouse.engine.highlight.HighlightManager;
 import bid.yuanlu.mcwarehouse.model.ContainerInfo;
 import bid.yuanlu.mcwarehouse.model.Warehouse;
 import bid.yuanlu.mcwarehouse.storage.WarehouseStorage;
@@ -44,12 +45,14 @@ public class HighlightController {
 				highlighted.add(CoordinateUtils.toAbsolute(info.relativePos, w.anchor));
 			}
 		}
+		HighlightManager.getInstance().setWarehouseHighlights(w);
 	}
 
 	public void hideAll() {
 		showing = false;
 		showingName = null;
 		highlighted.clear();
+		HighlightManager.getInstance().clearAll();
 	}
 
 	public boolean isShowing() {

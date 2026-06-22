@@ -1,5 +1,7 @@
 package bid.yuanlu.mcwarehouse.command.sub;
 
+import java.util.ArrayList;
+
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.minecraft.client.Minecraft;
@@ -9,6 +11,7 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 
 import bid.yuanlu.mcwarehouse.controller.ContainerController;
+import bid.yuanlu.mcwarehouse.controller.RuleController;
 import bid.yuanlu.mcwarehouse.controller.SelectionController;
 import bid.yuanlu.mcwarehouse.controller.WarehouseController;
 import bid.yuanlu.mcwarehouse.model.ContainerInfo;
@@ -263,7 +266,97 @@ public class ContainerSubCommand {
 						ContainerController.getInstance().clearMemory();
 						ctx.getSource().sendFeedback(Component.literal("§aContainer memory cleared."));
 						return 1;
-					})));
+					})))
+			.then(literal("rules")
+				.then(literal("add")
+					.then(argument("name", word())
+						.executes(ctx -> {
+							String ruleName = getString(ctx, "name");
+							var player = Minecraft.getInstance().player;
+							if (player == null) return 0;
+
+							BlockPos lookingAt = getLookingAt(player);
+							if (lookingAt == null) {
+								ctx.getSource().sendError(Component.literal("§cNot looking at a block."));
+								return 0;
+							}
+
+							var wc = WarehouseController.getInstance();
+							String active = wc.getActiveWarehouse();
+							if (active == null) {
+								ctx.getSource().sendError(Component.literal("§cNo active warehouse."));
+								return 0;
+							}
+
+							var rc = RuleController.getInstance();
+							if (rc.getRule(active, ruleName) == null) {
+								ctx.getSource().sendError(Component.literal("§cRule not found: " + ruleName));
+								return 0;
+							}
+
+							Warehouse wh = wc.getWarehouse(active);
+							if (wh == null) return 0;
+
+							BlockPos rel = CoordinateUtils.toRelative(lookingAt, wh.anchor);
+							ContainerInfo info = wc.getContainerInfo(active, rel);
+							if (info == null) {
+								ctx.getSource().sendError(Component.literal("§cNo container at this position."));
+								return 0;
+							}
+
+							if (info.rulesNames == null) {
+								info.rulesNames = new ArrayList<>();
+							}
+
+							if (info.rulesNames.contains(ruleName)) {
+								ctx.getSource().sendError(Component.literal("§cRule already bound to this container."));
+								return 0;
+							}
+
+							info.rulesNames.add(ruleName);
+							new WarehouseStorage().saveWarehouse(wh);
+							ctx.getSource().sendFeedback(Component.literal("§aBound rule \"" + ruleName + "\" to container at " + lookingAt));
+							return 1;
+						})))
+				.then(literal("remove")
+					.then(argument("name", word())
+						.executes(ctx -> {
+							String ruleName = getString(ctx, "name");
+							var player = Minecraft.getInstance().player;
+							if (player == null) return 0;
+
+							BlockPos lookingAt = getLookingAt(player);
+							if (lookingAt == null) {
+								ctx.getSource().sendError(Component.literal("§cNot looking at a block."));
+								return 0;
+							}
+
+							var wc = WarehouseController.getInstance();
+							String active = wc.getActiveWarehouse();
+							if (active == null) {
+								ctx.getSource().sendError(Component.literal("§cNo active warehouse."));
+								return 0;
+							}
+
+							Warehouse wh = wc.getWarehouse(active);
+							if (wh == null) return 0;
+
+							BlockPos rel = CoordinateUtils.toRelative(lookingAt, wh.anchor);
+							ContainerInfo info = wc.getContainerInfo(active, rel);
+							if (info == null || info.rulesNames == null) {
+								ctx.getSource().sendError(Component.literal("§cNo rules bound to this container."));
+								return 0;
+							}
+
+							if (!info.rulesNames.remove(ruleName)) {
+								ctx.getSource().sendError(Component.literal("§cRule \"" + ruleName + "\" not bound to this container."));
+								return 0;
+							}
+
+							new WarehouseStorage().saveWarehouse(wh);
+							ctx.getSource().sendFeedback(Component.literal("§aRemoved rule \"" + ruleName + "\" from container at " + lookingAt));
+							return 1;
+						}))));
 	}
 
 	private static boolean isInsideSelection(BlockPos pos, SelectionController.Selection sel) {

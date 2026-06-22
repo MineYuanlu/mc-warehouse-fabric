@@ -47,14 +47,16 @@
 
 **所有数据都会保存到 `<game-dir>/mc-warehouse/` 的 JSON 文件中，重启后还在。**
 
-### ❌ 还不能用的核心功能（4个关键阻塞）
+### ❌ 还不能用的核心功能（1个关键阻塞）
 
 | 阻塞项               | 严重程度 | 说明                                                                                                                          |
 | -------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | **不会自动移动玩家** | **P0**   | `SimpleWalkExecutor` 只检测距离（2格内算到达），从不发送移动输入/数据包。跑 `/warehouse run` 后你需要**手动走到每个容器旁边** |
-| **高亮不渲染**       | **P0**   | `HighlightController.showWarehouse()` 计算出位置列表但**从没推给 `HighlightManager`**，WorldRenderer Mixin 读不到任何数据     |
-| **物品操作瞬间连点** | **P1**   | `ContainerInteractor.execute()` 在一帧内发完所有 `menu.clicked()`，没做 tick 间隔控制，容易被反作弊拦截                       |
-| **规则无法绑定容器** | **P1**   | 命令端没有 `/warehouse container rules add <ruleName>` 之类的指令，`ContainerInfo.rulesNames` 永远是空的                      |
+
+### ✅ 最近修复
+- **高亮渲染已修复**：`HighlightController.showWarehouse()` 调用 `HighlightManager.setWarehouseHighlights()`，`hideAll()` 同时清空 Manager。`/warehouse warehouse show` 现可正常渲染容器高亮。
+- **物品操作 tick 间隔已修复**：`ContainerInteractor` 新增 `startExecution() + tick()` 状态机，每 `speed` tick 执行一次移动。`PathfindingController` 在交互期间暂停路径执行，交互完成后再推进到下一目标容器。
+- **规则绑定命令已添加**：`/warehouse container rules add <name>` 和 `remove <name>`，玩家看向目标容器即可绑定/解绑规则组。
 
 ### 其他小问题
 
@@ -75,10 +77,9 @@
 
 **但不建议现在做"自动搬运"测试**，因为 `/warehouse run` 需要玩家手动走到每个容器旁边，且搬运逻辑因为没有绑定的规则而不生效。
 
-如果你想继续开发，优先级最高的两件事是：
+如果你想继续开发，优先级最高的事是：
 
 1. **让 `SimpleWalkExecutor` 真正控制移动**（输入模拟或发包）
-2. **修复高亮渲染**（`HighlightController.showWarehouse()` 把位置推给 `HighlightManager`）
 
 ---
 
@@ -104,6 +105,8 @@
 /warehouse container info               → Info for block player is looking at
 /warehouse container memory show        → Shows cached snapshot for container
 /warehouse container memory clear       → Clears all cached snapshots
+/warehouse container rules add <name>   → Binds rule group to looked-at container
+/warehouse container rules remove <name> → Unbinds rule group from looked-at container
 /warehouse rule create <name>           → Creates rule group
 /warehouse rule delete <name>           → Deletes rule group
 /warehouse rule list                    → Lists rule groups

@@ -7,10 +7,14 @@ import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
 
+import bid.yuanlu.mcwarehouse.engine.container.ContainerInteractor;
 import bid.yuanlu.mcwarehouse.engine.pathfinder.PathExecutor;
 import bid.yuanlu.mcwarehouse.engine.pathfinder.PathExecutor.Status;
 import bid.yuanlu.mcwarehouse.engine.pathfinder.executors.SimpleWalkExecutor;
+import bid.yuanlu.mcwarehouse.engine.rule.RuleApplicator;
+import bid.yuanlu.mcwarehouse.engine.rule.RuleApplicator.TransferPlan;
 import bid.yuanlu.mcwarehouse.model.ContainerInfo;
+import bid.yuanlu.mcwarehouse.model.ContainerSnapshot;
 import bid.yuanlu.mcwarehouse.model.ContainerType;
 import bid.yuanlu.mcwarehouse.model.Warehouse;
 import bid.yuanlu.mcwarehouse.util.CoordinateUtils;
@@ -28,6 +32,10 @@ public class PathfindingController {
 	private List<ContainerInfo> sortedContainers;
 	private int containerIndex;
 
+	private ContainerInteractor interactor;
+	private boolean interacting;
+	private BlockPos interactionPos;
+
 	public static PathfindingController getInstance() {
 		return INSTANCE;
 	}
@@ -38,6 +46,7 @@ public class PathfindingController {
 		this.retryCount = 0;
 		this.sortedContainers = new ArrayList<>();
 		this.containerIndex = 0;
+		this.interacting = false;
 	}
 
 	public boolean isRunning() {
@@ -83,6 +92,8 @@ public class PathfindingController {
 		containerIndex = 0;
 		retryCount = 0;
 		running = true;
+		interacting = false;
+		interactor = null;
 		return true;
 	}
 
@@ -96,10 +107,36 @@ public class PathfindingController {
 		containerIndex = 0;
 		sortedContainers.clear();
 		activeWarehouseName = null;
+		interacting = false;
+		if (interactor != null) {
+			interactor.resetState();
+			interactor = null;
+		}
+		interactionPos = null;
 	}
 
 	public void tick() {
 		if (!running || executor == null) return;
+
+		if (interacting) {
+			if (interactor == null) {
+				interacting = false;
+				return;
+			}
+			interactor.tick();
+			if (interactor.isCompleted()) {
+				var cc = ContainerController.getInstance();
+				ContainerSnapshot updated = interactor.captureCurrentScreen();
+				if (updated != null) {
+					cc.snapshotMemory(interactionPos, updated);
+				}
+				interacting = false;
+				interactor = null;
+				containerIndex++;
+				retryCount = 0;
+			}
+			return;
+		}
 
 		Status status = executor.tick();
 
@@ -110,8 +147,10 @@ public class PathfindingController {
 					BlockPos pos = BlockPos.containing(arrived);
 					boolean ok = processContainer(pos);
 					if (ok) {
-						containerIndex++;
-						retryCount = 0;
+						if (!interacting) {
+							containerIndex++;
+							retryCount = 0;
+						}
 					} else {
 						onContainerFailed();
 					}
@@ -138,8 +177,30 @@ public class PathfindingController {
 		if (containerIndex >= sortedContainers.size()) return false;
 
 		ContainerInfo info = sortedContainers.get(containerIndex);
-		ContainerController cc = ContainerController.getInstance();
-		return cc.executeTransfer(info, pos, activeWarehouseName);
+
+		var wc = WarehouseController.getInstance();
+		Warehouse warehouse = wc.getWarehouse(activeWarehouseName);
+		if (warehouse == null) return false;
+
+		var cc = ContainerController.getInstance();
+		ContainerSnapshot snapshot = cc.captureCurrentScreen();
+		if (snapshot == null) return false;
+
+		var tempInteractor = new ContainerInteractor(2);
+		ContainerSnapshot playerInv = tempInteractor.capturePlayerInventory();
+
+		TransferPlan plan = RuleApplicator.calculatePlan(info, snapshot, warehouse.rules, playerInv);
+
+		if (plan == null || plan.moves.isEmpty()) {
+			cc.snapshotMemory(pos, snapshot);
+			return true;
+		}
+
+		this.interactor = new ContainerInteractor(2);
+		this.interactor.startExecution(plan);
+		this.interacting = true;
+		this.interactionPos = pos;
+		return true;
 	}
 
 	private void onContainerFailed() {

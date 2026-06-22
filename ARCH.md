@@ -446,7 +446,7 @@ public class ContainerInteractor {
 
 > **当前实现状态：** `execute()` 已完整实现（调用 `menu.clicked()` 执行 `QUICK_MOVE` 操作），`captureCurrentScreen()` 和 `capturePlayerInventory()` 均已实现。注意：`applyPlan()` 不存在作为独立方法，逻辑已合并入 `execute()`。MC 26.1 中 `ClickType` 已替换为 `ContainerInput`，**构建已通过**。
 >
-> ⚠️ **待完善：** `execute()` 在一帧内发送所有 `menu.clicked()` 调用，`speed` 字段和 `tick()` 方法存在但**未被调用来控制 tick 间隔**，可能导致服务器反作弊拦截。需将单次执行改为基于 `interaction.speed` 的逐 tick 调度。
+> ✅ **已修复：** `startExecution(plan) + tick()` 状态机替换了单次 `execute()` 调用。每 `speed` tick 处理一次移动，`PathfindingController` 在交互期间暂停路径执行，交互完成后再推进到下一目标容器。`interaction.speed` 配置值将在后续整合。
 
 **搬运逻辑：**
 
@@ -463,7 +463,7 @@ public class ContainerInteractor {
 
 > **当前实现状态：** `ContainerOutlineRenderer.render()` 已完整实现（遍历高亮列表，调用 `Gizmos` API 渲染线框）。MC 26.1 中 `RenderType` 包路径已变更、`LevelRenderer.renderLineBox()` 已移除，均已适配 Gizmos API，`WorldRendererMixin` 已新建并注入 `collectPerFrameGizmos`，**构建已通过**。
 >
-> 🔴 **阻塞：** `HighlightController.showWarehouse()` 计算出位置列表后**未调用 `HighlightManager.setWarehouseHighlights()`**，导致 `HighlightManager` 始终为空，`WorldRendererMixin` 读不到任何数据，高亮**实际上不渲染**。
+> ✅ **已修复：** `HighlightController.showWarehouse()` 现会调用 `HighlightManager.setWarehouseHighlights(w)`，`hideAll()` 同时清空 Manager。完整链路已打通。
 
 ```java
 public class HighlightManager {
@@ -531,10 +531,12 @@ public class ContainerMemoryManager {
 │   ├── type <type>             # 切换容器类型
 │   ├── mode <mode>             # 切换白名单/黑名单
 │   ├── info                    # 查看容器详情
-│   └── memory
-│       ├── show                # 查看记忆
-│       └── clear               # 清空记忆
-│   # 缺少：规则绑定命令（ContainerInfo.rulesNames 无命令写入）
+│   ├── memory
+│   │   ├── show                # 查看记忆
+│   │   └── clear               # 清空记忆
+│   └── rules
+│       ├── add <name>          # 绑定规则组到容器（看向容器）
+│       └── remove <name>       # 解绑规则组
 │
 ├── rule
 │   ├── list                    # 列出所有规则组
@@ -726,8 +728,8 @@ loom {
 |------|------|------|---------|
 | **M1** | 数据模型 + 存储层 | 可创建/编辑/保存仓库和规则 | **~95%** ✅ |
 | **M2** | 命令系统 + Controller | 完整的 `/warehouse` 命令 | **~90%** ✅ (命令端缺部分Selector类型) |
-| **M3** | 容器交互 + 记忆 | 可执行容器内物品搬运 | **~60%** 🟡 (execute 已实现，但 tick 间隔控制未接入 speed；onScreenClosed 回调为空) |
-| **M4** | 高亮渲染 | 容器可视化 | **~50%** 🟡 (Gizmos API 渲染层已实现，但 HighlightController 未推送给 HighlightManager，实际不渲染) |
+| **M3** | 容器交互 + 记忆 | 可执行容器内物品搬运 | **~85%** 🟡 (tick 驱动的异步交互已实现，onScreenClosed 回调仍为空；interaction.speed 配置值待整合) |
+| **M4** | 高亮渲染 | 容器可视化 | **~95%** ✅ (Gizmos API 渲染层已实现，Controller→Manager 连接已打通) |
 | **M5** | 路径执行器 | 完整的自动搬运流程 | **~25%** 🔴 (PathfindingController已接入PathExecutor接口，但仅SimpleWalk且不控制移动) |
 | **M6** | 优化 + UI 接口 | EventBus + 为 UI 做好准备 | **0%** ⚪ |
 

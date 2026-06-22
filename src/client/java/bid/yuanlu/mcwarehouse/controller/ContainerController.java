@@ -50,6 +50,10 @@ public class ContainerController {
 		memory.clear(pos);
 	}
 
+	public void snapshotMemory(BlockPos pos, ContainerSnapshot snapshot) {
+		memory.snapshot(pos, snapshot);
+	}
+
 	public ContainerSnapshot captureCurrentScreen() {
 		Minecraft mc = Minecraft.getInstance();
 		if (mc.screen instanceof AbstractContainerScreen<?> screen) {
