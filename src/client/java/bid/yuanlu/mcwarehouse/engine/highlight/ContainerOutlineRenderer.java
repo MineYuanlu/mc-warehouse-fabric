@@ -13,7 +13,7 @@ public class ContainerOutlineRenderer {
 	private static final Map<HighlightType, Integer> COLORS = Map.of(
 			HighlightType.INPUT_OUTLINED, 0xFF4444,
 			HighlightType.OUTPUT_OUTLINED, 0x44FF44,
-			HighlightType.RELAY_OUTLINED, 0xFFFF44,
+			HighlightType.TEMP_OUTLINED, 0xFFFF44,
 			HighlightType.IGNORE_OUTLINED, 0x888888,
 			HighlightType.HAS_SPACE, 0x44AAFF,
 			HighlightType.FULL, 0xFFAA44,

@@ -37,7 +37,7 @@ public class ContainerSubCommand {
 						try {
 							type = ContainerType.valueOf(typeStr.toUpperCase());
 						} catch (IllegalArgumentException e) {
-							ctx.getSource().sendError(Component.literal("§cInvalid type. Use: INPUT, OUTPUT, RELAY, IGNORE"));
+							ctx.getSource().sendError(Component.literal("§cInvalid type. Use: INPUT, OUTPUT, TEMP, IGNORE"));
 							return 0;
 						}
 						var sel = SelectionController.getInstance();
@@ -132,7 +132,7 @@ public class ContainerSubCommand {
 						try {
 							type = ContainerType.valueOf(typeStr.toUpperCase());
 						} catch (IllegalArgumentException e) {
-							ctx.getSource().sendError(Component.literal("§cInvalid type. Use: INPUT, OUTPUT, RELAY, IGNORE"));
+							ctx.getSource().sendError(Component.literal("§cInvalid type. Use: INPUT, OUTPUT, TEMP, IGNORE"));
 							return 0;
 						}
 						var sel = SelectionController.getInstance();

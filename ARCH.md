@@ -6,44 +6,44 @@
 
 采用 MVC 模式完全分层，命令与未来 UI 共享 Controller 层：
 
-```
-┌─────────────────────────────────────────────────┐
-│                    View 层                        │
-│  ┌──────────────┐  ┌──────────────────────────┐  │
-│  │  Command/CMD  │  │  UI (未来实现)           │  │
+```─
+┌───────────────────────────────────────────────────┐
+│                    View Layer                     │
+│  ┌───────────────┐  ┌──────────────────────────┐  │
+│  │  Command/CMD  │  │  UI (TODO)               │  │
 │  │  /warehouse   │  │  Screen / HUD / Overlay  │  │
 │  │  /wh          │  │                          │  │
-│  └──────┬───────┘  └──────────┬───────────────┘  │
-├─────────┼─────────────────────┼───────────────────┤
-│         └─────────┬───────────┘                   │
+│  └──────┬────────┘  └──────────┬───────────────┘  │
+├─────────┼──────────────────────┼──────────────────┤
+│         └─────────┬────────────┘                  │
 │                   ▼                               │
 │  ┌──────────────────────────────────────────────┐ │
-│  │              Controller 层                    │ │
-│  │  SelectionController / RuleController /       │ │
-│  │  WarehouseController / PathfindingController  │ │
-│  │  ContainerController / HighlightController    │ │
+│  │              Controller Layer                │ │
+│  │  SelectionController / RuleController /      │ │
+│  │  WarehouseController / PathfindingController │ │
+│  │  ContainerController / HighlightController   │ │
 │  └──────────────────────┬───────────────────────┘ │
 ├─────────────────────────┼─────────────────────────┤
 │                         ▼                         │
 │  ┌──────────────────────────────────────────────┐ │
-│  │              Service / Engine 层              │ │
-│  │  RuleEngine / PathExecutor / ContainerMemory  │ │
-│  │  ContainerInteractor / HighlightManager       │ │
+│  │              Service / Engine Layer          │ │
+│  │  RuleEngine / PathExecutor / ContainerMemory │ │
+│  │  ContainerInteractor / HighlightManager      │ │
 │  └──────────────────────┬───────────────────────┘ │
 ├─────────────────────────┼─────────────────────────┤
 │                         ▼                         │
 │  ┌──────────────────────────────────────────────┐ │
-│  │              Data / Storage 层                │ │
-│  │  DataStorage / WarehouseStorage / WorldConfig │ │
-│  │  JSON Serializer / File I/O                   │ │
+│  │              Data / Storage Layer            │ │
+│  │ DataStorage / WarehouseStorage / WorldConfig │ │
+│  │ JSON Serializer / File I/O                   │ │
 │  └──────────────────────────────────────────────┘ │
 ├───────────────────────────────────────────────────┤
 │  ┌──────────────────────────────────────────────┐ │
-│  │              Mixin 层                         │ │
+│  │              Mixin Layer                     │ │
 │  │  ContainerScreenMixin / WorldRenderMixin     │ │
-│  │  MultiPlayerGameModeMixin                     │ │
+│  │  MultiPlayerGameModeMixin                    │ │
 │  └──────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────┘
+└───────────────────────────────────────────────────┘
 ```
 
 ### 1.2 源集与包结构
@@ -99,7 +99,7 @@ bid.yuanlu.mcwarehouse
 ├── model                               # 数据模型
 │   ├── Warehouse.java                  # 仓库定义
 │   ├── ContainerInfo.java              # 容器信息
-│   ├── ContainerType.java              # INPUT / OUTPUT / RELAY / IGNORE
+│   ├── ContainerType.java              # INPUT / OUTPUT / TEMP / IGNORE
 │   ├── ContainerMemory.java            # 容器内容记忆
 │   ├── ContainerSnapshot.java          # 容器快照 (内存快照)
 │   ├── rule
@@ -160,7 +160,7 @@ public class Warehouse {
 ```java
 public class ContainerInfo {
     BlockPos relativePos;               // 相对 anchor 的偏移
-    ContainerType type;                 // INPUT | OUTPUT | RELAY | IGNORE
+    ContainerType type;                 // INPUT | OUTPUT | TEMP | IGNORE
     RuleMode mode;                      // WHITELIST | BLACKLIST
     List<String> rulesNames;            // 引用的 ItemRules 名称列表
 }
@@ -168,13 +168,13 @@ public class ContainerInfo {
 
 - **INPUT（搬出容器/输入端）**：只能从中取出物品，按规则尽可能清空
 - **OUTPUT（搬入容器/输出端）**：只能放入物品，按规则尽可能填满
-- **RELAY（中继容器/暂存端）**：可存可取，倾向清空并送往 OUTPUT
+- **TEMP（临时暂存端）**：可存可取，作为 OUTPUT 和 INPUT 之间的缓冲。优先将匹配 OUTPUT 需求的物品取出，将背包中无法被任何 OUTPUT 接收的物品放入
 - **IGNORE（忽略）**：被标记但不参与搬运
 
 **默认 RuleMode**：以容器类型自动推断
 - INPUT → `BLACKLIST`（规则外的物品也能取出，尽可能清空）
 - OUTPUT → `WHITELIST`（只放入规则允许的物品）
-- RELAY → `BLACKLIST`（规则外的物品也能处理，倾向清空）
+- TEMP → `BLACKLIST`（规则外的物品也能处理，双向缓冲）
 
 ### 2.3 物品规则体系
 
@@ -459,7 +459,7 @@ public class ContainerInteractor {
 2. 根据容器类型和规则计算 TransferPlan：
    - **INPUT（默认黑名单）**：遍历容器内物品，匹配规则 → 规则匹配的按 quantifier 保留，其余全部取出
    - **OUTPUT（默认白名单）**：遍历规则 → 检查缺失物品 → 从玩家背包中放入规则允许的物品
-   - **RELAY（默认黑名单）**：双向计算，匹配规则的按 quantifier 保留，其余全部清出，再按规则从背包补入
+    - **TEMP（默认黑名单）**：双向计算（见 6.2 TEMP 部分）
 3. 交互速度由 `config.worlds.interaction.speed` 控制
 
 ### 4.3 高亮系统 (HighlightManager)
@@ -484,7 +484,7 @@ public class HighlightManager {
     enum HighlightType {
         INPUT_OUTLINED,    // 输入端颜色
         OUTPUT_OUTLINED,   // 输出端颜色
-        RELAY_OUTLINED,    // 暂存端颜色
+        TEMP_OUTLINED,    // 暂存端颜色
         IGNORE_OUTLINED,   // 忽略颜色
         HAS_SPACE,         // 有空间
         FULL,              // 已满
@@ -594,12 +594,14 @@ Controller 层承担所有业务逻辑：
 用户执行 /warehouse run
     │
     ▼
-PathfindingController
+PathfindingController（三阶段循环状态机）
     │ 1. 获取当前激活仓库的容器列表
-    │ 2. 筛选非 IGNORE 类型的容器
-    │ 3. 按容器类型排序优先级：
-    │    OUTPUT → INPUT → RELAY
-    │    （先清空背包放输出端，再从输入端取物，最后中继端中转分发）
+    │ 2. 按三阶段循环顺序处理：
+    │    每轮：OUTPUT → TEMP → INPUT（固定顺序）
+    │    - OUTPUT 阶段：将所有匹配规则物品从背包放入 OUTPUT
+    │    - TEMP 阶段：双向处理 TEMP（取出匹配 OUTPUT 需求的物品，放入无法被 OUTPUT 接收的物品）
+    │    - INPUT 阶段：从 INPUT 取出物品到背包
+    │ 3. 每个阶段内按距离排序（最近优先），未探索容器强制加入队列
     │ 4. 将坐标送入 PathExecutor.setTargets()
     │
     ▼
@@ -607,37 +609,55 @@ PathExecutor.tick() 循环
     │
     ├── ARRIVED ──→ ContainerInteractor
     │                   │ 读取容器记忆 + 规则
-    │                   │ 计算 TransferPlan
+    │                   │ 计算 TransferPlan（新：ItemMove 自带 direction）
     │                   │ 等待玩家打开容器 GUI（或通过外部 SDK 自动打开）
-    │                   │ 交互完成后 → snapshot()
-    │                   └──→ 继续 tick 前往下个目标
+    │                   │ 交互完成后 → snapshotMemory() 更新记忆
+    │                   │── 继续 tick 前往下个目标
     │
-    ├── FAILED ──→ 重试逻辑
+    ├── FAILED ──→ 重试逻辑（最多 3 次，跳过失败目标）
     │
-    └── DONE ────→ 提示用户搬运完成
+    └── DONE ────→ 一轮完成
+
+一轮完成后：
+    ├── 本轮有进展（roundHadAction 或 roundHadNewExplore）
+    │   └── 开始新一轮（OUTPUT → TEMP → INPUT）
+    └── 本轮无进展
+        └── 递进式终止评估并反馈用户
 ```
+
+**关键状态：**
+- `currentPhase: OUTPUT | TEMP | INPUT` — 当前阶段
+- `roundTargets: List<ContainerTarget>` — 当前阶段目标队列
+- `roundHadAction` — 本轮是否有实际搬运操作
+- `roundHadNewExplore` — 本轮是否有新容器被探索
+- 终止条件：`!roundHadAction && !roundHadNewExplore`
 
 ### 6.2 TransferPlan 计算
 
-对于一个容器，TransferPlan 包含两组操作：
+对于一个容器，TransferPlan 包含一组 `ItemMove`，每个 move 自带方向：
 
 ```
 输入容器 (INPUT) ：
     规则模式: BLACKLIST（默认）
     操作: 遍历物品 → 匹配规则 → 规则内物品按 quantifier 保留，多余的取出
           （默认黑名单意味着没有规则限制的物品全部取出，尽可能清空）
+    方向: TO_PLAYER（从容器取出到背包）
 
 输出容器 (OUTPUT)：
     规则模式: WHITELIST（默认）
     操作: 遍历规则 → 检查缺失数量 → 从背包取出规则允许的物品放入
           （默认白名单意味着没有规则允许的东西不会放入）
+    方向: TO_CONTAINER（从背包放入容器）
 
-暂存容器 (RELAY)：
+暂存容器 (TEMP)：
     规则模式: BLACKLIST（默认）
-    操作: 双向计算
-      1. 先移除不符合规则/超额物品到背包
-      2. 再根据规则补入（从背包）
-      默认黑名单意味着：规则匹配的物品按 quantifier 保留，其余全部清出
+    操作: 双向计算，分为两个阶段
+      阶段 A（从 TEMP 取出到背包，TO_PLAYER）：
+        - 有未探索 OUTPUT 时：保守策略，取出所有匹配规则但超额的部分
+        - 全部 OUTPUT 已探索时：精确策略，只取出匹配某 OUTPUT 规则的部分
+      阶段 B（从背包放入 TEMP，TO_CONTAINER）：
+        - 只放入那些"背包中无法被任何已探索 OUTPUT 接收"的物品
+        - 有 TEMP 规则匹配则按规则放，否则默认黑名单全放
 ```
 
 ---
@@ -737,7 +757,7 @@ loom {
 | **M2** | 命令系统 + Controller | 完整的 `/warehouse` 命令 | **~90%** ✅ (命令端缺部分Selector类型) |
 | **M3** | 容器交互 + 记忆 | 可执行容器内物品搬运 | **~92%** 🟢 (tick 驱动的异步交互 + onScreenClosed 快照存储 + interaction.speed 配置整合均已完成) |
 | **M4** | 高亮渲染 | 容器可视化 | **~95%** ✅ (Gizmos API 渲染层已实现，Controller→Manager 连接已打通) |
-| **M5** | 路径执行器 | 完整的自动搬运流程 | **~25%** 🔴 (PathfindingController已接入PathExecutor接口，但仅SimpleWalk且不控制移动) |
+| **M5** | 路径执行器 | 完整的自动搬运流程 | **~50%** 🟡 (PathfindingController已重写为三阶段循环状态机，但Executor不控制实际移动) |
 | **M6** | 优化 + UI 接口 | EventBus + 为 UI 做好准备 | **0%** ⚪ |
 
 > 详见 [`plan/summary.md`](plan/summary.md) 的完整分析及后续开发优先级建议。

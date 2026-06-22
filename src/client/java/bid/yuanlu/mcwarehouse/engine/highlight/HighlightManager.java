@@ -35,7 +35,7 @@ public class HighlightManager {
 			HighlightType type = switch (info.type) {
 				case INPUT -> HighlightType.INPUT_OUTLINED;
 				case OUTPUT -> HighlightType.OUTPUT_OUTLINED;
-				case RELAY -> HighlightType.RELAY_OUTLINED;
+				case TEMP -> HighlightType.TEMP_OUTLINED;
 				case IGNORE -> HighlightType.IGNORE_OUTLINED;
 			};
 			this.highlights.put(abs, type);
@@ -57,7 +57,7 @@ public class HighlightManager {
 	public enum HighlightType {
 		INPUT_OUTLINED,
 		OUTPUT_OUTLINED,
-		RELAY_OUTLINED,
+		TEMP_OUTLINED,
 		IGNORE_OUTLINED,
 		HAS_SPACE,
 		FULL,

@@ -10,7 +10,6 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 
 import bid.yuanlu.mcwarehouse.engine.rule.RuleApplicator.TransferPlan;
-import bid.yuanlu.mcwarehouse.engine.rule.RuleApplicator.TransferPlan.Direction;
 import bid.yuanlu.mcwarehouse.engine.rule.RuleApplicator.TransferPlan.ItemMove;
 import bid.yuanlu.mcwarehouse.model.ContainerSnapshot;
 
@@ -79,7 +78,7 @@ public class ContainerInteractor {
 		ItemMove move = currentPlan.moves.get(moveIndex);
 		moveIndex++;
 
-		int menuSlot = mapSlot(move, currentPlan.direction, containerSlots);
+		int menuSlot = mapSlot(move, containerSlots);
 		if (menuSlot >= 0 && menuSlot < menu.slots.size() && !menu.slots.get(menuSlot).getItem().isEmpty()) {
 			menu.clicked(menuSlot, 0, ContainerInput.QUICK_MOVE, player);
 		}
@@ -103,7 +102,7 @@ public class ContainerInteractor {
 		}
 
 		for (ItemMove move : plan.moves) {
-			int menuSlot = mapSlot(move, plan.direction, containerSlots);
+			int menuSlot = mapSlot(move, containerSlots);
 			if (menuSlot < 0 || menuSlot >= menu.slots.size()) continue;
 			if (menu.slots.get(menuSlot).getItem().isEmpty()) continue;
 
@@ -118,8 +117,8 @@ public class ContainerInteractor {
 		this.tickTimer = 0;
 	}
 
-	private static int mapSlot(ItemMove move, Direction dir, int containerSlots) {
-		if (dir == Direction.TO_CONTAINER) {
+	private static int mapSlot(ItemMove move, int containerSlots) {
+		if (move.direction == TransferPlan.Direction.TO_CONTAINER) {
 			if (move.slotIndex < 9) {
 				return containerSlots + 27 + move.slotIndex;
 			} else {

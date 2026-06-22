@@ -13,7 +13,7 @@ public class ContainerInfo {
 
 	public static RuleMode defaultMode(ContainerType type) {
 		return switch (type) {
-			case INPUT, RELAY -> RuleMode.BLACKLIST;
+			case INPUT, TEMP -> RuleMode.BLACKLIST;
 			case OUTPUT -> RuleMode.WHITELIST;
 			case IGNORE -> RuleMode.BLACKLIST;
 		};

@@ -22,6 +22,7 @@ import bid.yuanlu.mcwarehouse.model.rule.ItemRule;
 import bid.yuanlu.mcwarehouse.model.rule.ItemRules;
 import bid.yuanlu.mcwarehouse.storage.WarehouseStorage;
 import bid.yuanlu.mcwarehouse.storage.WorldConfigStorage;
+import bid.yuanlu.mcwarehouse.util.CoordinateUtils;
 
 public class ContainerController {
 
@@ -103,10 +104,10 @@ public class ContainerController {
 		}
 
 		boolean changed = false;
-		if (info.type == ContainerType.INPUT || info.type == ContainerType.RELAY) {
+		if (info.type == ContainerType.INPUT || info.type == ContainerType.TEMP) {
 			changed = processInput(snapshot, info.ruleMode, ruleSets);
 		}
-		if (info.type == ContainerType.OUTPUT || info.type == ContainerType.RELAY) {
+		if (info.type == ContainerType.OUTPUT || info.type == ContainerType.TEMP) {
 			changed = processOutput(snapshot, info.ruleMode, ruleSets) || changed;
 		}
 
@@ -179,5 +180,126 @@ public class ContainerController {
 		} else {
 			return !anyMatch;
 		}
+	}
+
+	// === Query helpers for PathfindingController ===
+
+	public boolean hasUnexploredOutput(Warehouse w) {
+		if (w == null || w.containers == null) return false;
+		for (ContainerInfo c : w.containers) {
+			if (c.type == ContainerType.OUTPUT && memory.get(CoordinateUtils.toAbsolute(c.relativePos, w.anchor)) == null) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	public List<ItemRule> collectAllOutputRules(Warehouse w) {
+		List<ItemRule> allRules = new ArrayList<>();
+		if (w == null || w.containers == null || w.rules == null) return allRules;
+		for (ContainerInfo c : w.containers) {
+			if (c.type != ContainerType.OUTPUT) continue;
+			if (c.rulesNames != null) {
+				for (String name : c.rulesNames) {
+					ItemRules group = w.rules.get(name);
+					if (group != null && group.rules != null) {
+						allRules.addAll(group.rules);
+					}
+				}
+			}
+		}
+		return allRules;
+	}
+
+	public boolean hasAnyOutputSpace(Warehouse w, ContainerSnapshot playerInv) {
+		if (w == null || w.containers == null) return false;
+		for (ContainerInfo c : w.containers) {
+			if (c.type != ContainerType.OUTPUT) continue;
+			BlockPos abs = CoordinateUtils.toAbsolute(c.relativePos, w.anchor);
+			ContainerSnapshot mem = getMemory(abs);
+			if (mem == null) return true;
+			TransferPlan plan = RuleApplicator.calculatePlan(c, mem, w.rules, playerInv);
+			if (plan != null && !plan.moves.isEmpty()) return true;
+		}
+		return false;
+	}
+
+	public boolean hasAnyTempSpace(Warehouse w, ContainerSnapshot playerInv) {
+		if (w == null || w.containers == null) return false;
+		boolean hasUnexplored = hasUnexploredOutput(w);
+		List<ItemRule> allOutputRules = collectAllOutputRules(w);
+		for (ContainerInfo c : w.containers) {
+			if (c.type != ContainerType.TEMP) continue;
+			BlockPos abs = CoordinateUtils.toAbsolute(c.relativePos, w.anchor);
+			ContainerSnapshot mem = getMemory(abs);
+			if (mem == null) return true;
+			TransferPlan plan = RuleApplicator.calculatePlan(c, mem, w.rules, playerInv, hasUnexplored, allOutputRules);
+			if (plan != null && !plan.moves.isEmpty()) return true;
+		}
+		return false;
+	}
+
+	public boolean isInventoryFull(ContainerSnapshot playerInv) {
+		if (playerInv == null) return true;
+		for (int i = 0; i < 36; i++) {
+			ItemStack stack = playerInv.slots.get(i);
+			if (stack == null || stack.isEmpty()) return false;
+			if (stack.getCount() < stack.getMaxStackSize()) return false;
+		}
+		return true;
+	}
+
+	public boolean isOutputFullySatisfied(Warehouse w) {
+		if (w == null || w.containers == null) return true;
+		ContainerSnapshot playerInv = new ContainerInteractor(2).capturePlayerInventory();
+		for (ContainerInfo c : w.containers) {
+			if (c.type != ContainerType.OUTPUT) continue;
+			BlockPos abs = CoordinateUtils.toAbsolute(c.relativePos, w.anchor);
+			ContainerSnapshot mem = getMemory(abs);
+			if (mem == null) return false;
+			TransferPlan plan = RuleApplicator.calculatePlan(c, mem, w.rules, playerInv);
+			if (plan != null && !plan.moves.isEmpty()) return false;
+		}
+		return true;
+	}
+
+	public boolean isTempFullyEmpty(Warehouse w) {
+		if (w == null || w.containers == null) return true;
+		boolean hasUnexplored = hasUnexploredOutput(w);
+		List<ItemRule> allOutputRules = collectAllOutputRules(w);
+		ContainerSnapshot playerInv = new ContainerInteractor(2).capturePlayerInventory();
+		for (ContainerInfo c : w.containers) {
+			if (c.type != ContainerType.TEMP) continue;
+			BlockPos abs = CoordinateUtils.toAbsolute(c.relativePos, w.anchor);
+			ContainerSnapshot mem = getMemory(abs);
+			if (mem == null) return false;
+			TransferPlan plan = RuleApplicator.calculatePlan(c, mem, w.rules, playerInv, hasUnexplored, allOutputRules);
+			if (plan != null && !plan.moves.isEmpty()) return false;
+		}
+		return true;
+	}
+
+	public boolean isInventoryEmpty() {
+		Minecraft mc = Minecraft.getInstance();
+		if (mc.player == null) return true;
+		var inv = mc.player.getInventory();
+		for (int i = 0; i < inv.getContainerSize(); i++) {
+			if (!inv.getItem(i).isEmpty()) return false;
+		}
+		return true;
+	}
+
+	public boolean isInputFullyEmpty(Warehouse w) {
+		if (w == null || w.containers == null) return true;
+		ContainerSnapshot playerInv = new ContainerInteractor(2).capturePlayerInventory();
+		for (ContainerInfo c : w.containers) {
+			if (c.type != ContainerType.INPUT) continue;
+			BlockPos abs = CoordinateUtils.toAbsolute(c.relativePos, w.anchor);
+			ContainerSnapshot mem = getMemory(abs);
+			if (mem == null) return false;
+			TransferPlan plan = RuleApplicator.calculatePlan(c, mem, w.rules, playerInv);
+			if (plan != null && !plan.moves.isEmpty()) return false;
+		}
+		return true;
 	}
 }

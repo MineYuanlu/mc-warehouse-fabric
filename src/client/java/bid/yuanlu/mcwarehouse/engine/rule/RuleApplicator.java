@@ -18,11 +18,9 @@ public class RuleApplicator {
 	public static class TransferPlan {
 
 		public final List<ItemMove> moves;
-		public final Direction direction;
 
-		public TransferPlan(List<ItemMove> moves, Direction direction) {
+		public TransferPlan(List<ItemMove> moves) {
 			this.moves = moves;
-			this.direction = direction;
 		}
 
 		public enum Direction {
@@ -36,18 +34,26 @@ public class RuleApplicator {
 			public final ItemStack item;
 			public final int amount;
 			public final int targetSlot;
+			public final Direction direction;
 
-			public ItemMove(int slotIndex, ItemStack item, int amount, int targetSlot) {
+			public ItemMove(int slotIndex, ItemStack item, int amount, int targetSlot, Direction direction) {
 				this.slotIndex = slotIndex;
 				this.item = item;
 				this.amount = amount;
 				this.targetSlot = targetSlot;
+				this.direction = direction;
 			}
 		}
 	}
 
 	public static TransferPlan calculatePlan(ContainerInfo info, ContainerSnapshot snapshot,
 			Map<String, ItemRules> rulesMap, ContainerSnapshot playerInventory) {
+		return calculatePlan(info, snapshot, rulesMap, playerInventory, false, null);
+	}
+
+	public static TransferPlan calculatePlan(ContainerInfo info, ContainerSnapshot snapshot,
+			Map<String, ItemRules> rulesMap, ContainerSnapshot playerInventory,
+			boolean hasUnexploredOutput, List<ItemRule> allOutputRules) {
 		if (info.type == ContainerType.IGNORE) return null;
 
 		RuleMode mode = info.ruleMode != null ? info.ruleMode : ContainerInfo.defaultMode(info.type);
@@ -65,7 +71,7 @@ public class RuleApplicator {
 		return switch (info.type) {
 			case INPUT -> planInput(snapshot, allRules, mode);
 			case OUTPUT -> planOutput(snapshot, allRules, playerInventory, mode);
-			case RELAY -> planRelay(snapshot, allRules, playerInventory, mode);
+			case TEMP -> planTemp(snapshot, allRules, playerInventory, mode, hasUnexploredOutput, allOutputRules);
 			default -> null;
 		};
 	}
@@ -96,7 +102,7 @@ public class RuleApplicator {
 
 			if (rule == null) {
 				if (mode == RuleMode.BLACKLIST) {
-					moves.add(new TransferPlan.ItemMove(slotIndex, stack, stack.getCount(), -1));
+					moves.add(new TransferPlan.ItemMove(slotIndex, stack, stack.getCount(), -1, TransferPlan.Direction.TO_PLAYER));
 				}
 			} else {
 				int total = typeCounts.get(stack);
@@ -107,14 +113,14 @@ public class RuleApplicator {
 					int removed = removalCounts.getOrDefault(stack, 0);
 					int toRemove = Math.min(stack.getCount(), excess - removed);
 					if (toRemove > 0) {
-						moves.add(new TransferPlan.ItemMove(slotIndex, stack, toRemove, -1));
+						moves.add(new TransferPlan.ItemMove(slotIndex, stack, toRemove, -1, TransferPlan.Direction.TO_PLAYER));
 						removalCounts.put(stack, removed + toRemove);
 					}
 				}
 			}
 		}
 
-		return moves.isEmpty() ? null : new TransferPlan(moves, TransferPlan.Direction.TO_PLAYER);
+		return moves.isEmpty() ? null : new TransferPlan(moves);
 	}
 
 	private static TransferPlan planOutput(ContainerSnapshot snapshot, List<ItemRule> allRules,
@@ -163,26 +169,116 @@ public class RuleApplicator {
 				if (!ItemMatcher.matches(rule, playerStack)) continue;
 
 				int toTake = Math.min(playerStack.getCount(), needed);
-				moves.add(new TransferPlan.ItemMove(playerSlot, playerStack, toTake, -1));
+				moves.add(new TransferPlan.ItemMove(playerSlot, playerStack, toTake, -1, TransferPlan.Direction.TO_CONTAINER));
 				needed -= toTake;
 				if (needed <= 0) break;
 			}
 		}
 
-		return moves.isEmpty() ? null : new TransferPlan(moves, TransferPlan.Direction.TO_CONTAINER);
+		return moves.isEmpty() ? null : new TransferPlan(moves);
 	}
 
-	private static TransferPlan planRelay(ContainerSnapshot snapshot, List<ItemRule> allRules,
-			ContainerSnapshot playerInventory, RuleMode mode) {
+	private static TransferPlan planTemp(ContainerSnapshot snapshot, List<ItemRule> tempRules,
+			ContainerSnapshot playerInventory, RuleMode mode,
+			boolean hasUnexploredOutput, List<ItemRule> allOutputRules) {
 		List<TransferPlan.ItemMove> allMoves = new ArrayList<>();
 
-		TransferPlan remove = planInput(snapshot, allRules, mode);
-		if (remove != null) allMoves.addAll(remove.moves);
+		if (hasUnexploredOutput) {
+			TransferPlan remove = planInput(snapshot, tempRules, mode);
+			if (remove != null) allMoves.addAll(remove.moves);
+		} else if (allOutputRules != null && !allOutputRules.isEmpty()) {
+			List<TransferPlan.ItemMove> selective = calcTempRemoveSelective(snapshot, tempRules, mode, allOutputRules);
+			allMoves.addAll(selective);
+		}
 
-		TransferPlan add = planOutput(snapshot, allRules, playerInventory, mode);
-		if (add != null) allMoves.addAll(add.moves);
+		if (allOutputRules != null && !allOutputRules.isEmpty()) {
+			List<TransferPlan.ItemMove> adds = calcTempAddSelective(snapshot, tempRules, playerInventory, mode, allOutputRules);
+			allMoves.addAll(adds);
+		}
 
-		return allMoves.isEmpty() ? null : new TransferPlan(allMoves, TransferPlan.Direction.TO_PLAYER);
+		return allMoves.isEmpty() ? null : new TransferPlan(allMoves);
+	}
+
+	private static List<TransferPlan.ItemMove> calcTempRemoveSelective(
+			ContainerSnapshot snapshot, List<ItemRule> tempRules, RuleMode mode,
+			List<ItemRule> allOutputRules) {
+		List<TransferPlan.ItemMove> moves = new ArrayList<>();
+
+		Map<ItemStack, Integer> typeCounts = new HashMap<>();
+		for (ItemStack stack : snapshot.slots.values()) {
+			if (stack.isEmpty()) continue;
+			typeCounts.merge(stack, stack.getCount(), Integer::sum);
+		}
+
+		Map<ItemStack, Integer> removalCounts = new HashMap<>();
+
+		for (var entry : snapshot.slots.entrySet()) {
+			int slotIndex = entry.getKey();
+			ItemStack stack = entry.getValue();
+			if (stack.isEmpty()) continue;
+
+			boolean matchesAnyOutput = false;
+			for (ItemRule outputRule : allOutputRules) {
+				if (ItemMatcher.matches(outputRule, stack)) {
+					matchesAnyOutput = true;
+					break;
+				}
+			}
+
+			if (matchesAnyOutput) {
+				ItemRule tempRule = findFirstMatch(tempRules, stack);
+				if (tempRule != null) {
+					int total = typeCounts.get(stack);
+					int maxStack = stack.getMaxStackSize();
+					int target = QuantityCalculator.computeTarget(tempRule.quantifier, total, snapshot.containerSize, maxStack);
+					if (total > target) {
+						int excess = total - target;
+						int removed = removalCounts.getOrDefault(stack, 0);
+						int toRemove = Math.min(stack.getCount(), excess - removed);
+						if (toRemove > 0) {
+							moves.add(new TransferPlan.ItemMove(slotIndex, stack, toRemove, -1, TransferPlan.Direction.TO_PLAYER));
+							removalCounts.put(stack, removed + toRemove);
+						}
+					}
+				} else if (mode == RuleMode.BLACKLIST) {
+					moves.add(new TransferPlan.ItemMove(slotIndex, stack, stack.getCount(), -1, TransferPlan.Direction.TO_PLAYER));
+				}
+			}
+		}
+
+		return moves;
+	}
+
+	private static List<TransferPlan.ItemMove> calcTempAddSelective(
+			ContainerSnapshot snapshot, List<ItemRule> tempRules, ContainerSnapshot playerInventory,
+			RuleMode mode, List<ItemRule> allOutputRules) {
+		List<TransferPlan.ItemMove> moves = new ArrayList<>();
+		if (playerInventory == null) return moves;
+
+		for (var entry : playerInventory.slots.entrySet()) {
+			int playerSlot = entry.getKey();
+			ItemStack stack = entry.getValue();
+			if (stack.isEmpty()) continue;
+
+			boolean matchesAnyOutput = false;
+			for (ItemRule outputRule : allOutputRules) {
+				if (ItemMatcher.matches(outputRule, stack)) {
+					matchesAnyOutput = true;
+					break;
+				}
+			}
+
+			if (matchesAnyOutput) continue;
+
+			ItemRule tempRule = findFirstMatch(tempRules, stack);
+			if (tempRule != null) {
+				moves.add(new TransferPlan.ItemMove(playerSlot, stack, stack.getCount(), -1, TransferPlan.Direction.TO_CONTAINER));
+			} else if (mode == RuleMode.BLACKLIST) {
+				moves.add(new TransferPlan.ItemMove(playerSlot, stack, stack.getCount(), -1, TransferPlan.Direction.TO_CONTAINER));
+			}
+		}
+
+		return moves;
 	}
 
 	private static ItemRule findFirstMatch(List<ItemRule> rules, ItemStack stack) {
