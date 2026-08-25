@@ -1,0 +1,58 @@
+name: reusable-package
+
+# 可复用 workflow：编译 + JUnit + 打包生产 JAR（universal jar 策略：按仓库默认
+# 最老支持线编译，fabric.mod.json 的 "minecraft": ">=26.1" 放行全部版本）。
+# 被 build.yml / release.yml / build-test-jar.yml 调用。
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: 'Git ref (branch / tag / SHA) to check out. Empty = caller ref.'
+        required: false
+        default: ''
+        type: string
+      artifact-name:
+        description: '上传 artifact 名。'
+        required: false
+        default: 'yuanlu-warehouse'
+        type: string
+      run-tests:
+        description: '是否执行 build 内含的 JUnit 测试（false 时 -x test）。'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: gradle/actions/wrapper-validation@v6
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'microsoft'
+      - name: Build JAR (+ JUnit)
+        run: |
+          chmod +x ./gradlew
+          ./gradlew build ${{ inputs.run-tests && '' || '-x test' }}
+      - name: Verify production JAR has expanded templates
+        run: |
+          # -sources.jar 的 fabric.mod.json 是未展开的 ${version} 模板，属预期；
+          # 生产 jar 若仍带模板则 Loader 解析失败，必须在这里拦下。
+          JAR=$(find build/libs -name 'yuanlu-warehouse-*.jar' ! -name '*-sources.jar' | head -1)
+          test -n "$JAR" || {
+            echo "::error::no production jar found in build/libs"
+            exit 1
+          }
+          if unzip -p "$JAR" fabric.mod.json | grep -qF '${'; then
+            echo "::error::production jar still carries unexpanded template: $JAR"
+            exit 1
+          fi
+          echo "production jar OK: $JAR"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: build/libs/

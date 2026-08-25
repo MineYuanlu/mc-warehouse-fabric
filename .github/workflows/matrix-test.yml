@@ -1,0 +1,173 @@
+name: matrix-test
+
+# 版本矩阵测试（N 个 MC 版本编译 + JUnit + 全版本 E2E 真实启动）。
+# 触发：develop / master 推送（全面门禁）+ 手动。feature 分支只跑 pr-check 快速检查。
+on:
+  push:
+    branches: [master, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # ── Resolve: expand versions.json into the strategy matrices ──
+  resolve:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.emit.outputs.matrix }}
+      oldest: ${{ steps.emit-oldest.outputs.oldest }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check versions.json freshness (advisory, never blocks)
+        run: |
+          python3 tools/resolve_versions.py check || \
+            echo "::warning::versions.json is stale — run the refresh workflow"
+      - name: Emit matrix JSON (all supported MC versions)
+        id: emit
+        run: |
+          python3 tools/resolve_versions.py matrix > /tmp/matrix.json
+          {
+            echo "matrix<<EOF"
+            cat /tmp/matrix.json
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+      - name: Emit oldest MC row (universal jar compile target)
+        id: emit-oldest
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          rows = json.load(open("versions.json"))["versions"]
+          print(f"oldest={json.dumps(rows[-1])}")
+          PY
+
+  # ── Test: 每个支持的 MC 版本，源码兼容预警 ──────────────────────────────
+  # 目的：确保源码在全部 MC 版本下可编译 + JUnit 通过。
+  # 这里产出的 jar 只是编译载体，不发布；发布产物是 build-universal 的 universal jar。
+  test:
+    needs: resolve
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.resolve.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          java-version: ${{ matrix.java }}
+          distribution: 'microsoft'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Compile + JUnit tests (source coverage, not published)
+        run: |
+          chmod +x ./gradlew
+          ./gradlew build \
+            -Pminecraft_version=${{ matrix.mc }} \
+            -PfabricApiVersion=${{ matrix.fabricApi }}
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-${{ matrix.mc }}
+          path: |
+            build/reports/tests/test
+            build/test-results/test
+
+  # ── Universal jar: 编一个 jar，供所有版本 E2E 复用 ───────────────────────
+  # 编译目标取全局最老支持线：引用的符号是全部支持版本集合的子集，
+  # 配合 fabric.mod.json 的 "minecraft": ">=26.1"，单个 jar 通用于全部版本。
+  build-universal:
+    needs: resolve
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'microsoft'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build universal jar (oldest MC line)
+        env:
+          OLDEST: ${{ needs.resolve.outputs.oldest }}
+        run: |
+          chmod +x ./gradlew
+          ./gradlew build \
+            -Pminecraft_version=$(echo "$OLDEST" | jq -r .mc) \
+            -PfabricApiVersion=$(echo "$OLDEST" | jq -r .fabricApi)
+      - name: Upload universal jar
+        uses: actions/upload-artifact@v7
+        with:
+          name: universal-jar
+          # 只传生产 jar：排除 -sources.jar，其 fabric.mod.json 是未展开的
+          # ${version}/${loader_version} 模板，被 E2E 误载会导致 Loader 解析失败。
+          path: |
+            build/libs/yuanlu-warehouse-*.jar
+            !build/libs/*-sources.jar
+
+  # ── Universal client E2E gametest（生产运行，headless）────────────────────
+  # 对照 Fabric 官方 CI（fabric-api/.github/workflows/build.yml client_test job）：
+  # 无显示 ubuntu + xvfb + 上传截图。mod 本体不按矩阵重新编译，而是复用
+  # build-universal 产出的同一个 jar（runProductionClientGameTestUniversal +
+  # -PuniversalJar）。因此验证的是"发布的单 jar 在所有 MC 版本上真实可用"，
+  # 而非"该版本源码编译出的 jar 可用"。mixin 的运行时应用、MC 目标方法名差异
+  # 都在真实启动中暴露；未来破坏性 MC 版本随 versions.json 增长自动被覆盖。
+  universal-e2e:
+    needs:
+      - resolve
+      - build-universal
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.resolve.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          java-version: ${{ matrix.java }}
+          distribution: 'microsoft'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install dependencies (xvfb)
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+      - name: Download universal jar
+        uses: actions/download-artifact@v8
+        with:
+          name: universal-jar
+          path: universal
+      - name: Run client gametest (universal jar, production, headless via xvfb)
+        timeout-minutes: 20
+        run: |
+          chmod +x ./gradlew
+          # 只选生产 jar，排除 -sources.jar（其 fabric.mod.json 为未展开的 ${version} 模板），
+          # 并断言所选 jar 内模板已展开，防止任何错误 jar 被误载。
+          UJAR=$(find universal -name 'yuanlu-warehouse-*.jar' ! -name '*-sources.jar' | head -1)
+          test -n "$UJAR" || {
+            echo "::error::no production universal jar found (mc=${{ matrix.mc }})"
+            exit 1
+          }
+          unzip -p "$UJAR" fabric.mod.json | grep -qF '${' && {
+            echo "::error::universal jar still carries unexpanded template: $UJAR (mc=${{ matrix.mc }})"
+            exit 1
+          }
+          # -PuniversalJar 让 mod 本体用预构建 jar（不重编译）
+          ./gradlew runProductionClientGameTestUniversal \
+            -PuniversalJar="$UJAR" \
+            -Pminecraft_version=${{ matrix.mc }} \
+            -PfabricApiVersion=${{ matrix.fabricApi }} \
+            --stacktrace > gametest.log 2>&1
+          # 断言全部通过才算成功；挂起由 timeout-minutes 兜底 kill
+          grep -q "yuanlu-warehouse E2E assertions passed" gametest.log || {
+            echo "::error::client gametest assertions did not pass (mc=${{ matrix.mc }})"
+            exit 1
+          }
+      - name: Upload gametest log (diagnose hangs)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: client-gametest-log-${{ matrix.mc }}
+          path: gametest.log
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: client-gametest-screenshots-${{ matrix.mc }}
+          path: run/screenshots

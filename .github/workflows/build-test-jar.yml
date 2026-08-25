@@ -1,0 +1,29 @@
+name: build-test-jar
+
+# 手动触发，不 bump 版本、不打 tag、不发布。
+# 编译打包一个生产 JAR 供人工测试（产物等同 release 产物）。
+# ref 指定构建的分支/tag/SHA；runTests 开关打包时的 JUnit。
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch / tag / SHA to build (default: master)'
+        required: false
+        default: 'master'
+      runTests:
+        description: 'Run JUnit tests in package job'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    uses: ./.github/workflows/reusable-package.yml
+    with:
+      ref: ${{ inputs.ref }}
+      artifact-name: yuanlu-warehouse-test
+      run-tests: ${{ inputs.runTests }}
+    secrets: inherit

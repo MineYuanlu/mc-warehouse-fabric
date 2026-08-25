@@ -1,0 +1,105 @@
+name: release
+
+# 手动发布：bump 版本并打 tag → 编译打包（reusable-package）→ 生成 changelog →
+# 创建 GitHub Release。仅 GitHub Release 渠道；如需 Modrinth 再扩展。
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version bump type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    name: Bump version & tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Bump version in gradle.properties
+        id: bump
+        run: |
+          CURRENT=$(grep '^mod_version=' gradle.properties | cut -d= -f2)
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+          case "${{ github.event.inputs.version }}" in
+            major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+            minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+            patch) PATCH=$((PATCH + 1)) ;;
+          esac
+          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          sed -i "s/^mod_version=.*/mod_version=${NEW_VERSION}/" gradle.properties
+          git add gradle.properties
+          git commit -m "chore(release): v${NEW_VERSION}"
+          git tag "v${NEW_VERSION}"
+          git push origin master
+          git push origin "v${NEW_VERSION}"
+          echo "version=${NEW_VERSION}" >> "$GITHUB_OUTPUT"
+
+  package:
+    needs: bump
+    uses: ./.github/workflows/reusable-package.yml
+    with:
+      ref: v${{ needs.bump.outputs.version }}
+      artifact-name: yuanlu-warehouse-release
+      run-tests: true
+    secrets: inherit
+
+  github-release:
+    name: Create GitHub Release
+    needs:
+      - bump
+      - package
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: v${{ needs.bump.outputs.version }}
+          # 完整历史：changelog 的 git describe 需要拿到上一个 tag。
+          fetch-depth: 0
+      - name: Download release jars
+        uses: actions/download-artifact@v8
+        with:
+          name: yuanlu-warehouse-release
+          path: build/libs/
+      - name: Generate changelog
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            LOG=$(git log --oneline --no-decorate "${PREV_TAG}..HEAD")
+          else
+            LOG=$(git log --oneline --no-decorate -10)
+          fi
+          {
+            echo 'CHANGELOG<<EOF_M'
+            echo "## What's Changed"
+            echo "$LOG"
+            echo ""
+            echo "**Full Changelog**: https://github.com/MineYuanlu/mc-warehouse/commits/v${{ needs.bump.outputs.version }}"
+            echo 'EOF_M'
+          } >> "$GITHUB_ENV"
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.bump.outputs.version }}
+          name: v${{ needs.bump.outputs.version }}
+          generate_release_notes: true
+          body: ${{ env.CHANGELOG }}
+          files: build/libs/*.jar
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -19,7 +19,6 @@ classes/
 # vscode
 
 .settings/
-.vscode/
 bin/
 .classpath
 .project
@@ -38,3 +37,15 @@ hs_err_*.log
 replay_*.log
 *.hprof
 *.jfr
+
+
+# local properties
+gradle.local.properties
+
+# Python
+__pycache__/
+
+
+/logs
+/tmp
+*.log

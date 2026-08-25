@@ -3,12 +3,15 @@ plugins {
 	id 'maven-publish'
 }
 
+version = project.mod_version
+group = project.maven_group
+
+base {
+	archivesName = project.archives_base_name
+}
+
 repositories {
-	// Add repositories to retrieve artifacts from in here.
-	// You should only use this when depending on other mods because
-	// Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
-	// See https://docs.gradle.org/current/userguide/declaring_repositories.html
-	// for more information about repositories.
+	// Loom 自动添加 MC / fabric maven；仅当依赖其他 mod 时才需要额外仓库。
 }
 
 loom {
@@ -22,60 +25,118 @@ loom {
 	}
 }
 
+// E2E 客户端 gametest：独立 source set（gametest）+ 独立测试 mod。
+fabricApi {
+	configureTests {
+		createSourceSet = true
+		modId = "yuanlu-warehouse-gametest"
+		// 只跑客户端 E2E；game test server 上部分 mod/注册表行为与真实客户端不一致。
+		enableGameTests = false
+		enableClientGameTests = true
+		eula = true
+	}
+}
+
+// 测试 mod 是独立 source set（gametest），production 运行只收集
+// jar/remapJar + productionRuntimeMods —— 打包成 jar 显式加入，否则测试类不加载。
+def gametestModJar = tasks.register("gametestModJar", Jar) {
+	group = "verification"
+	from sourceSets.gametest.output
+	archiveBaseName = "yuanlu-warehouse-gametest"
+	destinationDirectory = layout.buildDirectory.dir("gametest-mods")
+}
+
 dependencies {
-	// To change the versions see the gradle.properties file
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
 	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
 
 	// Fabric API. This is technically optional, but you probably want it anyway.
-	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabricApiVersion}"
+
+	testImplementation "net.fabricmc:fabric-loader-junit:${project.loader_version}"
+
+	// production 运行的 mods 只来自 jar/remapJar + productionRuntimeMods，
+	// fabric-api / 测试 mod 都要显式声明。
+	productionRuntimeMods "net.fabricmc.fabric-api:fabric-api:${project.fabricApiVersion}"
+	productionRuntimeMods files(gametestModJar)
+}
+
+test {
+	useJUnitPlatform()
+}
+
+// CI headless client gametest（生产运行）：Xvfb + fabric.client.gametest 开关。
+tasks.register("runProductionClientGameTest", net.fabricmc.loom.task.prod.ClientProductionRunTask) {
+	jvmArgs.add("-Dfabric.client.gametest")
+	// 网络同步器 bug 规避（fabric-docs automatic-testing warning）。
+	jvmArgs.add("-Dfabric.client.gametest.disableNetworkSynchronizer=true")
+	// CI 无头用 Xvfb；本机有真实 DISPLAY 时直接用（-PclientGameTestXVFB 可覆盖）。
+	def xvfbProp = project.findProperty('clientGameTestXVFB')
+	useXVFB = (xvfbProp != null) ? (xvfbProp as boolean) : (System.getenv('CI') != null)
+}
+
+// 与 runProductionClientGameTest 相同，但 mod 本体使用预构建的 universal jar
+// （-PuniversalJar=<path>），从而在任意 MC 版本上端到端验证同一个发布产物，
+// 而非针对该版本重新编译的 jar。loom 的 AbstractProductionRunTask 构造时把
+// remapJar + productionRuntimeMods 塞进 mods 集合，这里用 setFrom 整体替换掉 remapJar。
+tasks.register("runProductionClientGameTestUniversal", net.fabricmc.loom.task.prod.ClientProductionRunTask) {
+	jvmArgs.add("-Dfabric.client.gametest")
+	jvmArgs.add("-Dfabric.client.gametest.disableNetworkSynchronizer=true")
+	def xvfbProp = project.findProperty('clientGameTestXVFB')
+	useXVFB = (xvfbProp != null) ? (xvfbProp as boolean) : (System.getenv('CI') != null)
+	def ujar = project.findProperty('universalJar')
+	if (ujar) {
+		mods.setFrom(files(ujar), configurations.named("productionRuntimeMods"))
+	}
 }
 
 processResources {
-	def version = project.version
-	inputs.property "version", version
+	inputs.property "version", project.version
+	inputs.property "loader_version", project.loader_version
+	filteringCharset "UTF-8"
 
 	filesMatching("fabric.mod.json") {
-		expand "version": version
+		expand "version": project.version,
+				"loader_version": project.loader_version
 	}
 }
 
+def targetJavaVersion = 25
 tasks.withType(JavaCompile).configureEach {
-	it.options.release = 25
+	it.options.encoding = "UTF-8"
+	if (targetJavaVersion >= 10 || JavaVersion.current().isJava10Compatible()) {
+		it.options.release.set(targetJavaVersion)
+	}
 }
 
 java {
-	// Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
-	// if it is present.
-	// If you remove this line, sources will not be generated.
+	def javaVersion = JavaVersion.toVersion(targetJavaVersion)
+	if (JavaVersion.current() < javaVersion) {
+		toolchain.languageVersion = JavaLanguageVersion.of(targetJavaVersion)
+	}
 	withSourcesJar()
+}
 
-	sourceCompatibility = JavaVersion.VERSION_25
-	targetCompatibility = JavaVersion.VERSION_25
+// sources jar 从 allSource 取原始资源，fabric.mod.json 是未展开的 ${version} 模板；
+// 排除它，防止 sources jar 被当成 mod 加载导致 Loader 解析失败。
+tasks.named('sourcesJar') {
+	exclude 'fabric.mod.json'
 }
 
 jar {
-	def projectName = project.name
-	inputs.property "projectName", projectName
-
 	from("LICENSE") {
-		rename { "${it}_$projectName"}
+		rename { "${it}_${project.archives_base_name}" }
 	}
 }
 
-// configure the maven publication
 publishing {
 	publications {
 		create("mavenJava", MavenPublication) {
+			artifactId = project.archives_base_name
 			from components.java
 		}
 	}
 
-	// See https://docs.gradle.org/current/userguide/publishing_maven.html for information on how to set up publishing.
 	repositories {
-		// Add repositories to publish to here.
-		// Notice: This block does NOT have the same function as the block in the top level.
-		// The repositories here will be used for publishing your artifact, not for
-		// retrieving dependencies.
 	}
 }

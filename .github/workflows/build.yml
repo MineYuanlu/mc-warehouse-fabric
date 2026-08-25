@@ -1,30 +1,23 @@
-# Automatically build the project and run any configured tests for every push
-# and submitted pull request. This can help catch issues that only occur on
-# certain platforms or Java versions, and provides a first line of defence
-# against bad commits.
-
 name: build
-on: [pull_request, push]
+
+# 全面门禁：编译 + 打包（产物等同 release 产物，自动产出）。
+# 单人开发流程：dev/xxx → develop → master → 手动发版。
+# develop 是合入 master 前的完整验证门禁，因此 develop 与 master 都跑全量构建；
+# tag 触发用于留档 release 引用构建。feature 分支/PR 的快速检查在 pr-check.yml，
+# 版本矩阵 + E2E 在 matrix-test.yml。
+on:
+  push:
+    branches: [master, develop]
+    tags: ['v*']
+
+permissions:
+  contents: read
 
 jobs:
-  build:
-    runs-on: ubuntu-24.04
-    steps:
-      - name: checkout repository
-        uses: actions/checkout@v6
-      - name: validate gradle wrapper
-        uses: gradle/actions/wrapper-validation@v6
-      - name: setup jdk
-        uses: actions/setup-java@v5
-        with:
-          java-version: '25'
-          distribution: 'microsoft'
-      - name: make gradle wrapper executable
-        run: chmod +x ./gradlew
-      - name: build
-        run: ./gradlew build
-      - name: capture build artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: Artifacts
-          path: build/libs/
+  package:
+    uses: ./.github/workflows/reusable-package.yml
+    with:
+      ref: ${{ github.ref }}
+      artifact-name: yuanlu-warehouse
+      run-tests: true
+    secrets: inherit
