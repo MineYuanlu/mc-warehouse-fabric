@@ -34,6 +34,16 @@ public final class RuleApplicator {
 	 */
 	public static List<TakePlan> planTake(ContainerInfo info, List<ContainerRule> rules,
 			ContainerSnapshot snapshot, TakeMode mode) {
+		return planTake(info, rules, snapshot, mode, null);
+	}
+
+	/**
+	 * 取出计划（带谓词过滤）：在 mode 语义之上再过滤可取物品。
+	 * TEMP 精确模式传「任一 OUTPUT 当前需要」的谓词，配合 {@link TakeMode#ALL}
+	 * 实现「仅取出 OUTPUT 消化得了的物品」（防振荡②，§5.3）；null = 不过滤。
+	 */
+	public static List<TakePlan> planTake(ContainerInfo info, List<ContainerRule> rules,
+			ContainerSnapshot snapshot, TakeMode mode, @Nullable java.util.function.Predicate<ItemStack> filter) {
 		var ctx = RuleModeContext.fromSnapshot(info.effectiveRuleMode(), snapshot);
 		List<TakePlan> plans = new ArrayList<>();
 		// 目标量：物品 → target；先用聚合结果计算 delta，再按槽位排水
@@ -42,6 +52,7 @@ public final class RuleApplicator {
 		Map<ItemStack, Integer> takeRemainder = new java.util.IdentityHashMap<>();
 		for (Map.Entry<ItemStack, Integer> e : currentByItem.entrySet()) {
 			ItemStack sample = e.getKey();
+			if (filter != null && !filter.test(sample)) continue;
 			int current = e.getValue();
 			int target;
 			if (mode == TakeMode.ALL) {

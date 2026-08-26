@@ -40,7 +40,7 @@
 | L7 | 内置 Detector（箱族/木桶/潜影盒/末影箱/漏斗族/熔炉系/酿造台）+ 槽位角色表 + resolveMultiBlock | JVM 单测 | ✅ | `feat(container): L7 容器检测` |
 | L8 | VanillaGuiInteraction 六原语 + ContainerSession 协议层（开屏握手/逐击对账/双向精确算法/settle 重扫）+ handleOpenScreen Mixin | gametest① | ✅ | `feat(protocol): L8 运行时交互协议` |
 | L9 | RuleApplicator（首条命中/negative/∞语义/滚动模拟/聚合容量预检/selector×IOType 校验） | JVM 单测 | ✅ | `feat(rule): L9 规则引擎` |
-| L10 | NoOpNavigator + TransportEngineImpl（状态机/防振荡双机制/轮次追踪/异常表/RunReport/WarehouseEvents） | gametest② | ⬜ | |
+| L10 | NoOpNavigator + TransportEngineImpl（状态机/防振荡双机制/轮次追踪/异常表/RunReport/WarehouseEvents） | gametest② | ✅ | `feat(engine): L10 传输引擎` |
 | L11 | `/wh` 命令全量 + 标记模式 + i18n（en_us+zh_cn）+ 入口装配 | gametest③ | ⬜ | |
 
 
@@ -62,6 +62,14 @@
 - 客户端 `AbstractContainerMenu.getStateId()` 在 26.1 不随服务端 SetContent/SetSlot 更新——对账信号改为「受监视槽位+光标内容变化 + 2 tick 稳定窗口」（见 D3）
 - gametest 断言不可用 JUnit（production runtime 无 junit）——用 AssertionError 抛出
 - gametest 源集需显式加 `gametestImplementation` junit + client output
+
+
+**L10 补充记录（E2E 实测教训）**
+- 内置实现注册（探测器/交互/导航器/分配器/codec）在 L11 入口装配前由 gametest 引导内联
+- `continueRun` 依赖 suspend 记录完整 sessionInfo（sessionKey/sessionInfo 三元组都要落）——坏容器探测失败发生在 beginOpen 早段时尤其注意
+- 出口条件补充（§5.2 v0.2「未知≠满足」的推广）：任何类目存在未探索容器 → 出口①②一律不满足；已 skip 的容器不算未知
+- itemsMoved 是取/放双段累计（INPUT 取 60 + OUTPUT 放 60 = 120），不是净搬运量
+- gametest 的 runOnServer 异步派发：断言服务端状态需标志位轮询等待回调完成；关箱后客户端 BlockEntity 不含容器内容（只有 Menu 同步），只能从服务端读
 
 ### gametest 里程碑覆盖（§13 映射）
 
