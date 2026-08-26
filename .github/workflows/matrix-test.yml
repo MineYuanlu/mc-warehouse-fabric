@@ -37,8 +37,10 @@ jobs:
         run: |
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import json
-          rows = json.load(open("versions.json"))["versions"]
-          print(f"oldest={json.dumps(rows[-1])}")
+          row = dict(json.load(open("versions.json"))["versions"][-1])
+          # versions.json 行字段为 id，与 matrix 模式输出 schema 对齐（mc/java/fabricApi）
+          row["mc"] = row.pop("id")
+          print(f"oldest={json.dumps(row)}")
           PY
 
   # ── Test: 每个支持的 MC 版本，源码兼容预警 ──────────────────────────────
