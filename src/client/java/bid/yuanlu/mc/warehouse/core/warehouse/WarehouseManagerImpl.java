@@ -83,6 +83,43 @@ public final class WarehouseManagerImpl implements WarehouseManager {
 
 	// ---- 变更 ----
 
+	/**
+	 * 跨仓库搬运的临时覆盖视图（PDD §5.6）：active() 返回 overlay，
+	 * save(overlay) 不落盘；popTransferOverlay() 恢复原激活态。
+	 */
+	@Nullable
+	private Warehouse transferOverlay;
+	@Nullable
+	private String preOverlayActiveId;
+
+	/** 推入临时搬运视图并激活；此前如有激活仓库存入恢复点 */
+	public void pushTransferOverlay(Warehouse overlay) {
+		synchronized (warehouses) {
+			if (transferOverlay != null) throw new IllegalStateException("transfer overlay already active");
+			this.transferOverlay = overlay;
+			this.preOverlayActiveId = activeId;
+			this.activeId = overlay.id;
+		}
+	}
+
+	/** 弹出临时搬运视图并恢复覆盖前激活态 */
+	public void popTransferOverlay() {
+		synchronized (warehouses) {
+			if (transferOverlay == null) return;
+			transferOverlay = null;
+			activeId = preOverlayActiveId;
+			preOverlayActiveId = null;
+		}
+	}
+
+	public boolean hasTransferOverlay() {
+		return transferOverlay != null;
+	}
+
+	public @Nullable Warehouse getTransferOverlay() {
+		return transferOverlay;
+	}
+
 	@Override
 	public Warehouse create(String id) {
 		requireValidId(id);
@@ -114,6 +151,9 @@ public final class WarehouseManagerImpl implements WarehouseManager {
 		java.util.Objects.requireNonNull(warehouse, "warehouse");
 		requireValidId(warehouse.id);
 		synchronized (warehouses) {
+			if (warehouse == transferOverlay) {
+				return; // 临时搬运视图不落盘（§5.6）
+			}
 			if (!warehouses.containsKey(warehouse.id)) {
 				throw new IllegalArgumentException("not managed by this manager: " + warehouse.id);
 			}
@@ -159,6 +199,7 @@ public final class WarehouseManagerImpl implements WarehouseManager {
 	@Nullable
 	public Warehouse active() {
 		synchronized (warehouses) {
+			if (transferOverlay != null) return transferOverlay;
 			return activeId != null ? warehouses.get(activeId) : null;
 		}
 	}

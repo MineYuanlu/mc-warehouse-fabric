@@ -41,7 +41,7 @@
 | L8 | VanillaGuiInteraction 六原语 + ContainerSession 协议层（开屏握手/逐击对账/双向精确算法/settle 重扫）+ handleOpenScreen Mixin | gametest① | ✅ | `feat(protocol): L8 运行时交互协议` |
 | L9 | RuleApplicator（首条命中/negative/∞语义/滚动模拟/聚合容量预检/selector×IOType 校验） | JVM 单测 | ✅ | `feat(rule): L9 规则引擎` |
 | L10 | NoOpNavigator + TransportEngineImpl（状态机/防振荡双机制/轮次追踪/异常表/RunReport/WarehouseEvents） | gametest② | ✅ | `feat(engine): L10 传输引擎` |
-| L11 | `/wh` 命令全量 + 标记模式 + i18n（en_us+zh_cn）+ 入口装配 | gametest③ | ⬜ | |
+| L11 | `/wh` 命令全量 + 标记模式 + i18n（en_us+zh_cn）+ 入口装配 | gametest③ | ✅ | `feat(command): L11 命令系统与入口装配` |
 
 
 **L2 补充记录**
@@ -70,6 +70,15 @@
 - 出口条件补充（§5.2 v0.2「未知≠满足」的推广）：任何类目存在未探索容器 → 出口①②一律不满足；已 skip 的容器不算未知
 - itemsMoved 是取/放双段累计（INPUT 取 60 + OUTPUT 放 60 = 120），不是净搬运量
 - gametest 的 runOnServer 异步派发：断言服务端状态需标志位轮询等待回调完成；关箱后客户端 BlockEntity 不含容器内容（只有 Menu 同步），只能从服务端读
+
+
+**L11 补充记录（E2E 实测教训）**
+- `ContainerOpenContext` 紧构造器要求 pos/block 双非空——标记模式采集必须用目标绝对坐标 + 客户端 level 的 BlockInWorld 构造，传 null 会让全部 Detector 组合判定 NPE
+- 26.1 动作栏/聊天分离：`LocalPlayer.sendOverlayMessage`（动作栏）/`sendSystemMessage`（聊天）；`displayClientMessage` 已不存在
+- `MultiPlayerGameMode.useItemOn` 打开容器 → `handleOpenScreen` mixin（HEAD 时 screen 未挂上）→ 标记模式用「开屏包置 pendingCapture + 下帧 tick 消费」两段式采集，最后真实扫描再 onClose
+- Brigadier 字面量参数不能含冒号——`rule add <id> <selector...>` 用单个 greedy 参数自行分词（支持裸 JSON 选择器与 `--quantity count:64` 尾巴）
+- 跨仓库搬运经 manager 的临时覆盖视图实现（overlay 不落盘、pop 恢复激活态），引擎零改动复用标准状态机
+- gametest 命令冒烟：独立 dispatcher + FabricClientCommandSource stub（computeOnClient 同步执行）；`/warehouse` 别名经 redirect 注册
 
 ### gametest 里程碑覆盖（§13 映射）
 

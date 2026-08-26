@@ -9,7 +9,8 @@
     "fabric-client-gametest": [
       "bid.yuanlu.mc.warehouse.gametest.WarehouseClientGameTest",
       "bid.yuanlu.mc.warehouse.gametest.ContainerProtocolGameTest",
-      "bid.yuanlu.mc.warehouse.gametest.TransportEngineGameTest"
+      "bid.yuanlu.mc.warehouse.gametest.TransportEngineGameTest",
+      "bid.yuanlu.mc.warehouse.gametest.CommandMarkGameTest"
     ]
   },
   "depends": {

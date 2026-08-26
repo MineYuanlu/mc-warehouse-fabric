@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
+import org.jetbrains.annotations.Nullable;
+
 import bid.yuanlu.mc.warehouse.api.container.ContainerInfo;
 import bid.yuanlu.mc.warehouse.api.container.IOType;
 import bid.yuanlu.mc.warehouse.api.item.ContainerRule;
@@ -57,6 +59,18 @@ public final class ConfigValidator {
 			}
 		}
 		return errors;
+	}
+
+	/** 单规则 vs 全部关联容器（引用处）的 D2 合法性；返回首个错误或 null（命令层设置期校验用） */
+	@Nullable
+	public static String validateRuleOnContainers(Warehouse warehouse, ContainerRule rule) {
+		for (ContainerInfo container : warehouse.containers) {
+			if (!container.rules.contains(rule.id)) continue;
+			List<String> errors = new ArrayList<>();
+			checkQuantityCompatibility(errors, describe(container), container, rule);
+			if (!errors.isEmpty()) return errors.get(0);
+		}
+		return null;
 	}
 
 	private static void checkQuantityCompatibility(List<String> errors, String where, ContainerInfo container, ContainerRule rule) {

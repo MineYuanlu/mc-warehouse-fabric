@@ -42,6 +42,10 @@ public class ModConfig {
 	/** worldId → 世界条目（两级结构，v0.2 决策） */
 	public Map<String, WorldEntry> worlds = new LinkedHashMap<>();
 
+	/** 运行期一次性寻路器覆盖（/wh start --pathfinder 置入；不持久化） */
+	@Nullable
+	public transient String pathfinderOnce;
+
 	// ---- 时间参数（§6.5）----
 
 	public static class Timeouts {

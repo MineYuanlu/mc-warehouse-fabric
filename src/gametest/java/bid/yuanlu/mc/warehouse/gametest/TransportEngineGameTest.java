@@ -264,18 +264,9 @@ public class TransportEngineGameTest implements FabricClientGameTest {
 		}
 
 		private static void registerBuiltins() {
-			bid.yuanlu.mc.warehouse.core.registry.SelectorCodecs.resetForTest();
-			bid.yuanlu.mc.warehouse.core.registry.SelectorCodecs
-					.registerItem(bid.yuanlu.mc.warehouse.impl.selector.IdSelector.codec());
-			bid.yuanlu.mc.warehouse.core.registry.SelectorCodecs
-					.registerQuantity(bid.yuanlu.mc.warehouse.impl.quantity.GroupSelector.codec());
-			bid.yuanlu.mc.warehouse.core.registry.SelectorCodecs
-					.registerQuantity(bid.yuanlu.mc.warehouse.impl.quantity.CountSelector.codec());
-			var reg = bid.yuanlu.mc.warehouse.core.registry.WarehouseRegistryImpl.get();
-			reg.registerDetector(new bid.yuanlu.mc.warehouse.impl.container.ChestDetector());
-			reg.registerInteraction(new bid.yuanlu.mc.warehouse.impl.container.VanillaGuiInteraction());
-			reg.registerNavigator(new bid.yuanlu.mc.warehouse.impl.navigation.NoOpNavigator());
-			reg.registerSlotAllocator(new bid.yuanlu.mc.warehouse.impl.allocator.FirstFitAllocator());
+			// L11 起生产入口启动时已注册并冻结——gametest 解冻后经同一装配函数重灌
+			bid.yuanlu.mc.warehouse.core.registry.WarehouseRegistryImpl.resetForTest();
+			bid.yuanlu.mc.warehouse.client.YuanluWarehouseClient.registerBuiltins();
 		}
 
 		private static void appendState(String s) {
