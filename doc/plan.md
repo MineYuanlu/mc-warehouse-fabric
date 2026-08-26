@@ -30,7 +30,7 @@
 | 层 | 内容 | 测试 | 状态 | 提交 |
 | -- | ---- | ---- | ---- | ---- |
 | L0 | PDD §5.3/§3.9 执行模型勘误回写 + 本计划文档 | — | ✅ | `doc: PDD 执行模型勘误 + 一阶段实施计划` |
-| L1 | `api/` 全量接口/记录/枚举（container/item/world/navigation/interaction/plugin/warehouse/transport） | 编译通过 | ⬜ | |
+| L1 | `api/` 全量接口/记录/枚举（container/item/world/navigation/interaction/plugin/warehouse/transport） | 编译通过 | ✅ | `feat(api): L1 核心 API 全量定义` |
 | L2 | impl 选择器×5+codec、数量选择器×4+codec、FirstFitAllocator、CoordinateUtils | JVM 单测 | ⬜ | |
 | L3 | 世界标识 Single/Multiplayer + WorldSessionTracker 会话切换 | JVM 单测 | ⬜ | |
 | L4 | 配置持久化 ModConfig/WorldConfig/仓库 JSON IO（schemaVersion/原子写/冲突拒载）/codec 分发 | JVM 单测 | ⬜ | |
