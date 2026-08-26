@@ -30,21 +30,26 @@
 - 接口方法签名无需修改（`matches(ItemStack)`）
 - `CompositeSelector` 的 `op` 枚举保持 `AND`/`OR`/`NOT`
 - 确保 `ItemSelector` 接口移动到 `api/` 包
+- **NbtSelector 语义差异**：旧实现是 `componentsPatch.toString().contains(value)` 字符串包含匹配（并非旧 ARCH.md 声称的"NBT 子集匹配"）。新 PDD §3.5 已如实注记该语义；是否更名/升级待调研。迁移时保留现行为，并补单元测试固化
+- 每个选择器需配套 `SelectorCodec` 注册到 Registry（新 PDD §9.2），否则无法参与 JSON 序列化
 
 ### 2. 数量选择器 (QuantitySelector 体系)
 
-| 旧文件                                                             | 新包路径                               | 迁移方式         |
-| ------------------------------------------------------------------ | -------------------------------------- | ---------------- |
-| `$OLD/src/client/java/.../model/rule/QuantitySelector.java`        | `api/item/QuantitySelector.java`       | 直接复制，改包名 |
-| `$OLD/src/client/java/.../model/quantifier/CountSelector.java`     | `impl/quantity/CountSelector.java`     | 直接复制，改包名 |
-| `$OLD/src/client/java/.../model/quantifier/GroupSelector.java`     | `impl/quantity/GroupSelector.java`     | 直接复制，改包名 |
-| `$OLD/src/client/java/.../model/quantifier/FillSlotsSelector.java` | `impl/quantity/FillSlotsSelector.java` | 直接复制，改包名 |
-| `$OLD/src/client/java/.../model/quantifier/PercentSelector.java`   | `impl/quantity/PercentSelector.java`   | 直接复制，改包名 |
+| 旧文件                                                             | 新包路径                               | 迁移方式                       |
+| ------------------------------------------------------------------ | -------------------------------------- | ------------------------------ |
+| `$OLD/src/client/java/.../model/rule/QuantitySelector.java`        | `api/item/QuantitySelector.java`       | **接口重设计，参考语义后重写** |
+| `$OLD/src/client/java/.../model/quantifier/CountSelector.java`     | `impl/quantity/CountSelector.java`     | 参考后改造（签名变更）         |
+| `$OLD/src/client/java/.../model/quantifier/GroupSelector.java`     | `impl/quantity/GroupSelector.java`     | 参考后改造（签名变更）         |
+| `$OLD/src/client/java/.../model/quantifier/FillSlotsSelector.java` | `impl/quantity/FillSlotsSelector.java` | 参考后改造（签名变更）         |
+| `$OLD/src/client/java/.../model/quantifier/PercentSelector.java`   | `impl/quantity/PercentSelector.java`   | 参考后改造（签名变更）         |
 
 **注意事项**：
 
-- `computeTargetQuantity()` 方法签名保持不变
-- `isSatisfied()` 方法可选保留，但新 PDD 未要求
+- **接口已重构**（新 PDD §3.6）：旧的双方法 `computeTargetQuantity(int currentCount, int totalSlots, int maxStackSize)` + `isSatisfied(...)` 废弃，改为单一方法
+  `int computeTargetAmount(QuantityContext ctx)`——只算「目标总量」，不再返回 per-slot 分布
+- 槽位落位由独立的 **SlotAllocator** 扩展点承担（内置 `FirstFitAllocator`，无旧代码对应，需新写）
+- 四个 quantifier 实现按新公式迁移：count→value；group→value×maxStackSize；fill_slots→max(0,slotCount-value)×maxStackSize；percent→slotCount×maxStackSize×value%
+- 同样需要配套 codec 注册
 
 ### 3. 坐标工具类
 
@@ -68,6 +73,13 @@
 | `$OLD/src/client/java/.../model/rule/ItemRules.java`  | `api/item/ContainerRule.java`      | 重命名，结构基本相同                                    |
 | `$OLD/src/client/java/.../model/ContainerMemory.java` | `core/cache/ContainerMemory.java`  | 参考后重写                                              |
 
+**注意事项**：
+
+- 字段名映射：`negate → negative`、`quantifier → quantity`（新 PDD §3.4）
+- `Warehouse.active` **不迁移**：激活态改为 `WarehouseManager.activeWarehouseId` 运行时持有（旧项目该字段持久化但从未被读取）
+- `ContainerInfo` 新增 cacheType/priority/label；priority.soft 为 hard 相同时的次级排序键
+- 缓存键从裸 BlockPos 升级为 `(worldId, dimId, canonicalPos [, playerUUID])`，快照排除玩家背包区槽位（新 PDD §3.8）
+
 ### 5. 配置持久化 (Gson 适配器)
 
 | 旧文件                                                   | 新包路径                            | 迁移方式                   |
@@ -77,9 +89,10 @@
 
 **关键迁移点**：
 
-- Gson 的 `ItemSelectorAdapter` 和 `QuantitySelectorAdapter` 代码可直接复用
-- 文件路径从 `mc-warehouse/` 改为 `yuanlu-warehouse/`
-- 序列化结构需适配新 PDD 的 JSON 格式
+- Gson 的 `ItemSelectorAdapter` 和 `QuantitySelectorAdapter` 代码可直接复用；但 v0.2 起多态分发表来自 Registry 的 `SelectorCodec` 注册（内置实现同样走注册），不再是硬编码 instanceof 链
+- 文件路径从 `mc-warehouse/` 改为 `yuanlu-warehouse/`，且位于标准 `config/` 目录下
+- 序列化结构需适配新 PDD 的 JSON 格式（anchors 两级嵌套、pos 相对坐标、schemaVersion 字段）
+- `WorldConfigStorage` 的 sp/mp 双通道按服务器地址分层思想已被新 `worlds[worldId].dimensions[dimId]` 两级配置吸收（新 PDD §11.4）；`PathfinderDataStorage` 对应新的 `pathfinders/` 目录（二阶段消费）
 
 ## 需要参考后重写的模块
 

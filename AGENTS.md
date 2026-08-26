@@ -43,14 +43,14 @@ Minecraft Fabric 模组，**纯客户端**自动化仓库管理（服务端可�
 
 ```
 src/
-├── main/java/.../warehouse/     # ModInitializer + 核心逻辑
+├── main/java/.../warehouse/     # ModInitializer 空壳（未来服务端增强/网络层预留）
+├── client/java/.../warehouse/   # ★ 全部业务代码（纯客户端 mod）
 │   ├── api/                     # 公开接口（ContainerDetector, ItemSelector 等）
-│   ├── core/                    # 核心实现（引擎、缓存、配置）
-│   ├── impl/                    # 内置实现（Selector、Navigator、Detector）
+│   ├── core/                    # 核心实现（引擎、缓存、配置、事件）
+│   ├── impl/                    # 内置实现（Selector、Allocator、Navigator、Detector）
 │   ├── command/                 # /wh 命令
-│   ├── mixin/                   # 注入点
+│   ├── mixin/                   # 注入点（client-only，注册于 client mixins config）
 │   └── util/                    # 工具类
-├── client/java/.../warehouse/client/  # ClientModInitializer
 ├── gametest/java/               # E2E GameTest
 ├── test/java/                   # JUnit 单测
 ├── main/resources/              # fabric.mod.json（硬编码 >=26.1）
