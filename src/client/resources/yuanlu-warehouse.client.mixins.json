@@ -3,7 +3,8 @@
 	"package": "bid.yuanlu.mc.warehouse.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"client": [
-		"AbstractContainerScreenMixin"
+		"AbstractContainerScreenMixin",
+		"ClientPacketListenerMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

@@ -7,7 +7,8 @@
   "environment": "*",
   "entrypoints": {
     "fabric-client-gametest": [
-      "bid.yuanlu.mc.warehouse.gametest.WarehouseClientGameTest"
+      "bid.yuanlu.mc.warehouse.gametest.WarehouseClientGameTest",
+      "bid.yuanlu.mc.warehouse.gametest.ContainerProtocolGameTest"
     ]
   },
   "depends": {

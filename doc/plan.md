@@ -9,7 +9,8 @@
 | - | ---- | ---- |
 | D1 | 阶段执行模型 | 基于缓存构建阶段访问队列（未探索容器 + 缓存显示可 IO 的容器）；逐箱「开箱→扫描→本箱 moves 滚动模拟→当场执行→settle 重扫→关屏→下一箱」；`TransferPlan` 为阶段级概念聚合，随容器处理累积。已回写 PDD §5.3 / §3.9（L0） |
 | D2 | 不限量 quantity × OUTPUT | 按 PDD §3.7 **严格拒载**（配置加载期 + 命令设置期校验），不做 MVP 式静默矫正。`ItemRule.quantity == null` 表示不限量（∞ 语义） |
-| D3 | 点击对账实现 | 纯客户端 tick 轮询：点击前记录 menu stateId + 目标槽预期增量，逐 tick 观察 stateId 变化且内容相符 / 预测被拒的本地回滚；超时判失败。零网络包 mixin。开屏确认用单一 `ClientPacketListener.handleOpenScreen` mixin 捕获 containerId 作会话身份键 |
+| D3 | 点击对账实现 | ~~纯客户端 tick 轮询 stateId~~ **（L8 实测修订）**：26.1 客户端 `menu.getStateId()` 不随服务端包更新，不可作对账信号。实际采用：**受监视槽位/光标内容变化 + 2 tick 稳定窗口**——变化后未被回滚即确认；回到点击前状态 = 预测被拒（CLICK_CORRECTED）；超时 = CLICK_TIMEOUT。通道无关，插件交互实现免费复用。开屏确认仍用 `ClientPacketListener.handleOpenScreen` mixin 捕获 containerId |
+| D3a | 点击发包 | **必须经 `MultiPlayerGameMode.handleContainerInput`**（26.1 名称）——`menu.clicked` 只是本地预测不发包（E2E 实测教训） |
 | D4 | 交付节奏 | 逐层 commit（本文件随每次提交更新）；JVM 单测随层走；E2E gametest 在 L8 / L10 / L11 三个里程碑集中补齐 |
 
 ## 技术锚点（MC 26.1 已验证）
@@ -37,7 +38,7 @@
 | L5 | WarehouseManagerImpl CRUD + 激活态 | JVM 单测 | ✅ | `feat(warehouse): L5 仓库管理` |
 | L6 | CacheKey + 三级缓存 + TTL + 自愈失效 + Screen.onClose Mixin | JVM 单测 | ✅ | `feat(cache): L6 容器内存与三级缓存` |
 | L7 | 内置 Detector（箱族/木桶/潜影盒/末影箱/漏斗族/熔炉系/酿造台）+ 槽位角色表 + resolveMultiBlock | JVM 单测 | ✅ | `feat(container): L7 容器检测` |
-| L8 | VanillaGuiInteraction 六原语 + ContainerSession 协议层（开屏握手/逐击对账/双向精确算法/settle 重扫）+ handleOpenScreen Mixin | gametest① | ⬜ | |
+| L8 | VanillaGuiInteraction 六原语 + ContainerSession 协议层（开屏握手/逐击对账/双向精确算法/settle 重扫）+ handleOpenScreen Mixin | gametest① | ✅ | `feat(protocol): L8 运行时交互协议` |
 | L9 | RuleApplicator（首条命中/negative/∞语义/滚动模拟/聚合容量预检/selector×IOType 校验） | JVM 单测 | ⬜ | |
 | L10 | NoOpNavigator + TransportEngineImpl（状态机/防振荡双机制/轮次追踪/异常表/RunReport/WarehouseEvents） | gametest② | ⬜ | |
 | L11 | `/wh` 命令全量 + 标记模式 + i18n（en_us+zh_cn）+ 入口装配 | gametest③ | ⬜ | |
@@ -54,6 +55,13 @@
 - MC 26.1：`GenericContainerScreen` 已更名 `ContainerScreen`；身份判定以 MenuType+BE 类型+槽位数为主（不依赖 Screen 类）
 - `ContainerDetector` 增加 `playerScoped()` 默认方法（末影箱缓存键附 playerUUID 所需，PDD §3.8）
 - 双箱合并用 `ChestBlock.getConnectedBlockPos`；快照槽位边界以 `Slot.container instanceof Inventory` 判定
+
+
+**L8 补充记录（E2E 实测教训）**
+- `menu.clicked()` 仅本地预测不发包；点击必须经 `MultiPlayerGameMode.handleContainerInput(containerId, slot, button, ContainerInput, player)`（26.1 更名，旧名 handleInventoryMouseClick）
+- 客户端 `AbstractContainerMenu.getStateId()` 在 26.1 不随服务端 SetContent/SetSlot 更新——对账信号改为「受监视槽位+光标内容变化 + 2 tick 稳定窗口」（见 D3）
+- gametest 断言不可用 JUnit（production runtime 无 junit）——用 AssertionError 抛出
+- gametest 源集需显式加 `gametestImplementation` junit + client output
 
 ### gametest 里程碑覆盖（§13 映射）
 

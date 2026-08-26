@@ -57,6 +57,9 @@ dependencies {
 
 	// split sources：test 源集默认只依赖 main；业务代码在 client，显式挂上其编译产物
 	testImplementation sourceSets.client.output
+	// gametest 断言用 JUnit API（框架本身以 JUnit 驱动）
+	gametestImplementation "net.fabricmc:fabric-loader-junit:${project.loader_version}"
+	gametestImplementation sourceSets.client.output
 
 	// production 运行的 mods 只来自 jar/remapJar + productionRuntimeMods，
 	// fabric-api / 测试 mod 都要显式声明。
