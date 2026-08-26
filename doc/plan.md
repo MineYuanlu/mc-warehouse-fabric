@@ -34,7 +34,7 @@
 | L2 | impl 选择器×5+codec、数量选择器×4+codec、FirstFitAllocator、CoordinateUtils | JVM 单测 | ✅ | `feat(impl): L2 选择器/数量选择器/分配器实现与单测` |
 | L3 | 世界标识 Single/Multiplayer + WorldSessionTracker 会话切换 | JVM 单测 | ✅ | `feat(world): L3 世界标识与会话追踪` |
 | L4 | 配置持久化 ModConfig/WorldConfig/仓库 JSON IO（schemaVersion/原子写/冲突拒载）/codec 分发 | JVM 单测 | ✅ | `feat(config): L4 配置持久化` |
-| L5 | WarehouseManagerImpl CRUD + 激活态 | JVM 单测 | ⬜ | |
+| L5 | WarehouseManagerImpl CRUD + 激活态 | JVM 单测 | ✅ | `feat(warehouse): L5 仓库管理` |
 | L6 | CacheKey + 三级缓存 + TTL + 自愈失效 + Screen.onClose Mixin | JVM 单测 | ⬜ | |
 | L7 | 内置 Detector（箱族/木桶/潜影盒/末影箱/漏斗族/熔炉系/酿造台）+ 槽位角色表 + resolveMultiBlock | JVM 单测 | ⬜ | |
 | L8 | VanillaGuiInteraction 六原语 + ContainerSession 协议层（开屏握手/逐击对账/双向精确算法/settle 重扫）+ handleOpenScreen Mixin | gametest① | ⬜ | |
