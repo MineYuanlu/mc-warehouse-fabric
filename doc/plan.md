@@ -31,7 +31,7 @@
 | -- | ---- | ---- | ---- | ---- |
 | L0 | PDD §5.3/§3.9 执行模型勘误回写 + 本计划文档 | — | ✅ | `doc: PDD 执行模型勘误 + 一阶段实施计划` |
 | L1 | `api/` 全量接口/记录/枚举（container/item/world/navigation/interaction/plugin/warehouse/transport） | 编译通过 | ✅ | `feat(api): L1 核心 API 全量定义` |
-| L2 | impl 选择器×5+codec、数量选择器×4+codec、FirstFitAllocator、CoordinateUtils | JVM 单测 | ⬜ | |
+| L2 | impl 选择器×5+codec、数量选择器×4+codec、FirstFitAllocator、CoordinateUtils | JVM 单测 | ✅ | `feat(impl): L2 选择器/数量选择器/分配器实现与单测` |
 | L3 | 世界标识 Single/Multiplayer + WorldSessionTracker 会话切换 | JVM 单测 | ⬜ | |
 | L4 | 配置持久化 ModConfig/WorldConfig/仓库 JSON IO（schemaVersion/原子写/冲突拒载）/codec 分发 | JVM 单测 | ⬜ | |
 | L5 | WarehouseManagerImpl CRUD + 激活态 | JVM 单测 | ⬜ | |
@@ -41,6 +41,13 @@
 | L9 | RuleApplicator（首条命中/negative/∞语义/滚动模拟/聚合容量预检/selector×IOType 校验） | JVM 单测 | ⬜ | |
 | L10 | NoOpNavigator + TransportEngineImpl（状态机/防振荡双机制/轮次追踪/异常表/RunReport/WarehouseEvents） | gametest② | ⬜ | |
 | L11 | `/wh` 命令全量 + 标记模式 + i18n（en_us+zh_cn）+ 入口装配 | gametest③ | ⬜ | |
+
+
+**L2 补充记录**
+- `SelectorCodec` 增加 `implType()` 方法：序列化按「实例类型→codec」分发所必需（PDD §9.2 三方法之外的必要扩展，插件多写一行返回类字面量）
+- 新增 `core/registry/SelectorCodecs` 分发核心（CompositeSelector 嵌套编码依赖；type 字段由分发层统一写入，codec 只产出载荷）
+- **MC 26.1 测试基建关键修复**：`Bootstrap.bootStrap()` 后必须执行 `BuiltInRegistries.DATA_COMPONENT_INITIALIZERS` 组件绑定（否则 `new ItemStack` 抛 "Components not bound yet"）；初始化器会引用数据包侧标签/动态注册表（damage_type/is_fire、trim_material 等），测试环境用宽松 Provider（缺失标签→空 Named 集、缺失注册表→空表、缺失元素→stand-alone 占位 Holder）完成绑定
+- test 源集需显式依赖 `sourceSets.client.output`（split sources 下默认只挂 main）
 
 ### gametest 里程碑覆盖（§13 映射）
 
