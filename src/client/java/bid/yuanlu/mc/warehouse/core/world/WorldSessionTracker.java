@@ -27,6 +27,19 @@ public final class WorldSessionTracker {
 
 	private String currentWorldId;
 
+	private static volatile WorldSessionTracker instance;
+
+	/** 全局实例（客户端初始化时装配） */
+	public static WorldSessionTracker get() {
+		WorldSessionTracker t = instance;
+		if (t == null) throw new IllegalStateException("WorldSessionTracker not initialized");
+		return t;
+	}
+
+	public static void setInstance(@Nullable WorldSessionTracker tracker) {
+		instance = tracker;
+	}
+
 	public WorldSessionTracker() {
 		this(WarehouseRegistryImpl.worldIdentifiers());
 	}

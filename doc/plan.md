@@ -36,7 +36,7 @@
 | L4 | 配置持久化 ModConfig/WorldConfig/仓库 JSON IO（schemaVersion/原子写/冲突拒载）/codec 分发 | JVM 单测 | ✅ | `feat(config): L4 配置持久化` |
 | L5 | WarehouseManagerImpl CRUD + 激活态 | JVM 单测 | ✅ | `feat(warehouse): L5 仓库管理` |
 | L6 | CacheKey + 三级缓存 + TTL + 自愈失效 + Screen.onClose Mixin | JVM 单测 | ✅ | `feat(cache): L6 容器内存与三级缓存` |
-| L7 | 内置 Detector（箱族/木桶/潜影盒/末影箱/漏斗族/熔炉系/酿造台）+ 槽位角色表 + resolveMultiBlock | JVM 单测 | ⬜ | |
+| L7 | 内置 Detector（箱族/木桶/潜影盒/末影箱/漏斗族/熔炉系/酿造台）+ 槽位角色表 + resolveMultiBlock | JVM 单测 | ✅ | `feat(container): L7 容器检测` |
 | L8 | VanillaGuiInteraction 六原语 + ContainerSession 协议层（开屏握手/逐击对账/双向精确算法/settle 重扫）+ handleOpenScreen Mixin | gametest① | ⬜ | |
 | L9 | RuleApplicator（首条命中/negative/∞语义/滚动模拟/聚合容量预检/selector×IOType 校验） | JVM 单测 | ⬜ | |
 | L10 | NoOpNavigator + TransportEngineImpl（状态机/防振荡双机制/轮次追踪/异常表/RunReport/WarehouseEvents） | gametest② | ⬜ | |
@@ -48,6 +48,12 @@
 - 新增 `core/registry/SelectorCodecs` 分发核心（CompositeSelector 嵌套编码依赖；type 字段由分发层统一写入，codec 只产出载荷）
 - **MC 26.1 测试基建关键修复**：`Bootstrap.bootStrap()` 后必须执行 `BuiltInRegistries.DATA_COMPONENT_INITIALIZERS` 组件绑定（否则 `new ItemStack` 抛 "Components not bound yet"）；初始化器会引用数据包侧标签/动态注册表（damage_type/is_fire、trim_material 等），测试环境用宽松 Provider（缺失标签→空 Named 集、缺失注册表→空表、缺失元素→stand-alone 占位 Holder）完成绑定
 - test 源集需显式依赖 `sourceSets.client.output`（split sources 下默认只挂 main）
+
+
+**L7 补充记录**
+- MC 26.1：`GenericContainerScreen` 已更名 `ContainerScreen`；身份判定以 MenuType+BE 类型+槽位数为主（不依赖 Screen 类）
+- `ContainerDetector` 增加 `playerScoped()` 默认方法（末影箱缓存键附 playerUUID 所需，PDD §3.8）
+- 双箱合并用 `ChestBlock.getConnectedBlockPos`；快照槽位边界以 `Slot.container instanceof Inventory` 判定
 
 ### gametest 里程碑覆盖（§13 映射）
 

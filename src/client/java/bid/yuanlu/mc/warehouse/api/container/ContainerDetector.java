@@ -28,4 +28,11 @@ public interface ContainerDetector {
 	 * （如大箱子自动检测双格并关联，PDD §3.2）
 	 */
 	ContainerInfo resolveMultiBlock(BlockPos[] positions);
+
+	/**
+	 * 该类型容器的内容是否因玩家而异（如末影箱）——缓存键需附加 playerUUID（PDD §3.8）。
+	 */
+	default boolean playerScoped() {
+		return false;
+	}
 }
