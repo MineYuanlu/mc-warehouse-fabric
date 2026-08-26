@@ -13,15 +13,13 @@ import bid.yuanlu.mc.warehouse.impl.selector.NbtSelector;
 import bid.yuanlu.mc.warehouse.impl.selector.TagSelector;
 
 /**
- * 测试辅助：注册全部内置 codec（幂等），供序列化往返等测试复用。
+ * 测试辅助：注册全部内置 codec（每次从干净状态全量安装），供序列化往返等测试复用。
  * L11 的正式内置注册落地后可切换为调用生产入口。
  */
 public final class TestCodecs {
 
-	private static boolean installed = false;
-
 	public static synchronized void install() {
-		if (installed) return;
+		SelectorCodecs.resetForTest();
 		SelectorCodecs.registerItem(IdSelector.codec());
 		SelectorCodecs.registerItem(TagSelector.codec());
 		SelectorCodecs.registerItem(NameSelector.codec());
@@ -31,9 +29,9 @@ public final class TestCodecs {
 		SelectorCodecs.registerQuantity(GroupSelector.codec());
 		SelectorCodecs.registerQuantity(FillSlotsSelector.codec());
 		SelectorCodecs.registerQuantity(PercentSelector.codec());
-		installed = true;
 	}
 
 	private TestCodecs() {
 	}
 }
+

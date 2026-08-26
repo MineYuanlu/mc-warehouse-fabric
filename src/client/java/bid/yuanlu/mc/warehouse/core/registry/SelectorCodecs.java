@@ -64,6 +64,19 @@ public final class SelectorCodecs {
 		return frozen;
 	}
 
+	/** 仅测试用：清空全部 codec 并解冻（生产代码禁止调用） */
+	public static void resetForTest() {
+		synchronized (ITEM_BY_TYPE) {
+			ITEM_BY_TYPE.clear();
+			ITEM_BY_CLASS.clear();
+		}
+		synchronized (QUANTITY_BY_TYPE) {
+			QUANTITY_BY_TYPE.clear();
+			QUANTITY_BY_CLASS.clear();
+		}
+		frozen = false;
+	}
+
 	// ---- 分发 ----
 
 	public static JsonObject toJson(ItemSelector selector) {

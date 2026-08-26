@@ -32,7 +32,7 @@
 | L0 | PDD §5.3/§3.9 执行模型勘误回写 + 本计划文档 | — | ✅ | `doc: PDD 执行模型勘误 + 一阶段实施计划` |
 | L1 | `api/` 全量接口/记录/枚举（container/item/world/navigation/interaction/plugin/warehouse/transport） | 编译通过 | ✅ | `feat(api): L1 核心 API 全量定义` |
 | L2 | impl 选择器×5+codec、数量选择器×4+codec、FirstFitAllocator、CoordinateUtils | JVM 单测 | ✅ | `feat(impl): L2 选择器/数量选择器/分配器实现与单测` |
-| L3 | 世界标识 Single/Multiplayer + WorldSessionTracker 会话切换 | JVM 单测 | ⬜ | |
+| L3 | 世界标识 Single/Multiplayer + WorldSessionTracker 会话切换 | JVM 单测 | ✅ | `feat(world): L3 世界标识与会话追踪` |
 | L4 | 配置持久化 ModConfig/WorldConfig/仓库 JSON IO（schemaVersion/原子写/冲突拒载）/codec 分发 | JVM 单测 | ⬜ | |
 | L5 | WarehouseManagerImpl CRUD + 激活态 | JVM 单测 | ⬜ | |
 | L6 | CacheKey + 三级缓存 + TTL + 自愈失效 + Screen.onClose Mixin | JVM 单测 | ⬜ | |
