@@ -39,7 +39,7 @@
 | L6 | CacheKey + 三级缓存 + TTL + 自愈失效 + Screen.onClose Mixin | JVM 单测 | ✅ | `feat(cache): L6 容器内存与三级缓存` |
 | L7 | 内置 Detector（箱族/木桶/潜影盒/末影箱/漏斗族/熔炉系/酿造台）+ 槽位角色表 + resolveMultiBlock | JVM 单测 | ✅ | `feat(container): L7 容器检测` |
 | L8 | VanillaGuiInteraction 六原语 + ContainerSession 协议层（开屏握手/逐击对账/双向精确算法/settle 重扫）+ handleOpenScreen Mixin | gametest① | ✅ | `feat(protocol): L8 运行时交互协议` |
-| L9 | RuleApplicator（首条命中/negative/∞语义/滚动模拟/聚合容量预检/selector×IOType 校验） | JVM 单测 | ⬜ | |
+| L9 | RuleApplicator（首条命中/negative/∞语义/滚动模拟/聚合容量预检/selector×IOType 校验） | JVM 单测 | ✅ | `feat(rule): L9 规则引擎` |
 | L10 | NoOpNavigator + TransportEngineImpl（状态机/防振荡双机制/轮次追踪/异常表/RunReport/WarehouseEvents） | gametest② | ⬜ | |
 | L11 | `/wh` 命令全量 + 标记模式 + i18n（en_us+zh_cn）+ 入口装配 | gametest③ | ⬜ | |
 
