@@ -1,5 +1,7 @@
-# Yuanlu Warehouse — 产品设计文档 v0.2
+# Yuanlu Warehouse — 产品设计文档 v0.3
 
+> **v0.3 变更摘要**：吸收 Wurst7 MVP（`refs/libs/Wurst7`，真实运行验证过的前身实现）经验——精确数量搬运算法定稿并进入一阶段；ContainerInteraction 增加点击原语层；新增标记模式（右键注册容器）；计划生成引入滚动模拟与聚合容量预检；selector×IOType 合法性校验。对照记录见 §15.12，明细见版本历史。
+>
 > **v0.2 变更摘要**：吸收旧项目（mc-warehouse）实现期教训——新增「世界与服务器标识」「运行时交互协议」「槽位能力模型」；数量选择器重构为「目标总量 + SlotAllocator」；事件系统改用 Fabric `Event<T>`；业务代码确定整体位于 `src/client`；补充防振荡双机制、缓存自愈、服务端对账等正确性约束。明细见文末版本历史与 §15。
 
 ## 1. 概述
@@ -55,7 +57,7 @@ flowchart TB
 ```java
 Warehouse {
     id: String                          // 唯一标识
-    anchors: Map<WorldDimRef, Pos>      // 每个 (worldId, dimId) 的基准点（JSON 嵌套结构见 §11.3）
+    anchors: Map<WorldDim, Pos>         // 每个 (worldId, dimId) 的基准点（WorldDim 见 §4.3，JSON 嵌套结构见 §11.3）
     containers: List<ContainerInfo>
     rules: Map<String, ContainerRule>   // 本仓库内定义的规则（key = ruleId）
 }
@@ -201,6 +203,8 @@ record SlotAllocation(int slot, int count) {}
 - **BLACKLIST** 下无任何 ItemRule 命中 → 物品不受限：取出方向 target=∞（尽量清空）、放入方向 target=∞（尽量塞满）
 - 多个 delta 汇总后交由引擎推导操作（放入容量受目标容器剩余空间约束）
 
+**selector×IOType 合法性校验**：部分数量语义与容器类型组合非法——MVP 先例：「无限量」语义禁止用于 OUTPUT（否则所有物品涌入单箱，破坏分类目标）。QuantitySelector 实现可声明不兼容的 IOType 集合（接口默认方法，缺省返回空集表示全部兼容），配置加载与命令设置时校验，非法组合报错拒载。
+
 **默认规则**：
 
 | 容器类型 | ruleMode  | 规则 | 行为                                   |
@@ -274,7 +278,7 @@ enum PlanDirection {
 
 引擎的每个阶段（GET_TEMP / GET_INPUT / PUT_OUTPUT / PUT_TEMP）都会生成一个 `TransferPlan`，然后逐条执行 `ItemMove`。`PlanDirection` 使得同一段执行代码可以处理取出和放入两种操作，避免重复逻辑。
 
-> `amount` 的精确粒度语义（半组搬运需要拿起-放下两段点击序列）暂维持现状，待专项设计（§15.11）；一阶段执行层按整堆粒度解释。
+> `amount` 的执行语义已定稿（v0.3）：支持任意精确数量的双向搬运，算法见 §6.2，一阶段完整实现。
 
 ## 4. 世界与服务器标识
 
@@ -422,6 +426,12 @@ stateDiagram-v2
   所有容器遍历完毕 → 执行 TransferPlan（§6.2 对账协议）→ 进入下一状态
 ```
 
+**计划生成的实现指引（v0.3，源自 MVP 验证）**：
+
+- **滚动模拟**：TransferPlan 的生成是顺序模拟过程——每加入一条 ItemMove 前先在内存模型上模拟执行，后续可行性判断基于滚动后的状态（防止跨多堆规划总量超限）
+- **聚合容量预检**：对容器维护聚合摘要（每 itemId 的总量、占用槽位数、空槽数），`canStore`/「可放入余量」的快速判断只依赖该摘要——同类不满堆的剩余容量 + 空槽 × maxStackSize 的容量贡献，无需逐槽模拟；开箱扫描后构建，每次模拟存取后更新
+- **单容器准入**：某物品在目标容器的可放入余量 ≤ 0 → 该条目直接跳过
+
 **防振荡机制（v0.2 新增，必实现；旧项目实测教训）**：
 
 1. **INPUT 条件准入**：GET_INPUT 阶段对未探索的 INPUT 容器，仅当满足任一条件才加入本轮队列：
@@ -465,6 +475,7 @@ roundHadNewExplore: boolean // 本轮是否有新容器被首次成功探索
 - 任何被动操作（因搬运需要打开容器）都会刷新缓存
 - 通过 Mixin 拦截 `Screen.onClose()` 可以自动刷新缓存（即使不是由引擎触发的打开）；写入前校验 Screen↔容器会话绑定（§3.8）
 - `NONE` 缓存在搬运轮次结束后清除，但搬运轮次内可重复使用以节省操作
+- 可选 `cacheTtlSeconds`（默认 0=禁用）：为 MEMORY/DISK 增加时间维度的陈旧保险，超期强制重扫（MVP 用 TTL 缓存验证过的廉价防线）
 
 ### 5.5 异常处理
 
@@ -524,9 +535,21 @@ roundHadNewExplore: boolean // 本轮是否有新容器被首次成功探索
 /wh select plan                 # 交由 AgentPlanner 自动配置
 ```
 
-**二阶段预留：点击式框选**——进入框选模式后拦截玩家的攻击/使用方块事件选取两个角点，需要额外的输入拦截 Mixin 与选区状态机（§15.11）。
+**一阶段补充：标记模式（mark mode，v0.3）**
 
-区域扫描：三重循环遍历选区内坐标，`level.getBlockEntity` 后按各 Detector 的 `matchesBlock` 归类生成 ContainerInfo。成本 O(体积)，大选区需提示预计耗时。
+逐个容器的交互式录入（Wurst7 MVP 的 SignWarehouse 已验证该形态），命令：
+
+```
+/wh container mark <type> [--rule R] [--template T]   # 进入/再次执行退出（切换式）
+```
+
+- 进入后：右键未注册容器 → 打开后自动捕获内容入库（复用 §6.1 协议与 syncId 门控）→ 自动关屏并按 `<type>` 注册；重复右键已注册容器 → 从仓库移除
+- `--rule` 注册时直接关联规则；`--template T` 批量套用全局规则（同类型多容器免重复参数）
+- 准星指向已注册容器时以动作栏文本提示状态（轮廓渲染随 §5.8 高亮系统启用后自动升级）；等待内容期间又打开新容器 → 两者的等待一并取消（防内容混淆）
+- 标记完成即完成首次内容采集，天然成为该容器的缓存种子
+- **右键感知无需输入拦截 Mixin**：引擎每 tick 记录准星指向的容器方块，检测到开屏事件时绑定「最后指向的容器」即可（纯轮询；§8.7 的 useItemOn Mixin 仅服务于 --look 选点等增强，非标记模式所必需）
+
+区域选点式点击框选仍留二阶段（日常录入由标记模式覆盖）；区域扫描：三重循环遍历选区内坐标，`level.getBlockEntity` 后按各 Detector 的 `matchesBlock` 归类生成 ContainerInfo。成本 O(体积)，大选区需提示预计耗时。
 
 ### 5.8 高亮系统
 
@@ -568,6 +591,8 @@ public final class WarehouseEvents {
 
 一阶段命令层订阅这些事件输出聊天栏文字；未来 UI 层替换为 HUD/Screen 渲染，插件可做统计/通知等扩展。
 
+PROGRESS 采用两级粒度（v0.3，吸收 MVP Status 枚举经验）：**阶段级**状态（§5.1 TransportState）+ **动作级**描述（MOVING / SCANNING / PICKING / PUTTING），UI 可分别渲染。
+
 **搬运结束报告 RunReport**（吸收旧项目的递进式终止诊断）：
 
 ```java
@@ -593,23 +618,67 @@ enum RunGrade { PERFECT, GOOD, ACCEPTABLE, BLOCKED, ABNORMAL }
 
 ```
 openContainer(pos):
+  0. CLOSE       关闭当前残留的任意 Screen（干净起点；残留界面会干扰会话绑定）
   1. PRECHECK    方块存在且某 Detector.matchesBlock 成立；
                  玩家距离 ≤ reachLimit（默认 4.5 格，服务端会校验触及距离）
                  失败 → 交还寻路 / 异常 CONTAINER_GONE
   2. FACE        转向方块中心
   3. OPEN        ContainerInteraction.requestOpen(handle)（默认实现：useItemOn 模拟右键）
-  4. WAIT_SCREEN openTimeoutTicks 内出现 Screen 且身份校验通过
-                 （Detector.matches 组合判定：方块实体类型 + 标题 + 槽位数，§8.1）
+  4. WAIT_SCREEN openTimeoutTicks 内收到 ScreenHandler 初始同步包即视为打开确认
+                 （包内自带 syncId 与容器槽位数——以同步包为确认信号，而非轮询 Screen 实例，
+                 MVP 已验证此手法）；syncId 随即成为本次容器会话的身份键，
+                 后续一切回调按 syncId 门控，不匹配者一律丢弃。
+                 身份校验：Detector.matches 组合判定（方块实体类型 + 标题 + 槽位数，§8.1）。
                  超时 → 异常 CONTAINER_NOT_OPENED；不符 → 异常 UI_MISMATCH
-  5. SYNC        等待服务端初始槽位同步（≥1 tick）后执行扫描快照
+  5. SCAN        同步包含初始槽位内容，据此执行扫描快照
 ```
 
-### 6.2 点击执行与服务端对账
+### 6.2 执行原语与精确数量算法
+
+**点击原语**（由 ContainerInteraction 提供，接口见 §8.3；每次调用经下方对账确认）：
+
+| 原语                       | 行为                                                                 | 典型用途                 |
+| -------------------------- | -------------------------------------------------------------------- | ------------------------ |
+| quickMoveToPlayer(slot)    | 整堆 QUICK_MOVE：槽位 → 背包                                         | 取出方向快速路径         |
+| quickMoveToContainer(slot) | 整堆 QUICK_MOVE：背包 → 槽位                                         | 存入方向快速路径         |
+| pickupAll(slot)            | 左键拾起整堆到光标                                                   | 取出方向全取             |
+| pickupHalf(slot)           | 右键拾起半组（向上取整）到光标                                       | 折半批量                 |
+| placeOne(slot)             | 右键从光标放 1 个入槽                                                | 单件补齐 / 放回多余      |
+| putBackHeld(slot)          | 左键把光标全部放回该槽                                               | 归还剩余                 |
+| dragDistribute(slots[])    | QUICK_CRAFT 拖拽协议：开始拖拽→逐槽加入→结束拖拽，把光标堆均分到多槽 | 多目标槽一次发包序列分发 |
+
+（quickMoveTo\* 是原语之上的语义封装；下文算法中简写为 quickMove。）
+
+不支持原语的交互通道声明 `supportsExactAmount()=false`，引擎自动降级为整堆粒度。
+
+**精确数量算法**（在协议层统一实现一份，所有交互通道零成本复用；双向算法均经 MVP 真实运行验证，点击序列以其实现为准）：
+
+存入方向——把背包槽位的 `count` 个物品存入配额 `quota` 个（仅当 `count > quota` 时启用，否则走 quickMove 快速路径）：
+
+```
+不变式：R(剩余配额) < S(剩余堆量)，由前置条件保证，不会过量存入
+① 折半批量段：while (S > t && R >= S/2)      // t = 本槽初始 ≤4 ? 2 : 4（打磨过的最优阈值）
+     pickupHalf(slot) → quickMoveToContainer(slot)；S -= S/2, R -= S/2     // O(log n)
+② 单件补齐段：pickupAll(slot) → placeOne(slot) × R → quickMoveToContainer(slot)
+     （源背包槽位自身充当暂存区：放回 R 个后整批移入）
+③ 归还段：putBackHeld(slot)                  // 光标剩余放回原槽
+复杂度 O(log n) + O(R)。
+```
+
+取出方向——从容器槽位 `nowCount` 个中取出 `needCount` 个到光标：
+
+```
+needCount ≤ ⌈nowCount/2⌉ ? pickupHalf 后 placeOne 放回 (⌈nowCount/2⌉ − needCount) 个
+                         : pickupAll  后 placeOne 放回 (nowCount − needCount) 个
+光标最终恰好持有 needCount 个；随后 dragDistribute 到目标背包槽位。
+```
+
+**两遍式落位**（SlotAllocator 默认实现的参考顺序）：先并入同类不满堆、再依次填空槽；每步先做容量预检，余量 ≤ 0 直接跳过该条目。
 
 ```
 executeMove(move):
-  1. 确保容器会话有效（Screen 已开且身份一致），否则重新走 §6.1
-  2. 经 ContainerInteraction.quickMove*(handle, slot) 执行（默认：menu.clicked QUICK_MOVE）
+  1. 确保容器会话有效（Screen 已开且身份一致，syncId 门控生效），否则重新走 §6.1
+  2. 按 §5.3 计划粒度调用上述原语/算法执行
   3. 对账：confirmTimeoutTicks 内观察到以下之一方为成功：
      a. ScreenHandler revision/stateId 发生变化且槽位内容符合预期增量；
      b. 服务端纠正包（预测被拒绝时客户端槽位被回滚）。
@@ -770,10 +839,23 @@ interface ContainerInteraction {
     boolean quickMoveToPlayer(ContainerHandle handle, int slot);
     /** 背包 → 整堆移入槽位 */
     boolean quickMoveToContainer(ContainerHandle handle, int slot);
+
+    // ---- v0.3 点击原语层：精确数量能力的物理基础，语义见 §6.2 ----
+
+    /** 是否支持点击原语；false 时引擎降级为整堆粒度 */
+    boolean supportsExactAmount();
+    boolean pickupAll(ContainerHandle handle, int slot);
+    boolean pickupHalf(ContainerHandle handle, int slot);
+    boolean placeOne(ContainerHandle handle, int slot);
+    boolean putBackHeld(ContainerHandle handle, int slot);
+    /** QUICK_CRAFT 拖拽协议：把光标堆均分到多个槽位（一次发包序列） */
+    boolean dragDistribute(ContainerHandle handle, int[] slots);
 }
 ```
 
-- 内置 `VanillaGuiInteraction`：`useItemOn` 打开 + `menu.clicked(QUICK_MOVE)` 移动
+- 内置 `VanillaGuiInteraction`：`useItemOn` 打开 + `menu.clicked` 实现全部原语
+- 精确数量算法在**协议层**只实现一份（§6.2），参数化于原语——交互插件提供原语即可获得双向精确搬运能力，无需重写算法
+- 语义级方法（quickMoveTo\*）是原语之上的便捷封装，仅支持整堆的通道只需实现它们
 - `ContainerHandle` = 一次已建立的容器会话（pos + 当前 Screen/Menu 引用 + 身份信息）
 - 协议层的等待/对账/超时逻辑（§6）对一切实现复用不变——插件换交互方式时无需重写协议
 
@@ -924,44 +1006,45 @@ TEMP 容器同时参与取出和放入两个阶段，其行为取决于当前阶
 
 ### 10.1 命令树
 
-| 命令                                                    | 功能                                                     | 一阶段 |
-| ------------------------------------------------------- | -------------------------------------------------------- | ------ |
-| `/wh help`                                              | 帮助                                                     | ✅     |
-| `/wh list`                                              | 列出所有仓库                                             | ✅     |
-| `/wh create <name>`                                     | 创建新仓库                                               | ✅     |
-| `/wh remove <name>`                                     | 删除仓库                                                 | ✅     |
-| `/wh use <name>`                                        | 激活指定仓库                                             | ✅     |
-| `/wh status`                                            | 查看当前仓库状态                                         | ✅     |
-| `/wh show`                                              | 高亮显示当前仓库所有容器                                 | ✅     |
-| `/wh anchor set [<x> <y> <z>]`                          | 设置当前 (world,dim) 基准点（缺省=当前位置）             | ✅     |
-| `/wh start [--pathfinder <id>]`                         | 开始搬运（可选临时寻路器覆盖配置）                       | ✅     |
-| `/wh stop`                                              | 暂停搬运（可 continue 无损恢复）                         | ✅     |
-| `/wh continue`                                          | 断点继续（跳过出错容器）                                 | ✅     |
-| `/wh restart`                                           | 重头开始（SUSPENDED 恢复选项①）                          | ✅     |
-| `/wh abort`                                             | 退出搬运（SUSPENDED 恢复选项③）                          | ✅     |
-| `/wh rule list`                                         | 列出所有规则                                             | ✅     |
-| `/wh rule create <id>`                                  | 创建新规则                                               | ✅     |
-| `/wh rule delete <id>`                                  | 删除规则                                                 | ✅     |
-| `/wh rule show <id>`                                    | 显示规则详情                                             | ✅     |
-| `/wh rule add <id> <selector> [--negate] [--count N]`   | 为规则添加物品条目                                       | ✅     |
-| `/wh rule remove <id> <index>`                          | 移除规则中的条目                                         | ✅     |
-| `/wh container add [<x> <y> <z>] [--type T] [--rule R]` | 添加容器（坐标支持 `~` 相对；省略=准星指向 player.pick） | ✅     |
-| `/wh container remove <pos>`                            | 移除容器                                                 | ✅     |
-| `/wh container list`                                    | 列出当前仓库所有容器                                     | ✅     |
-| `/wh container type <pos> <type>`                       | 设置容器类型                                             | ✅     |
-| `/wh container mode <pos> <mode>`                       | 设置容器的 ruleMode                                      | ✅     |
-| `/wh container memory <pos>`                            | 查看容器缓存状态                                         | ✅     |
-| `/wh container memory clear <pos>`                      | 清除容器缓存                                             | ✅     |
-| `/wh container rules <pos> <add/remove> <ruleId>`       | 管理容器关联的规则                                       | ✅     |
-| `/wh select pos1/pos2 [--look]`                         | 设置框选角点                                             | ✅     |
-| `/wh select expand <n> <dir>`                           | 向指定方向扩展选区                                       | ✅     |
-| `/wh select show` / `clear`                             | 高亮/清除选区                                            | ✅     |
-| `/wh select set-type/set-rule/set-cache`                | 批量设置                                                 | ✅     |
-| `/wh select plan`                                       | 交由 Agent 自动配置                                      | ✅     |
-| `/wh transfer <src> <dst> start/status/stop`            | 跨仓库搬运                                               | ✅     |
-| `/wh reload`                                            | 重载配置文件                                             | ✅     |
-| `/wh config show`                                       | 显示当前配置                                             | ✅     |
-| `/wh config set <key> <value>`                          | 设置配置项                                               | ✅     |
+| 命令                                                                  | 功能                                                                                          | 一阶段 |
+| --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------ |
+| `/wh help`                                                            | 帮助                                                                                          | ✅     |
+| `/wh list`                                                            | 列出所有仓库                                                                                  | ✅     |
+| `/wh create <name>`                                                   | 创建新仓库                                                                                    | ✅     |
+| `/wh remove <name>`                                                   | 删除仓库                                                                                      | ✅     |
+| `/wh use <name>`                                                      | 激活指定仓库                                                                                  | ✅     |
+| `/wh status`                                                          | 查看当前仓库状态                                                                              | ✅     |
+| `/wh show`                                                            | 显示当前仓库所有容器清单（聊天栏文本；轮廓渲染随高亮系统启用）                                | ✅     |
+| `/wh anchor set [<x> <y> <z>]`                                        | 设置当前 (world,dim) 基准点（缺省=当前位置）                                                  | ✅     |
+| `/wh start [--pathfinder <id>]`                                       | 开始搬运（可选临时寻路器覆盖配置）                                                            | ✅     |
+| `/wh stop`                                                            | 暂停搬运（可 continue 无损恢复）                                                              | ✅     |
+| `/wh continue`                                                        | 断点继续（跳过出错容器）                                                                      | ✅     |
+| `/wh restart`                                                         | 重头开始（SUSPENDED 恢复选项①）                                                               | ✅     |
+| `/wh abort`                                                           | 退出搬运（SUSPENDED 恢复选项③）                                                               | ✅     |
+| `/wh rule list`                                                       | 列出所有规则                                                                                  | ✅     |
+| `/wh rule create <id>`                                                | 创建新规则                                                                                    | ✅     |
+| `/wh rule delete <id>`                                                | 删除规则                                                                                      | ✅     |
+| `/wh rule show <id>`                                                  | 显示规则详情                                                                                  | ✅     |
+| `/wh rule add <id> <selector> [--negate] [--quantity <type>:<value>]` | 为规则添加物品条目（quantity 如 count:64 / group:3 / percent:75 / fill_slots:5；缺省=不限量） | ✅     |
+| `/wh rule remove <id> <index>`                                        | 移除规则中的条目                                                                              | ✅     |
+| `/wh container add [<x> <y> <z>] [--type T] [--rule R]`               | 添加容器（坐标支持 `~` 相对；省略=准星指向 player.pick）                                      | ✅     |
+| `/wh container mark <type> [--rule R] [--template T]`                 | 进入/退出标记模式（右键注册/移除容器，自动采集内容，§5.7）                                    | ✅     |
+| `/wh container remove <pos>`                                          | 移除容器                                                                                      | ✅     |
+| `/wh container list`                                                  | 列出当前仓库所有容器                                                                          | ✅     |
+| `/wh container type <pos> <type>`                                     | 设置容器类型                                                                                  | ✅     |
+| `/wh container mode <pos> <mode>`                                     | 设置容器的 ruleMode                                                                           | ✅     |
+| `/wh container memory <pos>`                                          | 查看容器缓存状态                                                                              | ✅     |
+| `/wh container memory clear <pos>`                                    | 清除容器缓存                                                                                  | ✅     |
+| `/wh container rules <pos> <add/remove> <ruleId>`                     | 管理容器关联的规则                                                                            | ✅     |
+| `/wh select pos1/pos2 [--look]`                                       | 设置框选角点                                                                                  | ✅     |
+| `/wh select expand <n> <dir>`                                         | 向指定方向扩展选区                                                                            | ✅     |
+| `/wh select show` / `clear`                                           | 显示/清除选区（show 输出文本范围；轮廓随高亮系统启用）                                        | ✅     |
+| `/wh select set-type/set-rule/set-cache`                              | 批量设置                                                                                      | ✅     |
+| `/wh select plan`                                                     | 交由 Agent 自动配置                                                                           | ✅     |
+| `/wh transfer <src> <dst> start/status/stop`                          | 跨仓库搬运                                                                                    | ✅     |
+| `/wh reload`                                                          | 重载配置文件                                                                                  | ✅     |
+| `/wh config show`                                                     | 显示当前配置                                                                                  | ✅     |
+| `/wh config set <key> <value>`                                        | 设置配置项                                                                                    | ✅     |
 
 复杂配置通过 JSON 文件编辑，命令仅做常用操作。跨维度添加容器经 JSON 编辑完成。
 
@@ -1071,7 +1154,11 @@ config/yuanlu-warehouse/
   "debug": false,
   "defaultInteractionSpeed": 2,
   "interactionJitterPercent": 0,
+  "cacheTtlSeconds": 0,
   "slotAllocator": "first_fit",
+  "reachLimit": 4.5,
+  "exploreFailMax": 2,
+  "navRetryMax": 3,
   "timeouts": { "openTicks": 20, "confirmTicks": 10, "settleTicks": 2 },
   "worlds": {
     "singleplayer:New World": {
@@ -1090,17 +1177,21 @@ config/yuanlu-warehouse/
 
 全局配置分为 `ModConfig`（模组级）和 `WorldConfig`（世界级）两部分。**v0.2**：WorldConfig 采用 `worldId → dimId` 两级结构（吸收旧项目 sp/mp 双通道按服务器地址分层的经验），查找顺序：`worlds[world].dimensions[dim]` → `worlds[world]` 级默认 → 全局默认。
 
-| 配置项                                   | 类型    | 默认值    | 说明                                       |
-| ---------------------------------------- | ------- | --------- | ------------------------------------------ |
-| debug                                    | boolean | false     | 是否输出调试日志                           |
-| defaultInteractionSpeed                  | int     | 2         | 默认交互速度（每次操作后的 tick 等待数）   |
-| interactionJitterPercent                 | int     | 0         | 每次操作的随机额外延迟百分比（反作弊缓解） |
-| slotAllocator                            | String  | first_fit | 槽位分配器 id                              |
-| timeouts.openTicks                       | int     | 20        | 等待容器 UI 打开的超时（§6.5）             |
-| timeouts.confirmTicks                    | int     | 10        | 单次点击对账超时（§6.5）                   |
-| timeouts.settleTicks                     | int     | 2         | 一组操作后的稳定等待（§6.5）               |
-| worlds[w].dimensions[d].interactionSpeed | int     | 2         | 特定 (world,dim) 的交互速度                |
-| worlds[w].dimensions[d].pathfinder       | String  | noop      | 特定 (world,dim) 的默认寻路器              |
+| 配置项                                   | 类型    | 默认值    | 说明                                                  |
+| ---------------------------------------- | ------- | --------- | ----------------------------------------------------- |
+| debug                                    | boolean | false     | 是否输出调试日志                                      |
+| defaultInteractionSpeed                  | int     | 2         | 默认交互速度（每次操作后的 tick 等待数）              |
+| interactionJitterPercent                 | int     | 0         | 每次操作的随机额外延迟百分比（反作弊缓解）            |
+| cacheTtlSeconds                          | int     | 0（关）   | MEMORY/DISK 缓存的 TTL 秒数保险，超期强制重扫（§5.4） |
+| reachLimit                               | double  | 4.5       | 开容器的最大触及距离（格）（§6.5）                    |
+| exploreFailMax                           | int     | 2         | 同一容器连续探索失败上限（§6.5）                      |
+| navRetryMax                              | int     | 3         | 同一寻路目标的引擎侧重试上限（§6.5）                  |
+| slotAllocator                            | String  | first_fit | 槽位分配器 id                                         |
+| timeouts.openTicks                       | int     | 20        | 等待容器 UI 打开的超时（§6.5）                        |
+| timeouts.confirmTicks                    | int     | 10        | 单次点击对账超时（§6.5）                              |
+| timeouts.settleTicks                     | int     | 2         | 一组操作后的稳定等待（§6.5）                          |
+| worlds[w].dimensions[d].interactionSpeed | int     | 2         | 特定 (world,dim) 的交互速度                           |
+| worlds[w].dimensions[d].pathfinder       | String  | noop      | 特定 (world,dim) 的默认寻路器                         |
 
 ## 12. 包结构规划
 
@@ -1169,22 +1260,23 @@ src/main/resources/
 | **世界标识**            | 完整实现         | Singleplayer/Multiplayer 内置实现 + 会话切换处理（§4）                       |
 | **仓库管理 (CRUD)**     | 完整实现         | WarehouseManager 创建/读取/更新/删除/激活                                    |
 | **容器检测**            | 完整实现         | 原版常见容器（箱子族/木桶/熔炉系/漏斗族/酿造台/潜影盒/末影箱）+ 槽位能力模型 |
-| **交互方式**            | 默认实现         | VanillaGuiInteraction + 运行时交互协议全链路（§6）                           |
+| **交互方式**            | 默认实现         | VanillaGuiInteraction + 运行时交互协议全链路 + 点击原语（§6、§8.3）          |
 | **物品选择器**          | 完整实现         | Id/Tag/Name/Nbt/Composite + codec                                            |
 | **数量选择器+分配**     | 完整实现         | Count/Group/FillSlots/Percent（新签名）+ FirstFitAllocator                   |
 | **传输引擎**            | 完整实现         | 状态机 + 防振荡双机制 + 优先级遍历 + TransferPlan + 轮次追踪                 |
 | **规则引擎**            | 完整实现         | RuleApplicator 按判定语义生成 TransferPlan                                   |
 | **容器内存**            | 完整实现         | 三级缓存 + 世界标识键 + Mixin 校验快照 + 自愈失效                            |
 | **命令系统**            | 基础命令         | §10.1 表格中标记 ✅ 的命令，全量 i18n                                        |
+| **标记模式**            | 完整实现         | 右键注册/移除容器 + 自动内容采集 + template 批量套用（§5.7）                 |
+| **精确数量搬运**        | 完整实现         | 点击原语 + 双向精确算法（§6.2）                                              |
 | **寻路**                | NoOpNavigator    | 仅提示，玩家自行前往                                                         |
 | **事件系统**            | 完整实现         | Fabric Event<T> + 聊天栏桥接 + RunReport                                     |
 | **配置持久化**          | 完整实现         | Gson + codec 分发 + schemaVersion + 原子写                                   |
 | **插件注册表**          | 框架搭建         | WarehouseRegistry 全量接口 + 内置自注册                                      |
 | **高亮系统**            | 不实现           | 留待后续                                                                     |
 | **AgentPlanner**        | 接口定义，不实现 | 留待后续                                                                     |
-| **点击式框选**          | 不实现           | 一阶段用命令式框选（§5.7）                                                   |
+| **点击式框选（选区）**  | 不实现           | 一阶段用命令式框选与标记模式覆盖（§5.7）；区域选点留待后续                   |
 | **容器物品拆解**        | 不实现           | 视为普通物品整体搬运                                                         |
-| **半组精确搬运**        | 不实现           | amount 语义专项设计后再做（§15.11）                                          |
 | **网络层 / 服务端增强** | 不实现           | 留待后续                                                                     |
 | **UI**                  | 不实现           | 留待后续                                                                     |
 
@@ -1240,16 +1332,43 @@ per-slot 进出签名把「算多少」（选择器职责）与「放哪格」�
 
 | 事项                         | 说明                                                                                           |
 | ---------------------------- | ---------------------------------------------------------------------------------------------- |
-| `ItemMove.amount` 精确粒度   | 半组搬运需拿起-放下两段点击序列，涉及光标占用与失败恢复；一阶段维持整堆粒度，待专项设计        |
 | NbtSelector 更名与语义升级   | 是否更名 ComponentMatchSelector、是否做结构化组件子集匹配，调研其它 mod 做法后决定             |
-| 点击式框选                   | 输入拦截 Mixin 方案（attack/useBlock）与选区状态机                                             |
-| watch 持续监控模式           | DONE 后监听 INPUT 变化自动重启搬运                                                             |
+| KeepCountSelector            | 「保持扫描时数量」的数量选择器（MVP COUNT_LIST 语义，实战验证过）                              |
+| OUTPUT 驱逐异类（clear）     | OUTPUT 容器主动取出不属于自身清单的物品（MVP clear 标志验证）                                  |
+| where 模式                   | 手持物品高亮所有含该物品的容器（区分规则命中/缓存命中色；高亮系统的实用用例）                  |
+| GO_BACK                      | 搬运完成后寻路返回起点（Navigator 目标的趣味用例）                                             |
+| 点击式框选（选区）           | 输入拦截 Mixin 方案（attack/useBlock）与选区状态机                                             |
+| watch 持续监控模式           | DONE 后监听 INPUT 变化自动重启搬运（MVP Hack 即此形态）                                        |
 | TransportEngine 阶段序列泛化 | 四阶段固定 → GET(sourceSet)/PUT(destSet) 策略序列；`transfer` 命令的 IOType 临时覆盖可被其取代 |
 | 高亮状态色                   | HAS_SPACE/FULL/UNKNOWN 与运行时联动                                                            |
 
+### 15.12 Wurst7 MVP 对照记录（v0.3）
+
+本设计有两个真实运行过的前身实现，位于 `refs/libs/Wurst7/src/main/java/net/wurstclient/`：
+
+- **WarehouseHack.java**——watch 模式雏形：范围内持续整理，无配置无寻路，打磨出了精确存取的折半算法与聚合容量模型
+- **WarehouseCmd.java**——一次性编排雏形：配置驱动的多容器搬运（weight 优先级 / ioType 数量语义 / sign 标记 / template 模板 / summary 高亮 / Wurst 寻路集成），是新 PDD 传输引擎的直系原型
+
+**吸收的验证结论**：
+
+1. 精确数量双向算法可行且高效（存入折半 O(log n)+O(R)；取出半取/全取+放回；QUICK_CRAFT 多槽分发）→ §6.2
+2. 聚合容量模型（每 itemId 总量/占用槽/空槽三标量）足以支撑快速预检 → §5.3
+3. syncId 门控的同步包握手是可靠的打开确认与会话身份方案 → §6.1
+4. 右键标记录入复用开箱协议、边际成本低 → §5.7 标记模式
+5. 配置按服务器地址隔离目录、缓存按维度失效 → §4、§11.3
+6. selector×IOType 存在非法组合需校验（ALL×OUTPUT）→ §3.7
+
+**不继承的反模式**（实现期红线）：
+
+- worker 线程 + `Thread.sleep` 节流 + Future 桥接主线程（连关屏都要调度回主线程）——坚持 tick 驱动单线程
+- `chest.length + (i<9 ? i+27 : i-9)` 槽位索引算术——只对原版布局成立，必须用 Slot.container 归属判定
+- 盲发点击不逐击对账（MVP 靠事后重扫兜底收敛）——新协议要求逐击对账
+- 聚合缓存当运行时数据源（每次 run 仍须真开箱）——聚合摘要只做预检，操作依据永远是对账后的槽位级快照
+
 ## 16. 版本历史
 
-| 版本 | 变更                                                                                                                                                                                                                                                                                                                             |
-| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| v0.2 | 吸收旧项目实现期教训：新增 §4 世界与服务器标识、§6 运行时交互协议、§8.2 槽位能力模型、§8.3 交互方式 SPI、§13 测试映射；QuantitySelector 重构（总量 + SlotAllocator）；事件系统改 Fabric Event<T> + RunReport；业务代码定于 src/client；补防振荡双机制、缓存键世界化+自愈、服务端对账、异常扩充、i18n 化、Registry/codec 本体定义 |
-| v0.1 | 初稿                                                                                                                                                                                                                                                                                                                             |
+| 版本 | 变更                                                                                                                                                                                                                                                                                                                               |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| v0.3 | 吸收 Wurst7 MVP 实战经验：精确数量搬运算法定稿并进一阶段（六原语+双向算法+QUICK_CRAFT 分发）；ContainerInteraction 增点击原语层与能力协商；新增标记模式（右键注册容器+自动内容采集）；计划生成补滚动模拟与聚合容量预检；selector×IOType 合法性校验；PROGRESS 两级粒度；cacheTtlSeconds；§15.12 MVP 对照记录（吸收清单+反模式红线） |
+| v0.2 | 吸收旧项目实现期教训：新增 §4 世界与服务器标识、§6 运行时交互协议、§8.2 槽位能力模型、§8.3 交互方式 SPI、§13 测试映射；QuantitySelector 重构（总量 + SlotAllocator）；事件系统改 Fabric Event<T> + RunReport；业务代码定于 src/client；补防振荡双机制、缓存键世界化+自愈、服务端对账、异常扩充、i18n 化、Registry/codec 本体定义   |
+| v0.1 | 初稿                                                                                                                                                                                                                                                                                                                               |
