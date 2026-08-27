@@ -311,6 +311,13 @@ public class CommandMarkGameTest implements FabricClientGameTest {
 				&& info.pos.getFirst().z() == 10,
 				"相对坐标应为 (8,0,10)，实际 " + info.pos.getFirst());
 
+		// §5.7 缓存种子：标记即首采，缓存应已有该容器条目
+		check(awaitTrue(context, 50, () -> WarehouseServices.cacheStore() != null
+				&& WarehouseServices.cacheStore().size() > 0),
+				"标记完成应写入缓存种子");
+		check(WarehouseServices.cacheStore().allValid().stream().anyMatch(m ->
+				m.snapshot() != null && m.snapshot().slotCount() == 27), "种子快照槽位数应为 27");
+
 		// 已注册容器重复标记 → 移除（标记模式仍激活，切换式命令此刻只会退出）
 		check(MarkMode.get().isActive(), "标记模式应保持激活以连续标记");
 		pointThenUse(context, chestA);

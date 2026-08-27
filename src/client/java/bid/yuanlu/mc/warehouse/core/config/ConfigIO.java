@@ -293,20 +293,9 @@ public final class ConfigIO {
 				}
 			}
 			byte[] bytes = gson.toJson(root).getBytes(StandardCharsets.UTF_8);
-			atomicWrite(file, bytes);
+			bid.yuanlu.mc.warehouse.util.AtomicFiles.write(file, bytes);
 		} catch (IOException e) {
 			throw new UncheckedIOException("save failed: " + file, e);
-		}
-	}
-
-	private static void atomicWrite(Path target, byte[] bytes) throws IOException {
-		Files.createDirectories(target.getParent());
-		Path tmp = Files.createTempFile(target.getParent(), target.getFileName().toString(), ".tmp");
-		Files.write(tmp, bytes);
-		try {
-			Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-		} catch (AtomicMoveNotSupportedException e) {
-			Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
 		}
 	}
 

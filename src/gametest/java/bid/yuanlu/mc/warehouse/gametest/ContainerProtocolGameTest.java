@@ -74,7 +74,7 @@ public class ContainerProtocolGameTest implements FabricClientGameTest {
 
 			// 开箱流程：CLOSE→PRECHECK→FACE→OPEN→WAIT_SCREEN(syncId 门控)→VERIFY→READY
 			context.runOnClient(mc -> ContainerProtocol.get()
-					.open(pos, new ChestDetector(), new VanillaGuiInteraction(), new ModConfig(), listener));
+					.open(pos, new ChestDetector(), new VanillaGuiInteraction(), new ModConfig(), listener, null));
 			await(context, "ready", ready, failure, 200);
 
 			// 扫描快照：slot0 = diamond×32（仅容器侧槽位）
@@ -123,7 +123,7 @@ public class ContainerProtocolGameTest implements FabricClientGameTest {
 						public void onFailed(ContainerSession s, ContainerSession.Failure f) {
 							goneFailure.set(f);
 						}
-					}));
+					}, null));
 			for (int i = 0; i < 60 && goneFailure.get() == null; i++) {
 				context.runOnClient(mc -> ContainerProtocol.get().tick());
 				context.waitTick();

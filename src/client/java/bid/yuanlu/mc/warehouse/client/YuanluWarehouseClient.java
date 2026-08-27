@@ -113,13 +113,16 @@ public final class YuanluWarehouseClient implements ClientModInitializer {
 	// ---- 服务单例 ----
 
 	static void bootstrapServices() {
-		ModConfig config = new ConfigIO(ConfigIO.defaultRoot()).loadModConfig();
+		ConfigIO io = new ConfigIO(ConfigIO.defaultRoot());
+		ModConfig config = io.loadModConfig();
 		WorldSessionTracker sessions = new WorldSessionTracker(List.of(
 				new SingleplayerWorldIdentifier(),
 				new MultiplayerWorldIdentifier()));
 		WorldSessionTracker.setInstance(sessions);
+		bid.yuanlu.mc.warehouse.core.cache.DiskCacheStore disk =
+				new bid.yuanlu.mc.warehouse.core.cache.DiskCacheStore(io.root());
 		bid.yuanlu.mc.warehouse.core.cache.ContainerMemoryStore store =
-				new bid.yuanlu.mc.warehouse.core.cache.ContainerMemoryStore(config, sessions);
+				new bid.yuanlu.mc.warehouse.core.cache.ContainerMemoryStore(config, sessions, disk);
 		bid.yuanlu.mc.warehouse.core.WarehouseServices.setCacheStore(store);
 		bid.yuanlu.mc.warehouse.core.WarehouseServices.setModConfig(config);
 		WarehouseManagerImpl manager = WarehouseManagerImpl.get();

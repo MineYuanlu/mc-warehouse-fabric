@@ -202,11 +202,10 @@ public final class MarkMode {
 			return;
 		}
 		Minecraft mc = Minecraft.getInstance();
-		SnapshotLike snap = Minecraft.getInstance().level == null ? null
-				: scanScreen(screen, target.abs(),
-						new net.minecraft.world.level.block.state.pattern.BlockInWorld(
-								mc.level, target.abs().toBlockPos(), false));
-		if (snap == null) {
+		ScreenScan scan = mc.level == null ? null
+				: scanScreen(screen, new net.minecraft.world.level.block.state.pattern.BlockInWorld(
+						mc.level, target.abs().toBlockPos(), false));
+		if (scan == null) {
 			say(player, "commands.wh.mark.no_detector", ChatFormatting.RED, fmt(target.abs()));
 			return;
 		}
@@ -220,7 +219,7 @@ public final class MarkMode {
 		}
 		ContainerInfo info = new ContainerInfo(s.type());
 		info.pos.add(rel);
-		info.label = snap.title();
+		info.label = scan.snapshot().title();
 		String ruleRef = s.ruleId() != null && !s.ruleId().isBlank() ? s.ruleId() : s.templateId();
 		if (ruleRef != null && ruleRef.isBlank()) ruleRef = null;
 		if (ruleRef != null) {
@@ -232,29 +231,42 @@ public final class MarkMode {
 		}
 		wh.containers.add(info);
 		mgr.save(wh);
+		seedCache(info, scan.detector(), scan.snapshot()); // §5.7：标记完成即缓存种子
 		say(player, "commands.wh.mark.added", ChatFormatting.GREEN,
-				s.type(), fmt(target.abs()), snap.slotCount());
+				s.type(), fmt(target.abs()), scan.snapshot().slotCount());
 	}
 
-	record SnapshotLike(String title, int slotCount) {
+	/** §5.7/§3.8：真实扫描即种子——按容器 cacheType 写入内存（DISK 同步落盘） */
+	private static void seedCache(ContainerInfo info, ContainerDetector detector,
+			bid.yuanlu.mc.warehouse.api.container.ContainerSnapshot snapshot) {
+		var store = bid.yuanlu.mc.warehouse.core.WarehouseServices.cacheStore();
+		if (store == null || info.cacheType == bid.yuanlu.mc.warehouse.api.container.CacheType.NONE) return;
+		var key = bid.yuanlu.mc.warehouse.core.cache.CacheKey.of(info.canonicalPos(),
+				bid.yuanlu.mc.warehouse.core.cache.DetectorResolver.playerUuidIfScoped(detector));
+		store.remember(key, info.cacheType, snapshot);
+	}
+
+	record ScreenScan(ContainerDetector detector,
+			bid.yuanlu.mc.warehouse.api.container.ContainerSnapshot snapshot) {
 	}
 
 	private static final org.slf4j.Logger LOG =
 			org.slf4j.LoggerFactory.getLogger("yuanlu-warehouse/mark");
 
 	@Nullable
-	private static SnapshotLike scanScreen(AbstractContainerScreen<?> screen, WorldDimPos pos,
+	private static ScreenScan scanScreen(AbstractContainerScreen<?> screen,
 			net.minecraft.world.level.block.state.pattern.BlockInWorld block) {
 		LOG.info("[mark] scanning: menu={}, blockEntity={}, title={}",
 				screen.getMenu().getType(), block.getEntity(), screen.getTitle().getString());
 		for (ContainerDetector d : WarehouseRegistryImpl.detectors()) {
 			try {
-				if (d.matches(screen, new bid.yuanlu.mc.warehouse.api.container.ContainerOpenContext(
-						pos, block))) {
+					if (d.matches(screen, new bid.yuanlu.mc.warehouse.api.container.ContainerOpenContext(
+						new WorldDimPos(WorldSessionTracker.get().currentWorldId(),
+								Minecraft.getInstance().level.dimension().identifier().toString(),
+								block.getPos().getX(), block.getPos().getY(), block.getPos().getZ()),
+						block))) {
 					bid.yuanlu.mc.warehouse.api.container.ContainerSnapshot snap = d.scan(screen);
-					int items = 0;
-					for (ItemStack st : snap.slots().values()) items += st.getCount();
-					return new SnapshotLike(snap.title(), snap.slotCount());
+					return new ScreenScan(d, snap);
 				}
 			} catch (Exception e) {
 				LOG.warn("[mark] detector {} threw: {}", d.id(), e.toString());

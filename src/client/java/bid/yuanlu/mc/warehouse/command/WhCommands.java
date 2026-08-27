@@ -939,15 +939,18 @@ public final class WhCommands {
 				CommandSupport.err(src, "commands.wh.error.generic", "no cache store");
 				return 0;
 			}
-			CacheKey key = CacheKey.of(info.canonicalPos(), playerUuid(src));
+			CacheKey key = CacheKey.of(info.canonicalPos(),
+					// §3.8：仅 playerScoped 容器（如末影箱）缓存键附 playerUUID
+					bid.yuanlu.mc.warehouse.core.cache.DetectorResolver.playerUuidIfScoped(
+							bid.yuanlu.mc.warehouse.core.cache.DetectorResolver.at(abs)));
 			if (clear) {
 				store.invalidate(key);
 				CommandSupport.fb(ctx, "commands.wh.container.memory.cleared", ChatFormatting.YELLOW,
 						fmtPos(info.canonicalPos()));
 				return 1;
 			}
-			boolean explored = store.isExplored(key);
-			var mem = store.getValid(key);
+			boolean explored = store.isExplored(key, info.cacheType);
+			var mem = store.getValid(key, info.cacheType);
 			long itemCount = 0;
 			if (mem != null && mem.snapshot() != null) {
 				itemCount = mem.snapshot().slots().values().stream()

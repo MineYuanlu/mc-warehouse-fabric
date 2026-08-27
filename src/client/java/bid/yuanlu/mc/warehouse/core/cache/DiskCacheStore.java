@@ -47,8 +47,7 @@ public final class DiskCacheStore {
 	public void save(CacheKey key, ContainerSnapshot snapshot) {
 		try {
 			Path file = fileOf(key);
-			Files.createDirectories(file.getParent());
-			JsonObject root = new JsonObject();
+			Files.createDirectories(file.getParent());			JsonObject root = new JsonObject();
 			root.addProperty("schemaVersion", SCHEMA_VERSION);
 			root.addProperty("worldId", key.worldId());
 			root.addProperty("dim", key.dimId());
@@ -76,7 +75,7 @@ public final class DiskCacheStore {
 			}
 			root.add("slotInfos", infos);
 
-			Files.writeString(file, GSON.toJson(root), StandardCharsets.UTF_8);
+			bid.yuanlu.mc.warehouse.util.AtomicFiles.write(file, GSON.toJson(root).getBytes(StandardCharsets.UTF_8));
 		} catch (Exception e) {
 			LOGGER.warn("disk cache save failed {}: {}", key, e.toString());
 		}

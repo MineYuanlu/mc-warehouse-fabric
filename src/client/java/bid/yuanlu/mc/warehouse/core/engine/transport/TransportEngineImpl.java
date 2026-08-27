@@ -360,7 +360,7 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 	 * 防振荡①（仅 INPUT 未探索容器）：背包无空间且 OUTPUT/TEMP 均无可确认空间 → 不去空取。
 	 */
 	private boolean cacheJudgesNothingToDo(IOType io, ContainerInfo c) {
-		var mem = cache.getValid(keyOf(c));
+		var mem = cache.getValid(keyOf(c), c.cacheType);
 		boolean takeDirection = io == IOType.INPUT || io == IOType.TEMP;
 		if (mem == null) {
 			// 未探索
@@ -383,7 +383,7 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 		for (ContainerInfo c : wh.containers) {
 			if (c.ioType != io) continue;
 			if (skippedKeys.contains(keyOf(c))) continue; // 已跳过不算未知
-			if (!cache.isExplored(keyOf(c))) return true;
+			if (!cache.isExplored(keyOf(c), c.cacheType)) return true;
 		}
 		return false;
 	}
@@ -393,7 +393,7 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 		if (wh == null) return false;
 		for (ContainerInfo c : wh.containers) {
 			if (c.ioType != io) continue;
-			var mem = cache.getValid(keyOf(c));
+			var mem = cache.getValid(keyOf(c), c.cacheType);
 			if (mem != null && hasAnyFreeSpace(mem.snapshot())) return true;
 		}
 		return false;
@@ -462,13 +462,7 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 
 	@Nullable
 	private static ContainerDetector detectAt(WorldDimPos pos) {
-		var level = Minecraft.getInstance().level;
-		if (level == null) return null;
-		BlockInWorld biw = new BlockInWorld(level, pos.toBlockPos(), true);
-		for (ContainerDetector d : WarehouseRegistryImpl.detectors()) {
-			if (d.matchesBlock(biw)) return d;
-		}
-		return null;
+		return bid.yuanlu.mc.warehouse.core.cache.DetectorResolver.at(pos);
 	}
 
 	private void beginOpen(ContainerInfo c) {
@@ -485,14 +479,16 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 			return;
 		}
 		sessionPos = abs;
-		sessionKey = keyOf(c);
+		sessionKey = keyOf(c, detector); // 复用已解析 Detector，避免重复扫描
 		sessionInfo = c;
-		sessionExploredNow = !cache.isExplored(sessionKey);
+		sessionExploredNow = !cache.isExplored(sessionKey, c.cacheType);
 		sessionPlanned.clear();
 		plannedExpected = 0;
 		fireProgress(SCANNING_ACTION);
 		LOGGER.debug("opening {} ({})", c.canonicalPos(), c.ioType);
-		ContainerProtocol.get().open(abs, detector, it, config, new SessionBridge());
+		ContainerDetector det = detector;
+		ContainerProtocol.get().open(abs, detector, it, config, new SessionBridge(),
+				snap -> cache.remember(keyOf(c, det), c.cacheType, snap)); // §5.4 关屏回写
 	}
 
 	private boolean sessionActive() {
@@ -654,7 +650,7 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 	private boolean hasUnexploredOutput(Warehouse wh) {
 		for (ContainerInfo c : wh.containers) {
 			if (c.ioType != IOType.OUTPUT) continue;
-			if (!cache.isExplored(keyOf(c))) return true;
+			if (!cache.isExplored(keyOf(c), c.cacheType)) return true;
 		}
 		return false;
 	}
@@ -667,7 +663,7 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 		one.put(sample.copyWithCount(1), sample.getMaxStackSize());
 		for (ContainerInfo c : wh.containers) {
 			if (c.ioType != IOType.OUTPUT) continue;
-			var mem = cache.getValid(keyOf(c));
+			var mem = cache.getValid(keyOf(c), c.cacheType);
 			if (mem == null) continue;
 			List<bid.yuanlu.mc.warehouse.core.engine.rule.PutDemand> demands =
 					RuleApplicator.planPut(c, resolveRules(wh, c), mem.snapshot(), one);
@@ -882,7 +878,7 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 		if (wh == null) return true;
 		for (ContainerInfo c : wh.containers) {
 			if (c.ioType != io) continue;
-			var mem = cache.getValid(keyOf(c));
+			var mem = cache.getValid(keyOf(c), c.cacheType);
 			if (mem == null) return false; // 未探索视为不满足
 			if (hasAnyFreeSpace(mem.snapshot())) {
 				// 有空间但若没有任何物品可填入也视为「满」（合并无源）
@@ -902,7 +898,7 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 		if (wh == null) return false;
 		for (ContainerInfo c : wh.containers) {
 			if (c.ioType != IOType.INPUT && c.ioType != IOType.TEMP) continue;
-			var mem = cache.getValid(keyOf(c));
+			var mem = cache.getValid(keyOf(c), c.cacheType);
 			if (mem == null) continue;
 			for (ItemStack sample : mem.snapshot().slots().values()) {
 				if (!sample.isEmpty() && containerWantsSample(snap, sample)) return true;
@@ -928,7 +924,7 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 		for (ContainerInfo c : wh.containers) {
 			if (c.ioType != io) continue;
 			any = true;
-			var mem = cache.getValid(keyOf(c));
+			var mem = cache.getValid(keyOf(c), c.cacheType);
 			if (mem == null) return false; // 未探索→不满足
 			if (hasAnyNonEmpty(mem.snapshot())) return false;
 		}
@@ -942,7 +938,7 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 		pack.aggregate().forEach((k, v) -> maxed.put(k.copyWithCount(k.getMaxStackSize()), v));
 		for (ContainerInfo c : wh.containers) {
 			if (c.ioType != IOType.OUTPUT && c.ioType != IOType.TEMP) continue;
-			var mem = cache.getValid(keyOf(c));
+			var mem = cache.getValid(keyOf(c), c.cacheType);
 			if (mem == null) return true; // 未探索还有可能收下
 			var demands = RuleApplicator.planPut(c, resolveRules(wh, c), mem.snapshot(), maxed);
 			if (!demands.isEmpty()) return true;
@@ -1043,13 +1039,13 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 
 	// ---- 杂项 ----
 
-	private static CacheKey keyOf(ContainerInfo c) {
-		return CacheKey.of(c.canonicalPos(), playerIdOrNull());
+	private CacheKey keyOf(ContainerInfo c) {
+		return keyOf(c, bid.yuanlu.mc.warehouse.core.cache.DetectorResolver.at(absPos(c)));
 	}
 
-	private static UUID playerIdOrNull() {
-		var p = Minecraft.getInstance().player;
-		return p == null ? null : p.getUUID();
+	private static CacheKey keyOf(ContainerInfo c, @Nullable ContainerDetector d) {
+		return CacheKey.of(c.canonicalPos(),
+				bid.yuanlu.mc.warehouse.core.cache.DetectorResolver.playerUuidIfScoped(d));
 	}
 
 	/** 相对坐标→绝对坐标（有 anchor 时）；无解析能力时原样返回 */

@@ -34,6 +34,9 @@ public final class ContainerProtocol {
 	private boolean hooksRegistered;
 	/** 最近一次开屏包捕获的 containerId（§6.1 步骤 4：会话经此做 syncId 门控） */
 	private volatile int lastCapturedContainerId = -1;
+	/** 关屏扫描回写（§5.4：玩家手动关闭也刷新缓存）；每次 open 覆盖 */
+	@Nullable
+	private volatile java.util.function.Consumer<bid.yuanlu.mc.warehouse.api.container.ContainerSnapshot> closeScanSink;
 
 	long captureCounter() {
 		return CAPTURE_COUNTER.get();
@@ -51,11 +54,21 @@ public final class ContainerProtocol {
 		});
 		ScreenHooks.registerOnClose(screen -> {
 			ContainerSession s = active;
-			if (s != null && s.isBoundScreen(screen) && !s.closingByUs) {
-				LOGGER.debug("screen closed externally: {}", s.pos);
-				s.failExternal();
-			}
 			if (s != null && s.isBoundScreen(screen)) {
+				if (!s.closingByUs) {
+					LOGGER.debug("screen closed externally: {}", s.pos);
+					s.failExternal();
+				}
+				// §5.4/§8.7：真实扫描回写缓存（对玩家手动关闭同样生效）
+				var sink = closeScanSink;
+				if (sink != null) {
+					try {
+						bid.yuanlu.mc.warehouse.api.container.ContainerSnapshot snap = s.scanNow();
+						if (snap != null) sink.accept(snap);
+					} catch (Exception e) {
+						LOGGER.warn("close-scan failed {}: {}", s.pos, e.toString());
+					}
+				}
 				s.handle.bind(null);
 			}
 		});
@@ -64,11 +77,16 @@ public final class ContainerProtocol {
 
 	/**
 	 * 发起开箱（异步）。已有活跃会话时先取消之。
+	 *
+	 * @param onCloseScanSink 关屏（含玩家手动关闭）时对当前界面真实扫描的回写目标；
+	 *                        null = 不回写
 	 */
 	public synchronized void open(WorldDimPos pos, ContainerDetector detector, ContainerInteraction interaction,
-			ModConfig config, ContainerSession.Listener listener) {
+			ModConfig config, ContainerSession.Listener listener,
+			@Nullable java.util.function.Consumer<bid.yuanlu.mc.warehouse.api.container.ContainerSnapshot> onCloseScanSink) {
 		ensureHooks();
 		cancel("superseded");
+		closeScanSink = onCloseScanSink;
 		active = new ContainerSession(pos, detector, interaction, config, listener,
 				System::currentTimeMillis);
 	}
