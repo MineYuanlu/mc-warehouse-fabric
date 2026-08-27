@@ -371,7 +371,7 @@ public final class ContainerSession {
 			// 确认：变化已稳定（未被纠正）
 			ackPending = false;
 			currentStep = null;
-			speedGap = Math.max(0, config.defaultInteractionSpeed);
+			speedGap = interactionPause(); // §6.5/§11.4：世界级速度 + §6.4 jitter
 			return;
 		}
 		if (++ackWaited > config.timeouts().confirmTicks) {
@@ -385,6 +385,19 @@ public final class ContainerSession {
 			ackWatchBefore.put(watchSlot, fingerprint(s));
 		}
 	}
+
+	/**
+	 * 每次操作后的等待 tick：dim 覆盖 → world 默认 → 全局（§11.4），叠加
+	 * {@code interactionJitterPercent} 的随机额外延迟（§6.4 反作弊缓解，0=无）。
+	 */
+	private int interactionPause() {
+		int base = Math.max(0, config.interactionSpeed(pos.world(), pos.dim()));
+		int pct = Math.max(0, config.interactionJitterPercent);
+		if (pct == 0 || base == 0) return base;
+		return base + jitter.nextInt((int) Math.min(Integer.MAX_VALUE, (long) base * pct / 100 + 1));
+	}
+
+	private final java.util.Random jitter = new java.util.Random();
 
 	private static int[] fingerprint(ItemStack stack) {
 		return stack.isEmpty()
