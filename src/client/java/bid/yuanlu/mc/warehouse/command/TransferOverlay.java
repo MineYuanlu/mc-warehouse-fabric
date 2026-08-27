@@ -67,4 +67,16 @@ final class TransferOverlay {
 		}
 		mgr.popTransferOverlay();
 	}
+
+	/**
+	 * 注册 RUN_FINISHED 自动回收：搬运自然跑完（RUN_FINISHED 仅在 DONE 终态发出，
+	 * SUSPENDED 挂起不发——continue 路径的 overlay 天然保留）后弹覆盖恢复激活态。
+	 */
+	static void registerAutoPop() {
+		bid.yuanlu.mc.warehouse.core.event.WarehouseEvents.RUN_FINISHED.register(report -> {
+			WarehouseManagerImpl mgr = WarehouseManagerImpl.get();
+			if (!mgr.hasTransferOverlay()) return;
+			end(mgr, bid.yuanlu.mc.warehouse.core.WarehouseServices.transportEngine(), false);
+		});
+	}
 }

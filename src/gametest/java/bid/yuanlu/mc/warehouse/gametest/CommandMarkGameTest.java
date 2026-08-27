@@ -255,6 +255,16 @@ public class CommandMarkGameTest implements FabricClientGameTest {
 		check(exec(context, src, "wh stop") == 1, "stop 停止");
 		check(!WarehouseServices.transportEngine().isRunning(), "引擎已停");
 
+		// RUN_FINISHED 自动回收：再起一次 transfer，模拟自然跑完（不发 stop）
+		check(exec(context, src, "wh transfer gt3 gt3-dst start") == 1, "transfer 启动#2");
+		check(WarehouseManagerImpl.get().hasTransferOverlay(), "overlay 推入#2");
+		context.runOnClient(mc -> mc.execute(() -> bid.yuanlu.mc.warehouse.core.event.WarehouseEvents
+				.RUN_FINISHED.invoker().onRunFinished(new bid.yuanlu.mc.warehouse.api.transport.RunReport(
+						bid.yuanlu.mc.warehouse.api.transport.RunGrade.PERFECT, 0, 1, 1, "wh.report.ok"))));
+		check(awaitTrue(context, 50, () -> !WarehouseManagerImpl.get().hasTransferOverlay()),
+				"RUN_FINISHED 自动弹 overlay");
+		checkEquals("gt3", WarehouseManagerImpl.get().activeId(), "激活态恢复 gt3#2");
+
 		LOGGER.info("[gt3] commands smoke passed (feedback={}, errors={})",
 				src.feedbackKeys().size(), src.errorKeys().size());
 	}

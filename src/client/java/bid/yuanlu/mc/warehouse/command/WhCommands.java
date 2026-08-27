@@ -59,6 +59,7 @@ public final class WhCommands {
 
 	/** 经 ClientCommandRegistrationCallback 接入（正式入口） */
 	public static void register(com.mojang.brigadier.CommandDispatcher<FabricClientCommandSource> d) {
+		TransferOverlay.registerAutoPop();
 		var root = buildRoot();
 		var rootNode = root.build();
 		lastRootNode = rootNode;
