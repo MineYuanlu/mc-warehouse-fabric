@@ -577,7 +577,14 @@ public final class WhCommands {
 			}
 			ItemRule entry = new ItemRule(selector, opts.negate(), quant);
 			rule.itemRules.add(entry);
-			String d2err = ConfigValidator.validateRuleOnContainers(wh, rule);
+			String d2err;
+			try {
+				d2err = ConfigValidator.validateRuleOnContainers(wh, rule);
+			} catch (Throwable t) {
+				rule.itemRules.remove(entry); // 校验异常同样回滚，不留脏条目
+				CommandSupport.err(src, "commands.wh.error.generic", String.valueOf(t));
+				return 0;
+			}
 			if (d2err != null) {
 				rule.itemRules.remove(entry); // D2 严格拒载（PDD §3.7）
 				CommandSupport.err(src, "commands.wh.error.generic", d2err);

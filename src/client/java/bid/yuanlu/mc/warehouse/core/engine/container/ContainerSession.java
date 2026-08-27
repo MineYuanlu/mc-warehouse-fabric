@@ -83,6 +83,8 @@ public final class ContainerSession {
 	private int speedGap;
 	// WAIT_SCREEN 用：捕获基线（协议层捕获计数器快照）
 	private long captureBaseline = -1;
+	/** 开屏包捕获的 containerId（§6.1 步骤 4 身份键）：VERIFYING 与逐击发包前门控 */
+	private int expectedContainerId = -1;
 
 	// 逐击对账状态（D3：不依赖客户端 stateId——26.1 上它不随服务端包更新；
 	// 以「受监视槽位/光标内容变化 + 稳定窗口无回滚」为确认信号）
@@ -224,6 +226,12 @@ public final class ContainerSession {
 		}
 		if (mc.screen instanceof AbstractContainerScreen<?> screen) {
 			int id = screen.getMenu().containerId;
+			expectedContainerId = ContainerProtocol.get().lastCapturedContainerId();
+			if (expectedContainerId != -1 && id != expectedContainerId) {
+				// 开屏包 containerId 与当前界面不符：打开的不是协议层要的那个会话
+				fail(Failure.UI_MISMATCH);
+				return;
+			}
 			handle.bind(screen);
 			phase = Phase.VERIFYING;
 			phaseTicks = 0;
@@ -289,6 +297,10 @@ public final class ContainerSession {
 			fail(Failure.UI_CLOSED_EXTERNAL);
 			return;
 		}
+		if (expectedContainerId != -1 && menu.containerId != expectedContainerId) {
+			fail(Failure.UI_MISMATCH); // §6.1 步骤 4：syncId 门控
+			return;
+		}
 		ackWatchBefore.clear();
 		snapshotWatch(menu, currentStep.watchSlot());
 		ItemStack carried = menu.getCarried();
@@ -305,6 +317,10 @@ public final class ContainerSession {
 		AbstractContainerMenu menu = menuOrNull();
 		if (menu == null) {
 			fail(Failure.UI_CLOSED_EXTERNAL);
+			return;
+		}
+		if (expectedContainerId != -1 && menu.containerId != expectedContainerId) {
+			fail(Failure.UI_MISMATCH); // 会话中途 UI 被替换
 			return;
 		}
 		Step st = currentStep;

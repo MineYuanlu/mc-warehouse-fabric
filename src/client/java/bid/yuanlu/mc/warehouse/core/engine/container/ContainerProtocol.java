@@ -32,7 +32,7 @@ public final class ContainerProtocol {
 	@Nullable
 	private ContainerSession active;
 	private boolean hooksRegistered;
-	/** 最近一次开屏包捕获的 containerId */
+	/** 最近一次开屏包捕获的 containerId（§6.1 步骤 4：会话经此做 syncId 门控） */
 	private volatile int lastCapturedContainerId = -1;
 
 	long captureCounter() {
