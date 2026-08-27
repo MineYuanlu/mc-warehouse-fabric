@@ -126,7 +126,6 @@ public final class ConfigIO {
 			String name = file.getFileName().toString();
 			try {
 				Warehouse w = readWarehouse(file);
-				if (w == null) continue;
 				List<String> problems = ConfigValidator.validate(w, globalIds);
 				if (!problems.isEmpty()) {
 					errors.add(name + ": rejected — " + String.join("; ", problems));
@@ -160,7 +159,13 @@ public final class ConfigIO {
 		for (Path file : listJsonFiles(rulesDir())) {
 			try {
 				JsonObject rootObj = readJsonObject(file);
-				if (optSchemaVersion(rootObj, file.toString()) != SCHEMA_VERSION) continue;
+				int version = optSchemaVersion(rootObj, file.toString());
+				if (version != SCHEMA_VERSION) {
+					// §11.2 不静默：版本不符告警并跳过（B9 修订，旧实现静默 continue）
+					LOGGER.warn("{}: unsupported schemaVersion {} (expected {}), rule skipped",
+							file, version, SCHEMA_VERSION);
+					continue;
+				}
 				ContainerRule rule = gson.fromJson(rootObj, ContainerRule.class);
 				if (rule != null && rule.id != null) out.put(rule.id, rule);
 			} catch (Exception e) {
@@ -248,7 +253,11 @@ public final class ConfigIO {
 	@Nullable
 	private Warehouse readWarehouse(Path file) throws IOException {
 		JsonObject rootObj = readJsonObject(file);
-		if (optSchemaVersion(rootObj, file.toString()) != SCHEMA_VERSION) return null;
+		int version = optSchemaVersion(rootObj, file.toString());
+		if (version != SCHEMA_VERSION) {
+			// §11.2 不静默：版本不符计入拒载错误（B9 修订，旧实现静默 continue）
+			throw new IOException("unsupported schemaVersion " + version + " (expected " + SCHEMA_VERSION + ")");
+		}
 		Warehouse w = gson.fromJson(rootObj, Warehouse.class);
 		if (w == null || w.id == null || w.id.isBlank()) throw new IOException("missing warehouse id");
 		fillOmittedWorlds(w);
