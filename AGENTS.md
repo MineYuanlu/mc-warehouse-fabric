@@ -64,6 +64,19 @@ src/
 - 插件通过 Fabric entrypoint `warehouse-plugin` 加载
 - 代码不从 `src/client/java` 引用 `src/main/java` 以外的包（`splitEnvironmentSourceSets` 隔离）
 
+## 依赖源码参考（refs）
+
+探索/实现时直接读本地反编译源码（gitignored，仅本地），不依赖在线：
+
+```bash
+python3 tools/gen_refs.py mc                # 全量反编译 MC → refs/dep-src/minecraft/
+python3 tools/gen_refs.py dep group:artifact:version   # 单依赖：优先 -sources.jar，缺则 fernflower
+python3 tools/gen_refs.py discover          # 列出 gradle/loom cache 的 jar 坐标+路径
+```
+
+- MC 26.1 无混淆，反编译名即真名。MC jar 在 loom cache（common + clientOnly 两 jar，无类重叠）；`mc` 把两者一次传入 fernflower 做引用解析。
+- 别把 Python `zipfile` 合并的 jar 传给 fernflower（会报 `zip END header not found`）。
+
 ## 设计参考
 
 `doc/PDD.md` 包含完整的数据模型、状态机（mermaid）、传输引擎逻辑、插件系统 API 和一阶段实现范围。实现前先阅读对应章节。
