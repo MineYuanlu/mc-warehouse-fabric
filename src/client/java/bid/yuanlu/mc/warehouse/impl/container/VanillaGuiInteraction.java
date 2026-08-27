@@ -111,6 +111,11 @@ public final class VanillaGuiInteraction implements ContainerInteraction {
 	@Override
 	public boolean dragDistribute(ContainerHandle handle, int[] slots) {
 		if (slots == null || slots.length == 0) return false;
+		if (slots.length == 1) {
+			// B10：单目标槽走左键放下（1 包）。完整拖拽三连包在单槽下等价——
+			// END 包槽位号在 26.1 线协议中无语义（占位值），行为一致但多 2 包
+			return putBackHeld(handle, slots[0]);
+		}
 		AbstractContainerScreen<?> screen = boundScreen(handle);
 		if (screen == null) return false;
 		var menu = screen.getMenu();
@@ -119,11 +124,11 @@ public final class VanillaGuiInteraction implements ContainerInteraction {
 
 		int id = menu.containerId;
 		var mode = Minecraft.getInstance().gameMode;
-		mode.handleContainerInput(id, slots[0], 0, ContainerInput.QUICK_CRAFT, player); // 开始拖拽
+		mode.handleContainerInput(id, slots[0], 0, ContainerInput.QUICK_CRAFT, player); // 开始拖拽（并加入首槽）
 		for (int i = 1; i < slots.length; i++) {
 			mode.handleContainerInput(id, slots[i], 1, ContainerInput.QUICK_CRAFT, player); // 加入槽位
 		}
-		mode.handleContainerInput(id, -999, 2, ContainerInput.QUICK_CRAFT, player); // 结束拖拽（线协议 -999）
+		mode.handleContainerInput(id, -999, 2, ContainerInput.QUICK_CRAFT, player); // 结束拖拽（-999 为占位值：END 包槽位号无语义）
 		return true;
 	}
 
