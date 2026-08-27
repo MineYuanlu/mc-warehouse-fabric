@@ -499,6 +499,15 @@ roundHadNewExplore: boolean // 本轮是否有新容器被首次成功探索
 | 玩家死亡           | 死亡掉落风险                                        | 终止本轮搬运，要求人工确认后 restart |
 | 断线/切世界/切维度 | worldId 变化或连接中断（§4.1）                      | 终止搬运                             |
 
+> **口径注记（v0.3 勘误，2026-08-28 与作者确认）**：探索类异常（容器消失、容器打不开、
+> 探索路径上的 UI 身份不匹配）取 §5.3③ 口径——单次「跳过 + 计数」，同一容器累计达
+> `exploreFailMax`（§11.4）方触发「反复探索失败」行暂停；表中其余行的「暂停」立即生效。
+
+> **口径注记（v0.3 勘误）**：探索类异常（容器消失、容器打不开、UI 身份不匹配发生在
+> 探索路径时）取 §5.3③ 口径——单次「跳过 + 计数」，同一容器累计达
+> `exploreFailMax`（§11.4）才暂停；表中其它行的「暂停」为立即生效。
+> （2026-08-28 与作者确认，实现即此口径。）
+
 **恢复选项与命令映射**：
 
 ```
@@ -804,6 +813,8 @@ interface ContainerDetector {
 ```
 
 - **身份识别必须组合判定**：仅凭 Screen 类不可靠（箱子/木桶/陷阱箱共用同类 Screen），须叠加方块实体类型与标题/槽位数
+- **标题要素语义（v0.3 勘误）**：「标题」是**开屏包标题 ↔ 预检 BE DisplayName 的一致性校验**，而非固定默认名匹配——26.1 服务端发包即 `provider.getDisplayName()`（与 BE 同源），天然抗铁砧改名；非 Nameable BE（末影箱）跳过该要素
+- **resolveMultiBlock 约定（v0.3）**：非多格容器类型对 `positions.length > 1` 应返回 null（拒绝裁剪语义，不产出默认模板）
 - v0.2 移除 `canInput(Screen)` / `canOutput(Screen)`：粗粒度布尔无法表达熔炉这类混合槽位容器，由 §8.2 槽位能力模型取代
 
 ### 8.2 槽位能力模型
@@ -821,7 +832,10 @@ enum SlotRole { GENERIC, MACHINE_INPUT, MACHINE_FUEL, MACHINE_OUTPUT, SPECIAL }
 
 - 放入计划只允许使用 `canPutTo=true` 的槽位；取出只用 `canTakeFrom=true`
 - 「容器满/空」聚合、`QuantityContext.slotCount/freeSlots` 按角色口径过滤
-- `MACHINE_FUEL` 槽位的放入还须经物品可燃性二次过滤（引擎内置常识表 + Detector 可覆盖）
+- `MACHINE_FUEL` 槽位的放入还须经物品可燃性二次过滤（引擎内置常识表 + Detector 可覆盖；
+  v0.3 实现注记：可熔炼判定用客户端同步的 RecipePropertySet（与服务端菜单同源），
+  可燃判定用 FuelValues，过滤语义完整镜像原版 quickMove 路由——
+  非「可熔炼且非燃料」类物品在需求生成期即跳过，避免 quickMove no-op 逐击超时）
 
 内置角色表：
 
@@ -1046,7 +1060,7 @@ TEMP 容器同时参与取出和放入两个阶段，其行为取决于当前阶
 | `/wh select expand <n> <dir>`                                         | 向指定方向扩展选区                                                                            | ✅     |
 | `/wh select show` / `clear`                                           | 显示/清除选区（show 输出文本范围；轮廓随高亮系统启用）                                        | ✅     |
 | `/wh select set-type/set-rule/set-cache`                              | 批量设置                                                                                      | ✅     |
-| `/wh select plan`                                                     | 交由 Agent 自动配置                                                                           | ✅     |
+| `/wh select plan`                                                     | 交由 Agent 自动配置（一阶段为 stub：AgentPlanner 属 §14 裁剪范围）                            | ✅     |
 | `/wh transfer <src> <dst> start/status/stop`                          | 跨仓库搬运                                                                                    | ✅     |
 | `/wh reload`                                                          | 重载配置文件                                                                                  | ✅     |
 | `/wh config show`                                                     | 显示当前配置                                                                                  | ✅     |

@@ -12,6 +12,7 @@
 | D3 | 点击对账实现 | ~~纯客户端 tick 轮询 stateId~~ **（L8 实测修订）**：26.1 客户端 `menu.getStateId()` 不随服务端包更新，不可作对账信号。实际采用：**受监视槽位/光标内容变化 + 2 tick 稳定窗口**——变化后未被回滚即确认；回到点击前状态 = 预测被拒（CLICK_CORRECTED）；超时 = CLICK_TIMEOUT。通道无关，插件交互实现免费复用。开屏确认仍用 `ClientPacketListener.handleOpenScreen` mixin 捕获 containerId |
 | D3a | 点击发包 | **必须经 `MultiPlayerGameMode.handleContainerInput`**（26.1 名称）——`menu.clicked` 只是本地预测不发包（E2E 实测教训） |
 | D4 | 交付节奏 | 逐层 commit（本文件随每次提交更新）；JVM 单测随层走；E2E gametest 在 L8 / L10 / L11 三个里程碑集中补齐 |
+| D5 | L11 复审修复决策（2026-08-28 定稿） | ① 多人 worldId 改 `mp:<host>:<port>`，**破坏性变更不迁移**（pre-release 无存量）；② 探索类异常**保留累计 exploreFailMax** 口径，回写 PDD §5.5；③ Detector 标题要素按「开屏标题 ↔ BE DisplayName 一致性」实现（26.1 同源精确等式，抗改名，非 Nameable 跳过）；④ 缓存种子与手动关箱回写**按 PDD 实现**（真实扫描非伪造，红线指操作依据须经对账） |
 
 ## 技术锚点（MC 26.1 已验证）
 
@@ -79,6 +80,30 @@
 - Brigadier 字面量参数不能含冒号——`rule add <id> <selector...>` 用单个 greedy 参数自行分词（支持裸 JSON 选择器与 `--quantity count:64` 尾巴）
 - 跨仓库搬运经 manager 的临时覆盖视图实现（overlay 不落盘、pop 恢复激活态），引擎零改动复用标准状态机
 - gametest 命令冒烟：独立 dispatcher + FabricClientCommandSource stub（computeOnClient 同步执行）；`/warehouse` 别名经 redirect 注册
+
+## 复审修复批次（L0–L11 遗留问题，2026-08-28 完成）
+
+> L11 完成后的复审发现 16 项前次遗留 + 4 项 L11 新增缺口。除 #7（对账语义，D3 已闭环）外全部修复，分 10 个提交（B1–B10）+ 文档回写（B11）。
+
+| 批 | 内容 | 提交 |
+| -- | ---- | ---- |
+| B1 | `api/transport/TransportEngine` 接口（命令层脱离具体类）；`start(pathfinderOverride)` 一次性寻路器参数化，删 `pathfinderOnce` 死字段 | `refactor(api)` |
+| B2 | transfer overlay 随 RUN_FINISHED 自动回收（SUSPENDED 不发 RUN_FINISHED，continue 路径天然保留） | `fix(command)` |
+| B3 | containerId 门控恢复（开屏包身份键，绑定/发包双重校验）；rule add 校验回滚加固 | `fix(protocol)` |
+| B4 | **DISK 缓存闭环**：remember 落盘 / getValid·isExplored 回源回填 / invalidate 双清 / 原子写；playerScoped 缓存键（DetectorResolver 共用）；标记模式缓存种子；手动关箱回写（closeScanSink） | `feat(cache)` |
+| B5 | MACHINE_FUEL 可燃性过滤（acceptsPut SPI + RecipePropertySet/FuelValues，镜像原版 quickMove 路由）；标题一致性校验；resolveMultiBlock 非多格拒多坐标 + MarkMode 双箱合并 | `feat(container)` |
+| B6 | NbtSelector 匹配完整组件表（含恰为默认值的组件） | `fix(selector)` |
+| B7 | 交互时序接入 `interactionSpeed(w,d)`（§11.4）与 `interactionJitterPercent`（§6.4） | `feat(protocol)` |
+| B8 | 多人 worldId → `mp:<host>:<port>`（D5①，破坏性变更） | `feat(world)` |
+| B9 | 仓库/全局规则 schemaVersion 不符不再静默（errors/warn） | `fix(config)` |
+| B10 | dragDistribute -999 注释勘误 + 单槽快路径（1 包替代三连包） | `fix(protocol)` |
+| B11 | PDD §5.5/§8.1/§8.2/§10.1 勘误 + 本表 | `doc` |
+
+**技术锚点补录（26.1 反编译验证，refs/dep-src）**
+- 开屏包标题来源：`ServerPlayer.openMenu` 直接发 `provider.getDisplayName()`；原版容器 BE 自身即 provider——标题一致性校验是精确等式
+- 可熔炼判定：客户端同步 `RecipePropertySet`（`level.recipeAccess().propertySet(FURNACE_INPUT)`，与服务端菜单同源）；可燃：`level.fuelValues().isFuel(stack)`
+- 原版熔炉 quickMove 路由：canSmelt→输入槽、isFuel→燃料槽、两者皆非→**拒绝**（no-op）——这正是放入需求必须前置过滤的原因
+- `RUN_FINISHED` 仅在 state→DONE 时发出；SUSPENDED 挂起不发——overlay 自动回收据此设计
 
 ### gametest 里程碑覆盖（§13 映射）
 
