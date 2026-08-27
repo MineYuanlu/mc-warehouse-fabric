@@ -28,6 +28,7 @@ import bid.yuanlu.mc.warehouse.api.item.ItemRule;
 import bid.yuanlu.mc.warehouse.api.item.ItemSelector;
 import bid.yuanlu.mc.warehouse.api.item.QuantitySelector;
 import bid.yuanlu.mc.warehouse.api.transport.RunReport;
+import bid.yuanlu.mc.warehouse.api.transport.TransportEngine;
 import bid.yuanlu.mc.warehouse.api.transport.TransportState;
 import bid.yuanlu.mc.warehouse.api.warehouse.Warehouse;
 import bid.yuanlu.mc.warehouse.api.world.WorldDim;
@@ -37,7 +38,6 @@ import bid.yuanlu.mc.warehouse.core.cache.CacheKey;
 import bid.yuanlu.mc.warehouse.core.config.ConfigIO;
 import bid.yuanlu.mc.warehouse.core.config.ConfigValidator;
 import bid.yuanlu.mc.warehouse.core.config.ModConfig;
-import bid.yuanlu.mc.warehouse.core.engine.transport.TransportEngineImpl;
 import bid.yuanlu.mc.warehouse.core.mark.MarkMode;
 import bid.yuanlu.mc.warehouse.core.registry.SelectorCodecs;
 import bid.yuanlu.mc.warehouse.core.registry.WarehouseRegistryImpl;
@@ -245,11 +245,11 @@ public final class WhCommands {
 		src.sendFeedback(Component.translatable("commands.wh.status.containers",
 				wh.containers.size(), in, out, tmp));
 		src.sendFeedback(Component.translatable("commands.wh.status.rules", wh.rules.size()));
-		TransportState st = TransportEngineImpl.get().state();
-		RunReport r = TransportEngineImpl.get().lastReport();
+		TransportState st = engine().state();
+		RunReport r = engine().lastReport();
 		src.sendFeedback(Component.translatable("commands.wh.status.engine",
 				Component.translatable(st == null ? "wh.state.idle" : "wh.state." + st.name())
-						.withStyle(TransportEngineImpl.get().isRunning()
+						.withStyle(engine().isRunning()
 								? ChatFormatting.GREEN
 								: ChatFormatting.GRAY),
 				r == null ? "-" : r.grade().name()));
@@ -363,7 +363,7 @@ public final class WhCommands {
 
 	private static int startRun(CommandContext<FabricClientCommandSource> ctx, String pathfinder) {
 		var src = ctx.getSource();
-		TransportEngineImpl engine = TransportEngineImpl.get();
+		TransportEngine engine = engine();
 		if (engine.isRunning()) {
 			CommandSupport.err(src, "commands.wh.control.running");
 			return 0;
@@ -377,16 +377,14 @@ public final class WhCommands {
 			CommandSupport.err(src, "commands.wh.start.empty");
 			return 0;
 		}
-		ModConfig cfg = WarehouseServices.modConfig();
-		if (cfg != null) cfg.pathfinderOnce = pathfinder; // null = 回配置默认
-		engine.start();
+		engine.start(pathfinder);
 		src.sendFeedback(Component.translatable("commands.wh.start.done", wh.id,
 				pathfinder == null ? "-" : pathfinder).withStyle(ChatFormatting.GREEN));
 		return 1;
 	}
 
 	private static int stop(CommandContext<FabricClientCommandSource> ctx) {
-		TransportEngineImpl engine = TransportEngineImpl.get();
+		TransportEngine engine = engine();
 		if (!engine.isRunning()) {
 			CommandSupport.err(ctx.getSource(), "commands.wh.control.not_running");
 			return 0;
@@ -397,7 +395,7 @@ public final class WhCommands {
 	}
 
 	private static int continueRun(CommandContext<FabricClientCommandSource> ctx) {
-		TransportEngineImpl engine = TransportEngineImpl.get();
+		TransportEngine engine = engine();
 		if (engine.isRunning()) {
 			CommandSupport.err(ctx.getSource(), "commands.wh.control.running");
 			return 0;
@@ -412,7 +410,7 @@ public final class WhCommands {
 	}
 
 	private static int restart(CommandContext<FabricClientCommandSource> ctx) {
-		TransportEngineImpl engine = TransportEngineImpl.get();
+		TransportEngine engine = engine();
 		if (engine.isRunning()) {
 			CommandSupport.err(ctx.getSource(), "commands.wh.control.running");
 			return 0;
@@ -423,7 +421,7 @@ public final class WhCommands {
 	}
 
 	private static int abort(CommandContext<FabricClientCommandSource> ctx) {
-		TransportEngineImpl engine = TransportEngineImpl.get();
+		TransportEngine engine = engine();
 		if (engine.state() == null) {
 			CommandSupport.err(ctx.getSource(), "commands.wh.control.not_running");
 			return 0;
@@ -1407,7 +1405,7 @@ public final class WhCommands {
 				CommandSupport.err(src, "commands.wh.transfer.same");
 				return 0;
 			}
-			TransportEngineImpl engine = TransportEngineImpl.get();
+			TransportEngine engine = engine();
 			if (engine.isRunning()) {
 				CommandSupport.err(src, "commands.wh.control.running");
 				return 0;
@@ -1426,7 +1424,7 @@ public final class WhCommands {
 						.withStyle(ChatFormatting.GRAY));
 				return 0;
 			}
-			TransportEngineImpl engine = TransportEngineImpl.get();
+			TransportEngine engine = engine();
 			src.sendFeedback(Component.translatable("commands.wh.transfer.active", ov.id,
 					Component.translatable(engine.state() == null ? "wh.state.idle"
 							: "wh.state." + engine.state().name())));
@@ -1440,7 +1438,7 @@ public final class WhCommands {
 				CommandSupport.err(src, "commands.wh.transfer.none_running");
 				return 0;
 			}
-			TransferOverlay.end(mgr, TransportEngineImpl.get(), true);
+			TransferOverlay.end(mgr, engine(), true);
 			src.sendFeedback(Component.translatable("commands.wh.transfer.stopped")
 					.withStyle(ChatFormatting.YELLOW));
 			return 1;
@@ -1563,6 +1561,13 @@ public final class WhCommands {
 
 	static WarehouseManagerImpl manager() {
 		return WarehouseManagerImpl.get();
+	}
+
+	/** 引擎（接口类型；未装配即未初始化的异常装配环境） */
+	static TransportEngine engine() {
+		TransportEngine e = WarehouseServices.transportEngine();
+		if (e == null) throw new IllegalStateException("TransportEngine not initialized");
+		return e;
 	}
 
 	static Warehouse requireActive(FabricClientCommandSource src) {

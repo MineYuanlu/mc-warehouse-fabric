@@ -63,7 +63,7 @@ import bid.yuanlu.mc.warehouse.impl.navigation.NoOpNavigator;
  * 精度口径：itemsMoved 以「会话内规划并逐击对账」的数量计——快速路径（整堆 quickMove）
  * 的实际落位由服务端裁量，settle 重扫刷新缓存自愈（§3.8/§5.4），聚合总量不受影响。
  */
-public final class TransportEngineImpl {
+public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.transport.TransportEngine {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger("yuanlu-warehouse/engine");
 
@@ -153,22 +153,35 @@ public final class TransportEngineImpl {
 		this.config = config;
 	}
 
-	// ---- 对外控制 API（命令层 L11 接线）----
+	// ---- 对外控制 API（命令层经 api/transport/TransportEngine 接口）----
 
+	@Override
 	public void start() {
+		start(null);
+	}
+
+	@Override
+	public void start(@Nullable String pathfinderId) {
 		if (running) return;
 		resetRunState();
+		pathfinderOverride = pathfinderId;
 		running = true;
 		setState(TransportState.ENTRY);
 	}
 
+	/** 本次运行的一次性寻路器覆盖（/wh start --pathfinder）；run 结束/重启时清除 */
+	@Nullable
+	private String pathfinderOverride;
+
 	/** 仅暂停（可 continue 无损恢复，不跳过容器） */
+	@Override
 	public void stop() {
 		if (!isRunning()) return;
 		suspend(null, "wh.error.user_stop");
 	}
 
 	/** 重头开始：重置状态与轮次标志，重新 ENTRY */
+	@Override
 	public void restart() {
 		if (state == null || state == TransportState.DONE) return;
 		LOGGER.info("run restarted");
@@ -180,6 +193,7 @@ public final class TransportEngineImpl {
 	}
 
 	/** 断点继续：出错容器标记 skip，继续当前轮次 */
+	@Override
 	public void continueRun() {
 		if (running || state != TransportState.SUSPENDED) return;
 		running = true;
@@ -194,30 +208,36 @@ public final class TransportEngineImpl {
 	}
 
 	/** 退出搬运 */
+	@Override
 	public void abort() {
 		if (state == null) return;
 		finish(RunGrade.BLOCKED, "wh.report.aborted");
 	}
 
+	@Override
 	public boolean isRunning() {
 		return running && state != null && state != TransportState.DONE;
 	}
 
+	@Override
 	@Nullable
 	public TransportState state() {
 		return state;
 	}
 
+	@Override
 	@Nullable
 	public RunReport lastReport() {
 		return lastReport;
 	}
 
+	@Override
 	@Nullable
 	public WorldDimPos erroredPos() {
 		return sessionPos;
 	}
 
+	@Override
 	@Nullable
 	public String lastDetailKey() {
 		return lastDetailKey != null ? lastDetailKey : (lastReport != null ? lastReport.detailKey() : null);
@@ -225,6 +245,7 @@ public final class TransportEngineImpl {
 
 	// ---- 每 tick 驱动 ----
 
+	@Override
 	public void tick() {
 		if (!isRunning()) return;
 		LocalPlayer player = Minecraft.getInstance().player;
@@ -416,7 +437,8 @@ public final class TransportEngineImpl {
 		LocalPlayer p = Minecraft.getInstance().player;
 		String worldId = p == null ? null : bid.yuanlu.mc.warehouse.core.world.WorldSessionTracker.get().currentWorldId();
 		String dimId = currentDimId();
-		Navigator nav = WarehouseRegistryImpl.navigator(config.pathfinder(worldId, dimId));
+		String wanted = pathfinderOverride != null ? pathfinderOverride : config.pathfinder(worldId, dimId);
+		Navigator nav = WarehouseRegistryImpl.navigator(wanted);
 		return nav != null ? nav : new NoOpNavigator();
 	}
 
@@ -999,6 +1021,7 @@ public final class TransportEngineImpl {
 		sessionExploredNow = false;
 		navStarted = false;
 		navRetries = 0;
+		pathfinderOverride = null;
 		cache.beginRound();
 	}
 

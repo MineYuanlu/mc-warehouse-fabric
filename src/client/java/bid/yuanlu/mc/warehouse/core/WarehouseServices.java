@@ -2,13 +2,14 @@ package bid.yuanlu.mc.warehouse.core;
 
 import org.jetbrains.annotations.Nullable;
 
+import bid.yuanlu.mc.warehouse.api.transport.TransportEngine;
 import bid.yuanlu.mc.warehouse.core.cache.ContainerMemoryStore;
 import bid.yuanlu.mc.warehouse.core.config.ModConfig;
 
 /**
  * 客户端装配的服务定位（入口装配时置入；gametest 可手动装配）。
  * <p>
- * 仅暴露无业务逻辑的运行期单例句柄，命令层经此访问缓存状态等
+ * 仅暴露无业务逻辑的运行期单例句柄，命令层经此访问引擎/缓存状态等
  * 未挂到 manager 的设施；不在 api/ 中——插件应走 Registry 与事件。
  */
 public final class WarehouseServices {
@@ -19,6 +20,9 @@ public final class WarehouseServices {
 	@Nullable
 	private static volatile ModConfig modConfig;
 
+	@Nullable
+	private static volatile TransportEngine transportEngine;
+
 	public static void setModConfig(@Nullable ModConfig config) {
 		modConfig = config;
 	}
@@ -26,6 +30,15 @@ public final class WarehouseServices {
 	@Nullable
 	public static ModConfig modConfig() {
 		return modConfig;
+	}
+
+	public static void setTransportEngine(@Nullable TransportEngine engine) {
+		transportEngine = engine;
+	}
+
+	@Nullable
+	public static TransportEngine transportEngine() {
+		return transportEngine;
 	}
 
 	public static void setCacheStore(@Nullable ContainerMemoryStore store) {

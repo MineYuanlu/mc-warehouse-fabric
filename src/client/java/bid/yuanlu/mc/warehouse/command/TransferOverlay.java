@@ -5,7 +5,7 @@ import org.jetbrains.annotations.Nullable;
 import bid.yuanlu.mc.warehouse.api.container.ContainerInfo;
 import bid.yuanlu.mc.warehouse.api.container.IOType;
 import bid.yuanlu.mc.warehouse.api.warehouse.Warehouse;
-import bid.yuanlu.mc.warehouse.core.engine.transport.TransportEngineImpl;
+import bid.yuanlu.mc.warehouse.api.transport.TransportEngine;
 import bid.yuanlu.mc.warehouse.core.warehouse.WarehouseManagerImpl;
 
 /**
@@ -53,7 +53,7 @@ final class TransferOverlay {
 	}
 
 	/** 启动跨仓库搬运：构建覆盖 → 推入 → start */
-	static String start(WarehouseManagerImpl mgr, TransportEngineImpl engine, Warehouse src, Warehouse dst) {
+	static String start(WarehouseManagerImpl mgr, TransportEngine engine, Warehouse src, Warehouse dst) {
 		Warehouse ov = build(src, dst);
 		mgr.pushTransferOverlay(ov);
 		engine.start();
@@ -61,7 +61,7 @@ final class TransferOverlay {
 	}
 
 	/** 结束搬运并恢复原激活态（可安全重复调用） */
-	static void end(WarehouseManagerImpl mgr, @Nullable TransportEngineImpl engine, boolean abort) {
+	static void end(WarehouseManagerImpl mgr, @Nullable TransportEngine engine, boolean abort) {
 		if (abort && engine != null && engine.isRunning()) {
 			engine.abort();
 		}

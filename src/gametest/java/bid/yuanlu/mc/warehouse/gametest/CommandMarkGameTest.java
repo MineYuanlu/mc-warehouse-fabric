@@ -116,6 +116,7 @@ public class CommandMarkGameTest implements FabricClientGameTest {
 			WarehouseManagerImpl.setInstance(mgr);
 			TransportEngineImpl engine = new TransportEngineImpl(mgr, store, config);
 			TransportEngineImpl.setInstance(engine);
+			WarehouseServices.setTransportEngine(engine);
 			for (String id : List.of("gt3", "gt3-dst")) {
 				if (mgr.exists(id)) mgr.delete(id);
 			}
@@ -247,6 +248,12 @@ public class CommandMarkGameTest implements FabricClientGameTest {
 		check(exec(context, src, "wh transfer stop") == 1, "transfer stop");
 		check(!WarehouseManagerImpl.get().hasTransferOverlay(), "stop 弹出 overlay");
 		checkEquals("gt3", WarehouseManagerImpl.get().activeId(), "激活态恢复 gt3");
+
+		// --pathfinder 参数贯通（引擎空转即停；断言参数可解析且引擎接受）
+		check(exec(context, src, "wh start --pathfinder noop") == 1, "start --pathfinder");
+		check(WarehouseServices.transportEngine().isRunning(), "引擎已启动");
+		check(exec(context, src, "wh stop") == 1, "stop 停止");
+		check(!WarehouseServices.transportEngine().isRunning(), "引擎已停");
 
 		LOGGER.info("[gt3] commands smoke passed (feedback={}, errors={})",
 				src.feedbackKeys().size(), src.errorKeys().size());

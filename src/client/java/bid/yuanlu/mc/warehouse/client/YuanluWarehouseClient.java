@@ -123,8 +123,10 @@ public final class YuanluWarehouseClient implements ClientModInitializer {
 		bid.yuanlu.mc.warehouse.core.WarehouseServices.setCacheStore(store);
 		bid.yuanlu.mc.warehouse.core.WarehouseServices.setModConfig(config);
 		WarehouseManagerImpl manager = WarehouseManagerImpl.get();
-		TransportEngineImpl.setInstance(
-				new TransportEngineImpl(manager, store, config));
+		bid.yuanlu.mc.warehouse.api.transport.TransportEngine engine =
+				new TransportEngineImpl(manager, store, config);
+		bid.yuanlu.mc.warehouse.core.WarehouseServices.setTransportEngine(engine);
+		TransportEngineImpl.setInstance((TransportEngineImpl) engine);
 	}
 
 	// ---- tick 驱动（反模式红线：全程 tick 单线程，无 worker/sleep）----
