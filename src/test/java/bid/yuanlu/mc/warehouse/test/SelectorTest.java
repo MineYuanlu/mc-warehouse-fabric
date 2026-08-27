@@ -61,13 +61,25 @@ public class SelectorTest extends McBootstrap {
 		assertFalse(new NameSelector("\u0000nope", true).matches(stack));
 	}
 
-	// ---- NbtSelector（组件序列化文本包含匹配）----
+	// ---- NbtSelector（完整组件序列化文本包含匹配）----
 
 	@Test
 	void nbtSubstringSemantics() {
 		ItemStack stack = new ItemStack(Items.DIAMOND);
 		assertTrue(new NbtSelector("").matches(stack), "空串应恒匹配");
 		assertFalse(new NbtSelector("zzz_no_such_component_zzz").matches(stack));
+	}
+
+	@Test
+	void nbtMatchesDefaultValuedComponents() {
+		// B6 修订：完整组件表可命中「恰好等于默认值」的组件（旧 patch 差异集匹配不到）
+		ItemStack plain = new ItemStack(Items.DIAMOND_SWORD);
+		int defaultDamage = plain.getMaxDamage();
+		assertTrue(defaultDamage > 0);
+		assertTrue(new NbtSelector("max_damage").matches(plain),
+				"默认值组件（max_damage）应出现在完整组件文本中");
+		assertTrue(new NbtSelector("=>" + defaultDamage).matches(plain),
+				"默认耐久数值应可匹配");
 	}
 
 	// ---- CompositeSelector ----
