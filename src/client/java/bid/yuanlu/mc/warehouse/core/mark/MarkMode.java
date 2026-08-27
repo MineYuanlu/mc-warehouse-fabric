@@ -212,13 +212,16 @@ public final class MarkMode {
 		WarehouseManagerImpl mgr = WarehouseManagerImpl.get();
 		var wh = mgr.active();
 		WorldDim tdim = new WorldDim(target.abs().world(), target.abs().dim());
-		WorldDimPos rel = wh.toRelative(tdim, target.abs().toBlockPos());
-		if (rel == null) {
-			say(player, "commands.wh.mark.no_anchor", ChatFormatting.RED);
-			return;
-		}
 		ContainerInfo info = new ContainerInfo(s.type());
-		info.pos.add(rel);
+		// §3.2 双箱合并：大箱子的另一半一并入库（canonical = 被点击的半边）
+		for (BlockPos part : multiblockParts(target.abs().toBlockPos())) {
+			WorldDimPos partRel = wh.toRelative(tdim, part);
+			if (partRel == null) {
+				say(player, "commands.wh.mark.no_anchor", ChatFormatting.RED);
+				return;
+			}
+			info.pos.add(partRel);
+		}
 		info.label = scan.snapshot().title();
 		String ruleRef = s.ruleId() != null && !s.ruleId().isBlank() ? s.ruleId() : s.templateId();
 		if (ruleRef != null && ruleRef.isBlank()) ruleRef = null;
@@ -234,6 +237,25 @@ public final class MarkMode {
 		seedCache(info, scan.detector(), scan.snapshot()); // §5.7：标记完成即缓存种子
 		say(player, "commands.wh.mark.added", ChatFormatting.GREEN,
 				s.type(), fmt(target.abs()), scan.snapshot().slotCount());
+	}
+
+	/** §3.2 多格坐标：大箱子返回 [被点击半边, 相连半边]，其余单格返回 [自身] */
+	private static java.util.List<BlockPos> multiblockParts(BlockPos abs) {
+		Minecraft mc = Minecraft.getInstance();
+		java.util.List<BlockPos> parts = new java.util.ArrayList<>();
+		parts.add(abs);
+		if (mc.level != null) {
+			var state = mc.level.getBlockState(abs);
+			if (state.getBlock() instanceof net.minecraft.world.level.block.ChestBlock) {
+				BlockPos other = net.minecraft.world.level.block.ChestBlock
+						.getConnectedBlockPos(abs, state);
+				if (other != null && mc.level.getBlockState(other).getBlock()
+						instanceof net.minecraft.world.level.block.ChestBlock) {
+					parts.add(other);
+				}
+			}
+		}
+		return parts;
 	}
 
 	/** §5.7/§3.8：真实扫描即种子——按容器 cacheType 写入内存（DISK 同步落盘） */

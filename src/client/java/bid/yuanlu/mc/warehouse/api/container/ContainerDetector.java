@@ -2,6 +2,7 @@ package bid.yuanlu.mc.warehouse.api.container;
 
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.pattern.BlockInWorld;
 
 /**
@@ -33,6 +34,22 @@ public interface ContainerDetector {
 	 * 该类型容器的内容是否因玩家而异（如末影箱）——缓存键需附加 playerUUID（PDD §3.8）。
 	 */
 	default boolean playerScoped() {
+		return false;
+	}
+
+	/**
+	 * 槽位级放入过滤（§8.2 引擎约束第 3 条）：默认只看 {@code canPutTo}；
+	 * 机器类容器覆盖（如熔炉燃料槽须可燃、输入槽须可熔炼——原版 quickMove 的真实路由）。
+	 */
+	default boolean acceptsPut(SlotInfo slot, ItemStack stack) {
+		return slot.canPutTo();
+	}
+
+	/** 是否存在任一可放入该物品的槽位；放入需求生成前的「必拒即跳」判定 */
+	default boolean acceptsPutAnywhere(ContainerSnapshot snapshot, ItemStack stack) {
+		for (SlotInfo si : snapshot.slotInfos().values()) {
+			if (acceptsPut(si, stack)) return true;
+		}
 		return false;
 	}
 }

@@ -117,6 +117,11 @@ public final class ContainerSession {
 		return phase;
 	}
 
+	/** 本会话的容器类型 Detector（引擎侧槽位过滤/扫描判定用） */
+	public ContainerDetector detector() {
+		return detector;
+	}
+
 	@Nullable
 	public Failure failure() {
 		return failure;

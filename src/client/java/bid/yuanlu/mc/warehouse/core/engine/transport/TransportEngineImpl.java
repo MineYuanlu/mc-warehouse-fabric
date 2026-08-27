@@ -742,8 +742,13 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 		if (menu == null) return PlanResult.empty(true);
 		var packAgg = menu.pack.aggregate();
 
+		// §8.2 第 3 条：槽位级放入过滤（熔炉系燃料/输入路由）经 Detector 判定
+		ContainerDetector detector = session.detector();
 		List<bid.yuanlu.mc.warehouse.core.engine.rule.PutDemand> demands =
 				RuleApplicator.planPut(info, resolveRules(wh, info), snap, packAgg);
+		if (detector != null) {
+			demands.removeIf(d -> !detector.acceptsPutAnywhere(snap, d.sample())); // 必拒即跳，避免整轮超时
+		}
 		if (demands.isEmpty()) return PlanResult.empty(true);
 
 		SlotAllocator allocator = resolveAllocator();
@@ -755,13 +760,16 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 		for (var demand : demands) {
 			ItemStack sample = demand.sample();
 			int remaining = demand.amount();
+			// 该物品被 Detector 允许进入的槽位集合（null = 全部 canPutTo 槽位）
+			java.util.function.Predicate<bid.yuanlu.mc.warehouse.api.container.SlotInfo> slotFilter =
+					detector == null ? null : si -> detector.acceptsPut(si, sample);
 			int guard = 0;
 			while (remaining > 0 && guard++ < PLAN_LOOP_GUARD) {
 				int capAll = contSim.freeUnitsFor(sample);
 				if (capAll <= 0) break;
 				List<SlotAllocation> allocs = allocator.allocate(
 						contSim.view(snap), sample.copyWithCount(Math.min(remaining, capAll)),
-						Math.min(remaining, capAll), true);
+						Math.min(remaining, capAll), true, slotFilter);
 				if (allocs.isEmpty()) break;
 				for (SlotAllocation alloc : allocs) {
 					if (remaining <= 0) break;

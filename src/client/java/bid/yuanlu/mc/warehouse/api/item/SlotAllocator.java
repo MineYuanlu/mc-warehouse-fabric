@@ -1,8 +1,12 @@
 package bid.yuanlu.mc.warehouse.api.item;
 
 import java.util.List;
+import java.util.function.Predicate;
+
+import org.jetbrains.annotations.Nullable;
 
 import bid.yuanlu.mc.warehouse.api.container.ContainerSnapshot;
+import bid.yuanlu.mc.warehouse.api.container.SlotInfo;
 import net.minecraft.world.item.ItemStack;
 
 /**
@@ -24,4 +28,13 @@ public interface SlotAllocator {
 	 * @return 分配列表；总 count 可能小于 amount（容器空间不足时截断），不超发
 	 */
 	List<SlotAllocation> allocate(ContainerSnapshot snapshot, ItemStack item, int amount, boolean toContainer);
+
+	/**
+	 * 带槽位过滤的分配（§8.2 第 3 条：机器类槽位按 Detector.acceptsPut 二次过滤）。
+	 * 默认忽略 filter（插件实现兼容）；实现宜覆写以获得精确落位模拟。
+	 */
+	default List<SlotAllocation> allocate(ContainerSnapshot snapshot, ItemStack item, int amount,
+			boolean toContainer, @Nullable Predicate<SlotInfo> slotFilter) {
+		return allocate(snapshot, item, amount, toContainer);
+	}
 }

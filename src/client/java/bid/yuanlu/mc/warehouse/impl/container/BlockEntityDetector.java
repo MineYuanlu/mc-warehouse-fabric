@@ -54,7 +54,20 @@ public abstract class BlockEntityDetector implements ContainerDetector {
 		if (!menuTypes.contains(screen.getMenu().getType())) return false;
 		BlockEntity be = ctx == null ? null : ctx.block().getEntity();
 		if (be == null || !blockEntities.contains(be.getType())) return false;
+		// §8.1 标题一致性：26.1 开屏包标题即 provider.getDisplayName()（ServerPlayer.openMenu），
+		// 与预检 BE 的 DisplayName 同源——改名容器不误杀，打开的容器与预检方块不符必杀。
+		// 非 Nameable BE（如末影箱）跳过。
+		if (be instanceof net.minecraft.world.level.block.entity.BaseContainerBlockEntity named
+				&& !titleMatches(screen.getTitle(), named.getDisplayName())) {
+			return false;
+		}
 		return slotCountMatches(containerSlotCount(screen.getMenu()));
+	}
+
+	/** 标题一致性（§8.1）；可被插件子类覆盖放宽 */
+	protected boolean titleMatches(net.minecraft.network.chat.Component screenTitle,
+			net.minecraft.network.chat.Component beDisplayName) {
+		return screenTitle.equals(beDisplayName);
 	}
 
 	/** 槽位数约束；默认不限 */

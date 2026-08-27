@@ -2,8 +2,12 @@ package bid.yuanlu.mc.warehouse.impl.allocator;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Predicate;
+
+import org.jetbrains.annotations.Nullable;
 
 import bid.yuanlu.mc.warehouse.api.container.ContainerSnapshot;
+import bid.yuanlu.mc.warehouse.api.container.SlotInfo;
 import bid.yuanlu.mc.warehouse.api.item.SlotAllocation;
 import bid.yuanlu.mc.warehouse.api.item.SlotAllocator;
 import net.minecraft.world.item.ItemStack;
@@ -27,12 +31,19 @@ public final class FirstFitAllocator implements SlotAllocator {
 
 	@Override
 	public List<SlotAllocation> allocate(ContainerSnapshot snapshot, ItemStack item, int amount, boolean toContainer) {
-		if (amount <= 0) return List.of();
-		return toContainer ? allocatePut(snapshot, item, amount) : allocateTake(snapshot, item, amount);
+		return allocate(snapshot, item, amount, toContainer, null);
 	}
 
-	/** 放入：两遍式——同类不满堆 → 空槽（槽序） */
-	private List<SlotAllocation> allocatePut(ContainerSnapshot snapshot, ItemStack item, int amount) {
+	@Override
+	public List<SlotAllocation> allocate(ContainerSnapshot snapshot, ItemStack item, int amount,
+			boolean toContainer, @Nullable Predicate<SlotInfo> slotFilter) {
+		if (amount <= 0) return List.of();
+		return toContainer ? allocatePut(snapshot, item, amount, slotFilter) : allocateTake(snapshot, item, amount);
+	}
+
+	/** 放入：两遍式——同类不满堆 → 空槽（槽序）；slotFilter 非空时额外过滤 */
+	private List<SlotAllocation> allocatePut(ContainerSnapshot snapshot, ItemStack item, int amount,
+			@Nullable Predicate<SlotInfo> slotFilter) {
 		List<SlotAllocation> out = new ArrayList<>();
 		int max = item.getMaxStackSize();
 		int remaining = amount;
@@ -42,7 +53,9 @@ public final class FirstFitAllocator implements SlotAllocator {
 		for (int slot : occupied) {
 			if (remaining <= 0) break;
 			ItemStack stack = snapshot.slots().get(slot);
-			if (!snapshot.slotInfo(slot).canPutTo()) continue;
+			SlotInfo info = snapshot.slotInfo(slot);
+			if (!info.canPutTo()) continue;
+			if (slotFilter != null && !slotFilter.test(info)) continue;
 			if (!ItemStack.isSameItemSameComponents(stack, item)) continue;
 			if (stack.getCount() >= max) continue;
 			int take = Math.min(max - stack.getCount(), remaining);
@@ -52,7 +65,9 @@ public final class FirstFitAllocator implements SlotAllocator {
 
 		for (int slot = 0; slot < snapshot.slotCount() && remaining > 0; slot++) {
 			if (snapshot.slots().containsKey(slot)) continue;
-			if (!snapshot.slotInfo(slot).canPutTo()) continue;
+			SlotInfo info = snapshot.slotInfo(slot);
+			if (!info.canPutTo()) continue;
+			if (slotFilter != null && !slotFilter.test(info)) continue;
 			int take = Math.min(max, remaining);
 			out.add(new SlotAllocation(slot, take));
 			remaining -= take;

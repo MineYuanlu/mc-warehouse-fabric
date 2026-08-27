@@ -36,7 +36,7 @@ public final class EnderChestDetector extends BlockEntityDetector {
 	@Override
 	@Nullable
 	public ContainerInfo resolveMultiBlock(BlockPos[] positions) {
-		if (positions.length == 0) return null;
+		if (positions.length != 1) return null; // 非多格容器拒绝多坐标（§3.2：不裁剪）
 		var info = new ContainerInfo(IOType.INPUT);
 		info.pos.add(DetectorUtil.dimPos(positions[0]));
 		return info;
