@@ -13,6 +13,7 @@
 | D3a | 点击发包 | **必须经 `MultiPlayerGameMode.handleContainerInput`**（26.1 名称）——`menu.clicked` 只是本地预测不发包（E2E 实测教训） |
 | D4 | 交付节奏 | 逐层 commit（本文件随每次提交更新）；JVM 单测随层走；E2E gametest 在 L8 / L10 / L11 三个里程碑集中补齐 |
 | D5 | L11 复审修复决策（2026-08-28 定稿） | ① 多人 worldId 改 `mp:<host>:<port>`，**破坏性变更不迁移**（pre-release 无存量）；② 探索类异常**保留累计 exploreFailMax** 口径，回写 PDD §5.5；③ Detector 标题要素按「开屏标题 ↔ BE DisplayName 一致性」实现（26.1 同源精确等式，抗改名，非 Nameable 跳过）；④ 缓存种子与手动关箱回写**按 PDD 实现**（真实扫描非伪造，红线指操作依据须经对账） |
+| D6 | 2026-08-29 实测回填决策 | ① 单机 worldId 改用 `getWorldPath(LevelResource.ROOT)`（26.1 `getServerDirectory()` 返回游戏根目录/版本隔离名，非存档目录）；② 玩家手动开箱按三层原版信号（点击捕获→FIFO 配对→开合信号验证）刷新缓存；③ 放入方向队列预筛（无规则可放物品不去开箱）；④ OUTPUT 空白名单保持「默认不放」语义（决策 A）+ 关屏扫描（决策 B） |
 
 ## 技术锚点（MC 26.1 已验证）
 

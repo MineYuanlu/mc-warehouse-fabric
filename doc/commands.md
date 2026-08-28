@@ -383,7 +383,9 @@ IOType 批量变更同样触发规则重校验，失败则整批拒绝。
 - `NONE`：永不缓存，每次都实地探索；
 - `MEMORY`：会话内缓存（默认），受 TTL 约束；
 - `DISK`：跨会话持久缓存（`cache/<worldId>/` 下）；
-- 探索失败累计到 `exploreFailMax` 次后暂停（`continue` 可跳过该容器继续）。
+- **手动开箱自动刷新**：你打开仓库内已注册容器并关闭后，缓存按真实扫描自动更新（无需标记模式）；
+- 探索失败累计到 `exploreFailMax` 次后暂停（`continue` 可跳过该容器继续）；
+- **放入方向预筛**：背包里没有「该容器规则可放」的物品（如 OUTPUT 空白名单）时，引擎不去开该箱子。
 
 ### 一轮搬运的流程
 
@@ -399,7 +401,13 @@ GET_TEMP（清空中转） → GET_INPUT（从 INPUT/TEMP 取货） → PUT_OUTP
 ## 常见问题（FAQ）
 
 **Q：`/wh start` 秒结束，报告 `input_empty`，但箱子里明明有东西？**
-标记/注册时的缓存种子是空的，且 `cacheTtlSeconds = 0`（永不过期），引擎按缓存判定 INPUT 无物、连去都不去。解决见[快速上手](#快速上手)的警告框。
+标记/注册时的缓存种子是空的，且 `cacheTtlSeconds = 0`（永不过期），引擎按缓存判定 INPUT 无物、连去都不去。解决：先指向箱子执行 `/wh container memory clear` 清掉缓存，或 `/wh config cacheTtlSeconds 10` 后重新 start。**另外**：从 v0.3 起，你**手动打开**仓库里的容器再关闭时，缓存会自动刷新——改完箱子后手动开合一次即可让引擎看到新内容。
+
+**Q：手动开箱为什么能刷新缓存？判定会不会错绑？**
+三层原版信号收敛：点击瞬间坐标（排除潜行放置）→ 开屏包 FIFO 配对 → 开合信号验证（箱子/木桶/潜影盒），关屏时再经 Detector 身份校验——错绑绝不写缓存。无动画容器（熔炉等）退化为点击配对，极端场景（受保护方块 + 5 秒内开另一同类箱）可能漏刷一次，下次实地访问自愈。
+
+**Q：`/wh start` 只开了一次 OUTPUT 就结束，且 OUTPUT 里有规则却啥也没放？**
+OUTPUT 默认 WHITELIST，**没有规则引用 = 任何物品都放不进去**（§3.7 设计）。引擎从 v0.3 起会在放入方向预筛：身上没有该 OUTPUT 规则可放的物品时直接不去开箱。给 OUTPUT 配规则：`/wh rule create x && /wh rule add x id:minecraft:diamond && /wh container rules add x`。
 
 **Q：`未知或不完整的命令`？**
 Brigadier 树较深，Tab 补全逐级往下打；带空格/冒号的参数（选择器、JSON）要用引号包住。

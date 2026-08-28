@@ -450,6 +450,10 @@ stateDiagram-v2
    - 全部 OUTPUT 已探索 → **精确模式**：仅取出能匹配某个 OUTPUT 白名单规则的物品。
      目的：避免「TEMP 取出 → OUTPUT 放不下 → PUT_TEMP 放回」的无限振荡。
 3. **探索失败不计进展**：容器快照失败（UI 未开/身份不符）不得置 `roundHadNewExplore=true`，也不写入缓存；同一容器连续探索失败 ≥ `exploreFailMax` 次（默认 2）触发 SUSPENDED——防止「永远打不开的容器让轮次永远有进展」的死循环。
+4. **放入方向条件准入（v0.3 新增，防振荡③）**：PUT_OUTPUT/PUT_TEMP 阶段对容器做**静态可行预筛**——背包为空、或背包无任何「该容器规则可放」的物品（WHITELIST 命中 / BLACKLIST 未命中，含 negative 求反；`PutFeasibility`）则不入队。已探索容器再叠加「快照无空间」「Detector 收拒」（`acceptsPutAnywhere`）剔除。
+   - 未探索 OUTPUT 若规则上无任何可放物品（如空白名单）→ 连探索都不去（避免空跑开箱）；
+   - 口径注记：规则不可行的未探索 OUTPUT 将**保持未探索**，出口①（storage_full，要求 OUTPUT 全探索）可能永不触发；出口②（input_empty）不依赖它，运行仍正常终止。
+   - 检测器级过滤（燃料/可熔炼）在无快照时不可知 → 对未探索容器保守放行（宁多去不漏去），执行期 `planPutInto` 再裁。
 
 **TransferPlan 执行流程**：见 §6.2（运行时交互协议），含服务端对账。
 
@@ -480,6 +484,12 @@ roundHadNewExplore: boolean // 本轮是否有新容器被首次成功探索
 - 缓存是惰性的：需要容器内容时，有缓存用缓存，无缓存则打开容器扫描
 - 任何被动操作（因搬运需要打开容器）都会刷新缓存
 - 通过 Mixin 拦截 `Screen.onClose()` 可以自动刷新缓存（即使不是由引擎触发的打开）；写入前校验 Screen↔容器会话绑定（§3.8）
+- **玩家手动开箱刷新（v0.3 落地）**：玩家打开激活仓库内已注册容器，关屏后以真实扫描回写缓存。绑定用三层原版信号收敛（F2）——
+  ① 点击瞬间捕获（`MultiPlayerGameMode.useItemOn` 方块 use 分支 consumed，排除潜行放置）；
+  ② 开屏包 FIFO 配对（开屏包顺序 == 点击顺序）；
+  ③ 开合信号验证（木桶 `OPEN` 方块状态 / 箱子·末影箱·潜影盒开合块事件；无动画类型放行）。
+  终审：关屏扫描走 Detector 身份校验（BE 类型+标题+槽位数），任何错绑绝不写缓存。
+  引擎运行期间由引擎归属判定（`isEngineBound`）排除双写；引擎自身 open 也走 useItemOn，被归属守卫拦下，其缓存由 closeScanSink/settle 重扫负责。
 - `NONE` 缓存在搬运轮次结束后清除，但搬运轮次内可重复使用以节省操作
 - 可选 `cacheTtlSeconds`（默认 0=禁用）：为 MEMORY/DISK 增加时间维度的陈旧保险，超期强制重扫（MVP 用 TTL 缓存验证过的廉价防线）
 
