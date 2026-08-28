@@ -13,6 +13,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import bid.yuanlu.mc.warehouse.core.cache.PlayerOpenRefresher;
+import bid.yuanlu.mc.warehouse.util.McScreens;
 
 /**
  * 捕获玩家点击容器的瞬间（F2）：useItemOn 返回 consumed 时记录坐标。
@@ -31,7 +32,7 @@ public abstract class MultiPlayerGameModeMixin {
 		// 潜行+手持物品 = 物品放置分支（performUseItemOn 的 suppressUsingBlock 跳过方块 use）
 		if (player.isSecondaryUseActive()
 				&& (!player.getMainHandItem().isEmpty() || !player.getOffhandItem().isEmpty())) return;
-		if (Minecraft.getInstance().screen != null) return;
+		if (McScreens.current() != null) return;
 		PlayerOpenRefresher.get().onClickConsumed(blockHit.getBlockPos());
 	}
 }

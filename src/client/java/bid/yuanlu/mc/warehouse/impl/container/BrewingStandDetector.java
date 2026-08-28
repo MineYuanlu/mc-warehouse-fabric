@@ -6,7 +6,6 @@ import org.jetbrains.annotations.Nullable;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.inventory.MenuType;
-import net.minecraft.world.level.block.entity.BlockEntityType;
 
 import bid.yuanlu.mc.warehouse.api.container.ContainerInfo;
 import bid.yuanlu.mc.warehouse.api.container.IOType;
@@ -23,7 +22,7 @@ public final class BrewingStandDetector extends BlockEntityDetector {
 	public static final String ID = "brewing_stand";
 
 	public BrewingStandDetector() {
-		super(ID, beTypes(BlockEntityType.BREWING_STAND), Set.of(MenuType.BREWING_STAND));
+		super(ID, beTypes(BeTypes.of("brewing_stand")), Set.of(MenuType.BREWING_STAND));
 	}
 
 	@Override

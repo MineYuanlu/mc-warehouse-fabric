@@ -29,11 +29,11 @@ import bid.yuanlu.mc.warehouse.api.container.SlotRole;
 public final class FurnaceDetector extends BlockEntityDetector {
 
 	public static final FurnaceDetector FURNACE = new FurnaceDetector("furnace",
-			BlockEntityType.FURNACE, MenuType.FURNACE, RecipePropertySet.FURNACE_INPUT);
+			BeTypes.of("furnace"), MenuType.FURNACE, RecipePropertySet.FURNACE_INPUT);
 	public static final FurnaceDetector BLAST_FURNACE = new FurnaceDetector("blast_furnace",
-			BlockEntityType.BLAST_FURNACE, MenuType.BLAST_FURNACE, RecipePropertySet.BLAST_FURNACE_INPUT);
+			BeTypes.of("blast_furnace"), MenuType.BLAST_FURNACE, RecipePropertySet.BLAST_FURNACE_INPUT);
 	public static final FurnaceDetector SMOKER = new FurnaceDetector("smoker",
-			BlockEntityType.SMOKER, MenuType.SMOKER, RecipePropertySet.SMOKER_INPUT);
+			BeTypes.of("smoker"), MenuType.SMOKER, RecipePropertySet.SMOKER_INPUT);
 
 	/** 各类型对应的可熔炼物品集（客户端同步，与服务端菜单判定同源） */
 	private final ResourceKey<RecipePropertySet> inputPropertySet;

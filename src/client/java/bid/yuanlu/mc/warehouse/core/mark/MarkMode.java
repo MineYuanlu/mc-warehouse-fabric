@@ -25,6 +25,7 @@ import bid.yuanlu.mc.warehouse.core.registry.WarehouseRegistryImpl;
 import bid.yuanlu.mc.warehouse.core.warehouse.WarehouseManagerImpl;
 import bid.yuanlu.mc.warehouse.core.world.WorldSessionTracker;
 import bid.yuanlu.mc.warehouse.impl.container.BlockEntityDetector;
+import bid.yuanlu.mc.warehouse.util.McScreens;
 
 /**
  * 标记模式（PDD §5.7 v0.3）：右键注册/移除容器，自动采集内容。
@@ -106,7 +107,7 @@ public final class MarkMode {
 		// 1. 待采集：等真实 Screen 出现（handleOpenScreen HEAD 时 screen 尚未挂上）
 		Target pending = pendingCapture;
 		Minecraft mc = Minecraft.getInstance();
-		if (pending != null && mc.screen instanceof AbstractContainerScreen<?> screen) {
+		if (pending != null && McScreens.current() instanceof AbstractContainerScreen<?> screen) {
 			pendingCapture = null;
 			Session s = session;
 			boolean close = true;
@@ -116,7 +117,7 @@ public final class MarkMode {
 				close = false; // 异常时保留界面便于用户观察现场
 				say(player, "commands.wh.error.generic", ChatFormatting.RED, String.valueOf(e));
 			}
-			if (close && mc.screen == screen) {
+			if (close && McScreens.current() == screen) {
 				screen.onClose(); // 自动关屏（§5.7）
 			}
 			return;

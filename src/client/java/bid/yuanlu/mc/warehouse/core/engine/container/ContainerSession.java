@@ -26,6 +26,7 @@ import bid.yuanlu.mc.warehouse.api.interaction.ContainerHandle;
 import bid.yuanlu.mc.warehouse.api.interaction.ContainerInteraction;
 import bid.yuanlu.mc.warehouse.api.world.WorldDimPos;
 import bid.yuanlu.mc.warehouse.core.config.ModConfig;
+import bid.yuanlu.mc.warehouse.util.McScreens;
 
 /**
  * 容器会话（协议层，PDD §6）：
@@ -152,7 +153,7 @@ public final class ContainerSession {
 		}
 		// 绑定中的界面被外部关闭（按 E / 死亡 / 踢出）——绝不视为成功
 		if (handle.isOpen()) {
-			if (Minecraft.getInstance().screen != handle.screen()) {
+			if (McScreens.current() != handle.screen()) {
 				fail(Failure.UI_CLOSED_EXTERNAL);
 				return;
 			}
@@ -177,12 +178,12 @@ public final class ContainerSession {
 
 	private void tickClosingResidue() {
 		Minecraft mc = Minecraft.getInstance();
-		if (++phaseTicks >= 4 || mc.screen == null) {
+		if (++phaseTicks >= 4 || McScreens.current() == null) {
 			phase = Phase.PRECHECK;
 			phaseTicks = 0;
 			return;
 		}
-		if (phaseTicks == 1 && mc.screen instanceof AbstractContainerScreen<?> s && mc.player != null) {
+		if (phaseTicks == 1 && McScreens.current() instanceof AbstractContainerScreen<?> s && mc.player != null) {
 			closingByUs = true;
 			mc.player.closeContainer(); // 干净起点（§6.1 步骤 0）
 		}
@@ -234,7 +235,7 @@ public final class ContainerSession {
 			if (++phaseTicks > config.timeouts().openTicks) fail(Failure.NOT_OPENED);
 			return;
 		}
-		if (mc.screen instanceof AbstractContainerScreen<?> screen) {
+		if (McScreens.current() instanceof AbstractContainerScreen<?> screen) {
 			int id = screen.getMenu().containerId;
 			expectedContainerId = ContainerProtocol.get().lastCapturedContainerId();
 			if (expectedContainerId != -1 && id != expectedContainerId) {
@@ -451,7 +452,7 @@ public final class ContainerSession {
 	@Nullable
 	private AbstractContainerMenu menuOrNull() {
 		AbstractContainerScreen<?> screen = handle.screen();
-		if (screen == null || screen != Minecraft.getInstance().screen) return null;
+		if (screen == null || screen != McScreens.current()) return null;
 		return screen.getMenu();
 	}
 

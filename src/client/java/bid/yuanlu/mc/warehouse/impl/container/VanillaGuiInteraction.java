@@ -16,6 +16,7 @@ import org.jetbrains.annotations.NotNull;
 
 import bid.yuanlu.mc.warehouse.api.interaction.ContainerHandle;
 import bid.yuanlu.mc.warehouse.api.interaction.ContainerInteraction;
+import bid.yuanlu.mc.warehouse.util.McScreens;
 
 /**
  * 原版 GUI 交互实现（PDD §8.3）：useItemOn 打开 + menu.clicked 实现全部原语。
@@ -148,7 +149,7 @@ public final class VanillaGuiInteraction implements ContainerInteraction {
 	@Nullable
 	private static AbstractContainerScreen<?> boundScreen(ContainerHandle handle) {
 		AbstractContainerScreen<?> screen = handle.screen();
-		if (screen == null || screen != Minecraft.getInstance().screen) return null;
+		if (screen == null || screen != McScreens.current()) return null;
 		return screen;
 	}
 }

@@ -54,6 +54,7 @@ import bid.yuanlu.mc.warehouse.core.registry.WarehouseRegistryImpl;
 import bid.yuanlu.mc.warehouse.core.warehouse.WarehouseManagerImpl;
 import bid.yuanlu.mc.warehouse.impl.allocator.FirstFitAllocator;
 import bid.yuanlu.mc.warehouse.impl.navigation.NoOpNavigator;
+import bid.yuanlu.mc.warehouse.util.McScreens;
 
 /**
  * 传输引擎（PDD §5）：状态机 + 基于缓存的访问队列 + 单容器会话滚动执行
@@ -1126,7 +1127,7 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 		static AbstractMenuAdapter capture(bid.yuanlu.mc.warehouse.api.interaction.ContainerHandle h) {
 			var menu = h.menu();
 			var screen = h.screen();
-			if (menu == null || screen == null || screen != Minecraft.getInstance().screen) return null;
+			if (menu == null || screen == null || screen != McScreens.current()) return null;
 			var it = defaultInteraction();
 			if (it == null) return null;
 			return new AbstractMenuAdapter(it, h, menu);

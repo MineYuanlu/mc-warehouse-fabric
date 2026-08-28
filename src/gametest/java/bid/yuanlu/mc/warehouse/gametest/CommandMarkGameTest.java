@@ -71,6 +71,7 @@ import bid.yuanlu.mc.warehouse.core.mark.MarkMode;
 import bid.yuanlu.mc.warehouse.core.registry.WarehouseRegistryImpl;
 import bid.yuanlu.mc.warehouse.core.warehouse.WarehouseManagerImpl;
 import bid.yuanlu.mc.warehouse.core.world.WorldSessionTracker;
+import bid.yuanlu.mc.warehouse.util.McScreens;
 
 /**
  * gametest③（L11）：命令冒烟 + 标记模式右键注册/移除。
@@ -393,12 +394,12 @@ public class CommandMarkGameTest implements FabricClientGameTest {
 		}));
 
 		boolean screenSeen = awaitTrue(context, 200, () -> context.computeOnClient(mc ->
-				mc.screen instanceof AbstractContainerScreen<?>));
+				McScreens.current() instanceof AbstractContainerScreen<?>));
 		check(screenSeen, "玩家开箱应出现容器界面");
 		context.waitTicks(6); // 刷新器 tick 绑定（生产循环驱动）
 
 		context.runOnClient(mc -> mc.execute(() -> {
-			if (mc.screen instanceof AbstractContainerScreen<?> s) s.onClose();
+			if (McScreens.current() instanceof AbstractContainerScreen<?> s) s.onClose();
 		}));
 
 		boolean refreshed = awaitTrue(context, 100, () -> {
@@ -630,6 +631,11 @@ public class CommandMarkGameTest implements FabricClientGameTest {
 		void clear() {
 			feedbackList.clear();
 			errorList.clear();
+		}
+
+		/** Fabric API 26.2 新增抽象方法；26.1 无此方法，故不加 @Override（运行时按签名匹配） */
+		public boolean attended() {
+			return true;
 		}
 
 		@Override

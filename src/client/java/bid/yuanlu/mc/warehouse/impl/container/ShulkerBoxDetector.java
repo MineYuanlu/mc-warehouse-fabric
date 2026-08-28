@@ -6,7 +6,6 @@ import org.jetbrains.annotations.Nullable;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.inventory.MenuType;
-import net.minecraft.world.level.block.entity.BlockEntityType;
 
 import bid.yuanlu.mc.warehouse.api.container.ContainerInfo;
 import bid.yuanlu.mc.warehouse.api.container.IOType;
@@ -19,7 +18,7 @@ public final class ShulkerBoxDetector extends BlockEntityDetector {
 	public static final String ID = "shulker_box";
 
 	public ShulkerBoxDetector() {
-		super(ID, beTypes(BlockEntityType.SHULKER_BOX), Set.of(MenuType.SHULKER_BOX));
+		super(ID, beTypes(BeTypes.of("shulker_box")), Set.of(MenuType.SHULKER_BOX));
 	}
 
 	@Override

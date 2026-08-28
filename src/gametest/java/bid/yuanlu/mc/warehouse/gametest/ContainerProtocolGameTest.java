@@ -28,6 +28,7 @@ import bid.yuanlu.mc.warehouse.core.engine.container.ContainerProtocol;
 import bid.yuanlu.mc.warehouse.core.engine.container.ContainerSession;
 import bid.yuanlu.mc.warehouse.impl.container.ChestDetector;
 import bid.yuanlu.mc.warehouse.impl.container.VanillaGuiInteraction;
+import bid.yuanlu.mc.warehouse.util.McScreens;
 
 /**
  * gametest①：容器打开协议（syncId 握手 / 身份校验）+ 点击对账 + 整堆取出（PDD §6/§13）。
@@ -98,7 +99,7 @@ public class ContainerProtocolGameTest implements FabricClientGameTest {
 
 			// 对账后的结果：背包收到 32 钻石、箱子槽位已空（服务端权威状态）
 			boolean gotItem = context.computeOnClient(mc -> {
-				if (!(mc.screen instanceof AbstractContainerScreen<?> screen)) return false;
+				if (!(McScreens.current() instanceof AbstractContainerScreen<?> screen)) return false;
 				boolean chestEmpty = !screen.getMenu().slots.isEmpty()
 						&& screen.getMenu().slots.get(0).getItem().isEmpty();
 				boolean inInventory = false;

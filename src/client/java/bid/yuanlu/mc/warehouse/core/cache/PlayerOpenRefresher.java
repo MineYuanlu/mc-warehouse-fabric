@@ -32,6 +32,7 @@ import bid.yuanlu.mc.warehouse.core.engine.container.ScreenScanner;
 import bid.yuanlu.mc.warehouse.core.mark.MarkMode;
 import bid.yuanlu.mc.warehouse.core.warehouse.WarehouseManagerImpl;
 import bid.yuanlu.mc.warehouse.core.world.WorldSessionTracker;
+import bid.yuanlu.mc.warehouse.util.McScreens;
 
 /**
  * 玩家手动开箱缓存刷新（PDD §5.4/§8.7，F2）：玩家自行打开激活仓库内已注册容器时，
@@ -121,7 +122,7 @@ public final class PlayerOpenRefresher {
 			if (pendingExpireAt < now) {
 				pairCandidates.clear();
 				lastOpenContainerId = -1;
-			} else if (mc.screen instanceof AbstractContainerScreen<?> s
+			} else if (McScreens.current() instanceof AbstractContainerScreen<?> s
 					&& s.getMenu().containerId == lastOpenContainerId
 					&& !ContainerProtocol.isEngineBound(s)) {
 				// 候选按序选：开箱信号验证放在此处（块事件比 OpenScreen 晚到一拍）
