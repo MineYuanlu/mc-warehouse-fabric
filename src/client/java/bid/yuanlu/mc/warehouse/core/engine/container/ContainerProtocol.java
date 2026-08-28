@@ -97,6 +97,15 @@ public final class ContainerProtocol {
 		return active;
 	}
 
+	/**
+	 * 该界面是否已被引擎会话绑定（F2：玩家开箱刷新器据此跳过，避免与引擎
+	 * closeScanSink/settle 重扫双写打架）。
+	 */
+	public static boolean isEngineBound(AbstractContainerScreen<?> screen) {
+		ContainerSession s = INSTANCE.active;
+		return s != null && s.isBoundScreen(screen);
+	}
+
 	/** 引擎每 tick 调用 */
 	public void tick() {
 		ContainerSession s = active;

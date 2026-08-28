@@ -20,6 +20,7 @@ import bid.yuanlu.mc.warehouse.api.container.IOType;
 import bid.yuanlu.mc.warehouse.api.world.WorldDim;
 import bid.yuanlu.mc.warehouse.api.world.WorldDimPos;
 import bid.yuanlu.mc.warehouse.core.engine.container.OpenScreenCapture;
+import bid.yuanlu.mc.warehouse.core.engine.container.ScreenScanner;
 import bid.yuanlu.mc.warehouse.core.registry.WarehouseRegistryImpl;
 import bid.yuanlu.mc.warehouse.core.warehouse.WarehouseManagerImpl;
 import bid.yuanlu.mc.warehouse.core.world.WorldSessionTracker;
@@ -202,8 +203,8 @@ public final class MarkMode {
 			return;
 		}
 		Minecraft mc = Minecraft.getInstance();
-		ScreenScan scan = mc.level == null ? null
-				: scanScreen(screen, new net.minecraft.world.level.block.state.pattern.BlockInWorld(
+		ScreenScanner.ScanResult scan = mc.level == null ? null
+				: ScreenScanner.scan(screen, new net.minecraft.world.level.block.state.pattern.BlockInWorld(
 						mc.level, target.abs().toBlockPos(), false));
 		if (scan == null) {
 			say(player, "commands.wh.mark.no_detector", ChatFormatting.RED, fmt(target.abs()));
@@ -266,35 +267,6 @@ public final class MarkMode {
 		var key = bid.yuanlu.mc.warehouse.core.cache.CacheKey.of(info.canonicalPos(),
 				bid.yuanlu.mc.warehouse.core.cache.DetectorResolver.playerUuidIfScoped(detector));
 		store.remember(key, info.cacheType, snapshot);
-	}
-
-	record ScreenScan(ContainerDetector detector,
-			bid.yuanlu.mc.warehouse.api.container.ContainerSnapshot snapshot) {
-	}
-
-	private static final org.slf4j.Logger LOG =
-			org.slf4j.LoggerFactory.getLogger("yuanlu-warehouse/mark");
-
-	@Nullable
-	private static ScreenScan scanScreen(AbstractContainerScreen<?> screen,
-			net.minecraft.world.level.block.state.pattern.BlockInWorld block) {
-		LOG.info("[mark] scanning: menu={}, blockEntity={}, title={}",
-				screen.getMenu().getType(), block.getEntity(), screen.getTitle().getString());
-		for (ContainerDetector d : WarehouseRegistryImpl.detectors()) {
-			try {
-					if (d.matches(screen, new bid.yuanlu.mc.warehouse.api.container.ContainerOpenContext(
-						new WorldDimPos(WorldSessionTracker.get().currentWorldId(),
-								Minecraft.getInstance().level.dimension().identifier().toString(),
-								block.getPos().getX(), block.getPos().getY(), block.getPos().getZ()),
-						block))) {
-					bid.yuanlu.mc.warehouse.api.container.ContainerSnapshot snap = d.scan(screen);
-					return new ScreenScan(d, snap);
-				}
-			} catch (Exception e) {
-				LOG.warn("[mark] detector {} threw: {}", d.id(), e.toString());
-			}
-		}
-		return null;
 	}
 
 	private static void say(@Nullable LocalPlayer player, String key, ChatFormatting color,

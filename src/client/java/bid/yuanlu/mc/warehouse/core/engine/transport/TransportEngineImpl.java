@@ -47,6 +47,7 @@ import bid.yuanlu.mc.warehouse.core.config.ModConfig;
 import bid.yuanlu.mc.warehouse.core.engine.container.ContainerProtocol;
 import bid.yuanlu.mc.warehouse.core.engine.container.ContainerSession;
 import bid.yuanlu.mc.warehouse.core.engine.container.MenuSlots;
+import bid.yuanlu.mc.warehouse.core.engine.rule.PutFeasibility;
 import bid.yuanlu.mc.warehouse.core.engine.rule.RuleApplicator;
 import bid.yuanlu.mc.warehouse.core.event.WarehouseEvents;
 import bid.yuanlu.mc.warehouse.core.registry.WarehouseRegistryImpl;
@@ -370,10 +371,31 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 					return true; // 取了也放不下——跳过该未探索 INPUT 本轮
 				}
 			}
+			if (!takeDirection) {
+				// 防振荡③（F3）：放入方向未探索——背包空、或规则上无可放物品则不去（避免空跑开箱）。
+				// 注意：规则不可行的未探索 OUTPUT 将保持未探索，storage_full 出口（要求 OUTPUT 全探索）
+				// 可能永不触发；input_empty 出口不受影响，运行仍正常终止。
+				PackView pack = PackView.capture();
+				if (pack.isEmpty()) return true;
+				if (!PutFeasibility.anyFeasible(c.effectiveRuleMode(), resolveRules(manager.active(), c),
+						pack.aggregate())) return true;
+			}
 			return false;
 		}
 		ContainerSnapshot snap = mem.snapshot();
-		return takeDirection ? !hasAnyNonEmpty(snap) : !hasAnyFreeSpace(snap);
+		if (takeDirection) return !hasAnyNonEmpty(snap);
+		// 防振荡③（F3）：已探索放入方向——无空间、背包空、或背包无「规则可放 + Detector 收」的物品则不去
+		if (!hasAnyFreeSpace(snap)) return true;
+		PackView pack = PackView.capture();
+		if (pack.isEmpty()) return true;
+		Map<ItemStack, Integer> agg = pack.aggregate();
+		if (!PutFeasibility.anyFeasible(c.effectiveRuleMode(), resolveRules(manager.active(), c), agg)) return true;
+		ContainerDetector detector = detectAt(absPos(c));
+		for (ItemStack sample : agg.keySet()) {
+			if (detector != null && !detector.acceptsPutAnywhere(snap, sample)) continue;
+			return false; // 存在规则与检测器双过审的可放物品
+		}
+		return true;
 	}
 
 	/** 该类目是否存在未探索容器（§5.2：未知不得当作满足） */

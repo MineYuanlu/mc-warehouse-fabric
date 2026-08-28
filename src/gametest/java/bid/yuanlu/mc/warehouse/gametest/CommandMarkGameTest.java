@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
 import org.slf4j.Logger;
@@ -23,6 +25,7 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.commands.SharedSuggestionProvider;
@@ -33,26 +36,37 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.permissions.PermissionSet;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.flag.FeatureFlagSet;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
+import bid.yuanlu.mc.warehouse.api.container.CacheType;
 import bid.yuanlu.mc.warehouse.api.container.ContainerInfo;
 import bid.yuanlu.mc.warehouse.api.container.IOType;
 import bid.yuanlu.mc.warehouse.api.container.RuleMode;
+import bid.yuanlu.mc.warehouse.api.transport.RunReport;
 import bid.yuanlu.mc.warehouse.api.world.WorldDim;
 import bid.yuanlu.mc.warehouse.api.world.WorldDimPos;
 import bid.yuanlu.mc.warehouse.command.SelectionState;
 import bid.yuanlu.mc.warehouse.command.WhCommands;
 import bid.yuanlu.mc.warehouse.core.WarehouseServices;
+import bid.yuanlu.mc.warehouse.core.cache.CacheKey;
+import bid.yuanlu.mc.warehouse.core.cache.ContainerMemory;
 import bid.yuanlu.mc.warehouse.core.cache.ContainerMemoryStore;
+import bid.yuanlu.mc.warehouse.core.cache.DetectorResolver;
 import bid.yuanlu.mc.warehouse.core.config.ConfigIO;
 import bid.yuanlu.mc.warehouse.core.config.ModConfig;
 import bid.yuanlu.mc.warehouse.core.engine.transport.TransportEngineImpl;
 import bid.yuanlu.mc.warehouse.api.warehouse.Warehouse;
+import bid.yuanlu.mc.warehouse.core.event.WarehouseEvents;
 import bid.yuanlu.mc.warehouse.core.mark.MarkMode;
 import bid.yuanlu.mc.warehouse.core.registry.WarehouseRegistryImpl;
 import bid.yuanlu.mc.warehouse.core.warehouse.WarehouseManagerImpl;
@@ -88,6 +102,8 @@ public class CommandMarkGameTest implements FabricClientGameTest {
 			bind(src);
 		commandSmoke(context, src);
 			markModeE2E(context, sp);
+			playerOpenRefreshE2E(context, sp);
+			skipUselessOutputE2E(context, sp);
 
 			LOGGER.info("yuanlu-warehouse L11 command/mark gametest passed");
 
@@ -334,6 +350,205 @@ public class CommandMarkGameTest implements FabricClientGameTest {
 		LOGGER.info("[gt3] mark mode e2e passed");
 	}
 
+	/**
+	 * F2 E2E：玩家手动开箱 → 关屏 → 缓存刷新。
+	 * 注册（命令式，未探索无种子）→ 服务端放 3 钻石 → 玩家开箱（useItemOn 触发
+	 * 刷新器点击捕获 + FIFO 配对）→ 关屏扫描回写 → 断言缓存出现 3 钻石。
+	 */
+	private static void playerOpenRefreshE2E(ClientGameTestContext context, TestSingleplayerContext sp) {
+		BlockPos chestB = new BlockPos(-6, -60, 10);
+		placeChest(context, sp, chestB);
+		StubSource src = new StubSource();
+		check(exec(context, src, "wh container add " + chestB.getX() + " " + chestB.getY() + " "
+				+ chestB.getZ() + " --type INPUT") == 1, "container add chestB");
+		ContainerInfo infoB = WarehouseManagerImpl.get().active().containers.stream()
+				.filter(c -> c.canonicalPos().x() == chestB.getX() && c.canonicalPos().z() == chestB.getZ())
+				.findFirst().orElse(null);
+		check(infoB != null, "chestB 应已注册");
+		check(!exploredAt(context, chestB, infoB.cacheType), "F2 前置：chestB 未探索无缓存");
+
+		AtomicBoolean filled = new AtomicBoolean(false);
+		sp.getServer().runOnServer(server -> {
+			ServerLevel level = server.getLevel(Level.OVERWORLD);
+			if (level.getBlockEntity(chestB) instanceof RandomizableContainerBlockEntity chest) {
+				chest.setItem(0, new ItemStack(Items.DIAMOND, 3));
+			}
+			filled.set(true);
+		});
+		awaitTrue(context, 100, filled::get);
+
+		// 玩家定位到 chestB 上方（useItemOn 需满足服务端触及距离校验）
+		context.runOnClient(mc -> mc.execute(() -> {
+			LocalPlayer p = mc.player;
+			p.setPos(chestB.getX() + 0.5, chestB.getY() + 2.2, chestB.getZ() + 0.5);
+			p.setXRot(85f);
+		}));
+		context.waitTicks(5);
+
+		// 玩家手动开箱（mixin 捕获点击瞬间坐标）
+		context.runOnClient(mc -> mc.execute(() -> {
+			BlockHitResult hit = new BlockHitResult(Vec3.atCenterOf(chestB), Direction.UP, chestB, false);
+			mc.hitResult = hit;
+			mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, hit);
+		}));
+
+		boolean screenSeen = awaitTrue(context, 200, () -> context.computeOnClient(mc ->
+				mc.screen instanceof AbstractContainerScreen<?>));
+		check(screenSeen, "玩家开箱应出现容器界面");
+		context.waitTicks(6); // 刷新器 tick 绑定（生产循环驱动）
+
+		context.runOnClient(mc -> mc.execute(() -> {
+			if (mc.screen instanceof AbstractContainerScreen<?> s) s.onClose();
+		}));
+
+		boolean refreshed = awaitTrue(context, 100, () -> {
+			ContainerMemory m = memAt(context, chestB);
+			return m != null && !m.snapshot().slots().isEmpty();
+		});
+		check(refreshed, "玩家开箱关屏后应刷新缓存（发现 3 钻石）");
+		ContainerMemory finalMem = memAt(context, chestB);
+		int items = finalMem == null ? -1 : finalMem.snapshot().slots().values().stream()
+				.mapToInt(ItemStack::getCount).sum();
+		LOGGER.info("[gt3-f2] player-open refresh: {} items", items);
+		check(items == 3, "缓存应含 3 钻石，实际=" + items);
+
+		WarehouseManagerImpl.get().active().containers.remove(infoB);
+		WarehouseManagerImpl.get().save(WarehouseManagerImpl.get().active());
+		LOGGER.info("[gt3] player-open refresh e2e passed");
+	}
+
+	/**
+	 * F3 E2E：OUTPUT 无规则（WHITELIST 默认空 → 放不进任何物品）时，引擎
+	 * 不应去开 OUTPUT——INPUT 有物但搬不动，直接 input_empty 结束。
+	 */
+	private static void skipUselessOutputE2E(ClientGameTestContext context, TestSingleplayerContext sp) {
+		BlockPos input3 = new BlockPos(2, -60, 10);
+		BlockPos output3 = new BlockPos(4, -60, 10);
+		placeChest(context, sp, input3);
+		placeChest(context, sp, output3);
+		AtomicBoolean filled = new AtomicBoolean(false);
+		sp.getServer().runOnServer(server -> {
+			ServerLevel level = server.getLevel(Level.OVERWORLD);
+			if (level.getBlockEntity(input3) instanceof RandomizableContainerBlockEntity chest) {
+				chest.setItem(0, new ItemStack(Items.DIAMOND, 3));
+			}
+			filled.set(true);
+		});
+		awaitTrue(context, 100, filled::get);
+
+		AtomicReference<RunReport> report = new AtomicReference<>();
+		// 玩家定位到 INPUT 附近（引擎经 NoOpNavigator 原地操作，须在触及距离内）
+		context.runOnClient(mc -> mc.execute(() -> {
+			LocalPlayer p = mc.player;
+			p.setPos(input3.getX() + 0.5, input3.getY() + 2.2, input3.getZ() + 0.5);
+			p.setXRot(85f);
+		}));
+		context.waitTicks(5);
+		context.runOnClient(mc -> {
+			WarehouseManagerImpl mgr = WarehouseManagerImpl.get();
+			if (mgr.exists("gt3-f3")) mgr.delete("gt3-f3");
+			Warehouse wh = mgr.create("gt3-f3");
+			wh.setAnchor(dim(), BlockPos.containing(0, 0, 0));
+			ContainerInfo in = new ContainerInfo(IOType.INPUT);
+			in.pos.add(WorldDimPos.of(dim(), input3));
+			wh.containers.add(in);
+			ContainerInfo out = new ContainerInfo(IOType.OUTPUT);
+			out.pos.add(WorldDimPos.of(dim(), output3));
+			wh.containers.add(out);
+			mgr.save(wh);
+			mgr.activate("gt3-f3");
+		});
+		check(!exploredAt(context, output3, CacheType.MEMORY), "F3 前置：OUTPUT 未探索");
+
+		WarehouseEvents.RUN_FINISHED.register(report::set);
+		context.runOnClient(mc -> TransportEngineImpl.get().start());
+		boolean finished = awaitEngineDone(context, report, 1500);
+		check(finished, "F3 引擎应在限时内结束");
+		RunReport r = report.get();
+		LOGGER.info("[gt3-f3] {}", r);
+		check(r != null && "wh.report.input_empty".equals(r.detailKey()),
+				"F3 应 input_empty 结束，实际=" + (r == null ? "null" : r.detailKey()));
+		check(!exploredAt(context, output3, CacheType.MEMORY),
+				"F3：OUTPUT 不应被探索/打开（无规则放不进，F3 预筛应跳过）");
+
+		int inTotal = chestDiamondsAwaited(sp, context, input3);
+		LOGGER.info("[gt3-f3-verify] input3={}", inTotal);
+		check(inTotal == 0, "INPUT 应被取空，实际=" + inTotal);
+		LOGGER.info("[gt3] skip-useless-output e2e passed");
+	}
+
+	/** 引擎运行到 RunReport 出现（DONE 触发 RUN_FINISHED）；循环内手动泵引擎与刷新器 */
+	private static boolean awaitEngineDone(ClientGameTestContext context,
+			AtomicReference<RunReport> report, int maxTicks) {
+		for (int i = 0; i < maxTicks; i++) {
+			if (report.get() != null) return true;
+			context.runOnClient(mc -> {
+				try {
+					TransportEngineImpl e = TransportEngineImpl.get();
+					if (e != null && e.isRunning()) e.tick();
+				} catch (IllegalStateException ignored) {
+				}
+			});
+			context.waitTick();
+		}
+		return report.get() != null;
+	}
+
+	/** 读取该绝对坐标容器的缓存条目（canonical 键解析与写入端同构） */
+	@org.jetbrains.annotations.Nullable
+	private static ContainerMemory memAt(ClientGameTestContext context, BlockPos abs) {
+		ContainerInfo info = containerAt(abs);
+		if (info == null) return null;
+		return context.computeOnClient(mc -> {
+			ContainerMemoryStore store = WarehouseServices.cacheStore();
+			if (store == null) return null;
+			WorldDimPos p = info.canonicalPos();
+			CacheKey key = CacheKey.of(p, DetectorResolver.playerUuidIfScoped(DetectorResolver.at(p)));
+			return store.getValid(key, info.cacheType);
+		});
+	}
+
+	/** 该绝对坐标容器是否已被探索 */
+	private static boolean exploredAt(ClientGameTestContext context, BlockPos abs, CacheType ct) {
+		ContainerInfo info = containerAt(abs);
+		if (info == null) return true;
+		return context.computeOnClient(mc -> {
+			ContainerMemoryStore store = WarehouseServices.cacheStore();
+			if (store == null) return true;
+			WorldDimPos p = info.canonicalPos();
+			CacheKey key = CacheKey.of(p, DetectorResolver.playerUuidIfScoped(DetectorResolver.at(p)));
+			return store.isExplored(key, ct);
+		});
+	}
+
+	/** 激活仓库内该绝对坐标的容器（canonical 解析） */
+	@org.jetbrains.annotations.Nullable
+	private static ContainerInfo containerAt(BlockPos abs) {
+		Warehouse wh = WarehouseManagerImpl.get().active();
+		if (wh == null) return null;
+		WorldDimPos rel = wh.toRelative(dim(), abs);
+		if (rel == null) return null;
+		return wh.containerAt(dim(), rel.toBlockPos());
+	}
+
+	/** 服务端读箱子钻石总量（runOnServer 异步，轮询等完成） */
+	private static int chestDiamondsAwaited(TestSingleplayerContext sp, ClientGameTestContext context, BlockPos pos) {
+		AtomicInteger out = new AtomicInteger(Integer.MIN_VALUE);
+		sp.getServer().runOnServer(server -> {
+			ServerLevel level = server.getLevel(Level.OVERWORLD);
+			int total = 0;
+			if (level.getBlockEntity(pos) instanceof RandomizableContainerBlockEntity chest) {
+				for (int i = 0; i < chest.getContainerSize(); i++) {
+					ItemStack st = chest.getItem(i);
+					if (st.is(Items.DIAMOND)) total += st.getCount();
+				}
+			}
+			out.set(total);
+		});
+		for (int i = 0; i < 200 && out.get() == Integer.MIN_VALUE; i++) context.waitTick();
+		return out.get();
+	}
+
 	/** 注入准星指向（无头环境渲染拾取不可靠）→ 记录指向 → 右键开箱 */
 	private static void pointThenUse(ClientGameTestContext context, BlockPos target) {
 		context.runOnClient(mc -> mc.execute(() -> {
@@ -341,11 +556,9 @@ public class CommandMarkGameTest implements FabricClientGameTest {
 					Direction.UP, target, false);
 			mc.hitResult = hit;
 			MarkMode.get().tick(); // 消费 hitResult 写入 lastLookedAt
-			mc.gameMode.useItemOn(mc.player,
-					net.minecraft.world.InteractionHand.MAIN_HAND, hit);
+			mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, hit);
 		}));
 	}
-
 	private static void placeChest(ClientGameTestContext context, TestSingleplayerContext sp,
 			BlockPos pos) {
 		AtomicBoolean done = new AtomicBoolean(false);

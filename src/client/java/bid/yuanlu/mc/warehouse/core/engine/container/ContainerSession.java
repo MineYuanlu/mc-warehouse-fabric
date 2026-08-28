@@ -66,6 +66,11 @@ public final class ContainerSession {
 	}
 
 	final WorldDimPos pos;
+
+	/** 会话目标坐标（F2：玩家开箱刷新器据此识别引擎归属的界面） */
+	public WorldDimPos pos() {
+		return pos;
+	}
 	final ContainerDetector detector;
 	final ContainerInteraction interaction;
 	private final ModConfig config;

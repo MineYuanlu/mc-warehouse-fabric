@@ -59,6 +59,7 @@ public final class YuanluWarehouseClient implements ClientModInitializer {
 		WarehouseRegistryImpl.freeze();
 		SelectorCodecs.freeze();
 		bootstrapServices();
+		bid.yuanlu.mc.warehouse.core.cache.PlayerOpenRefresher.get().init();
 		registerTickLoop();
 		ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
 				WhCommands.register(dispatcher));
@@ -139,6 +140,7 @@ public final class YuanluWarehouseClient implements ClientModInitializer {
 			WorldSessionTracker trk = WorldSessionTracker.get();
 			if (trk != null) trk.tick();
 			MarkMode.get().tick();
+			bid.yuanlu.mc.warehouse.core.cache.PlayerOpenRefresher.get().tick();
 			try {
 				TransportEngineImpl engine = TransportEngineImpl.get();
 				engine.tick();
