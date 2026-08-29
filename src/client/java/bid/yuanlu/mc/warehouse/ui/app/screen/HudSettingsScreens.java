@@ -35,7 +35,7 @@ import org.lwjgl.glfw.GLFW;
 public final class HudSettingsScreens {
 
 	private static final int ROW_HEIGHT = 20;
-	private static final float SCALE_STEP = 0.5f;
+	private static final float SCALE_STEP = 0.1f;
 	private static final float SCALE_MIN = 0.5f;
 	private static final float SCALE_MAX = 2f;
 
@@ -49,33 +49,18 @@ public final class HudSettingsScreens {
 
 	public static UiRoot create() {
 		var root = new UiRoot();
-		// 中央列表挂在满屏层下（root 直接子级会被 SCREEN_MARGIN 摆放，pos 无效）
+		// 中央列表挂在满屏层下（root 直接子级会被 SCREEN_MARGIN 摆放，pos 无效）；
+		// 本屏无主面板——HUD 设置模式只留中央操作面板（标题+帮助+区块行+完成）
 		var overlay = new OverlayLayer(root);
 		overlay.add(centerList());
 		root.add(overlay);
-		root.add(settingsPanel());
 		return root;
 	}
 
-	// ---- 顶部面板：标题 + 提示 + 完成 ----
-
-	private static PanelElement settingsPanel() {
-		var panel = new PanelElement().padding(10).layout(new Column(6)).size(400, -1).id("hud-settings-panel");
-		panel.add(ScreenHeader.create(ScreenHeader.Page.HUD_SETTINGS));
-		panel.add(new LabelElement(Component.translatable("ui.wh.hud.settings.title")));
-		panel.add(new LabelElement(Component.translatable("ui.wh.hud.settings.tip"))
-				.color(Theme.active().textMuted()));
-		var actions = PanelElement.plain().padding(2).layout(new Row(4));
-		actions.add(new ButtonElement(Component.translatable("ui.wh.hud.settings.done"))
-				.onClick(ScreenHeader::backToMain));
-		panel.add(actions);
-		return panel;
-	}
-
-	// ---- 中央块列表：开关 / 拖拽排序 / 字号 ----
+	// ---- 中央面板：标题 + 提示 + 区块行 + 完成 ----
 
 	private static PanelElement centerList() {
-		var list = PanelElement.plain().padding(6).id("hud-block-list").layout(new Column(2));
+		var list = new PanelElement().padding(8).id("hud-block-list").layout(new Column(4));
 		rebuildList(list);
 		return list;
 	}
@@ -83,10 +68,17 @@ public final class HudSettingsScreens {
 	private static void rebuildList(PanelElement list) {
 		List<HudConfig.Block> blocks = orderedBlocks();
 		list.clearChildren();
+		list.add(new LabelElement(Component.translatable("ui.wh.hud.settings.title")).padding(2));
+		list.add(new LabelElement(Component.translatable("ui.wh.hud.settings.tip"))
+				.color(Theme.active().textMuted()));
 		list.add(new LabelElement(Component.translatable("ui.wh.hud.settings.blocks")).padding(2));
 		for (HudConfig.Block block : blocks) {
 			list.add(blockRow(list, block));
 		}
+		var actions = PanelElement.plain().padding(2).layout(new Row(4));
+		actions.add(new ButtonElement(Component.translatable("ui.wh.hud.settings.done"))
+				.onClick(ScreenHeader::backToMain));
+		list.add(actions);
 	}
 
 	private static List<HudConfig.Block> orderedBlocks() {
@@ -218,18 +210,14 @@ public final class HudSettingsScreens {
 
 		@Override
 		protected void onTick() {
-			// 满屏铺满 + 中央列表居中（优先居中，避让顶部面板并 clamp 屏内）
+			// 满屏铺满 + 中央面板居中（clamp 屏内）
 			size(root.width(), root.height());
 			var list = root.findId("hud-block-list");
 			if (list == null) {
 				return;
 			}
-			int y = (root.height() - list.height()) / 2;
-			var panel = root.findId("hud-settings-panel");
-			if (panel != null) {
-				y = Math.max(y, panel.absY() + panel.height() + 8);
-			}
-			y = Math.max(8, Math.min(y, root.height() - list.height() - 8));
+			int y = Math.max(8, Math.min((root.height() - list.height()) / 2,
+					root.height() - list.height() - 8));
 			list.pos((root.width() - list.width()) / 2, y);
 		}
 

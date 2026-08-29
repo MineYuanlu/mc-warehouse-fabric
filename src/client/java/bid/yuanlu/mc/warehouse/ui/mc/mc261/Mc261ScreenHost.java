@@ -51,6 +51,15 @@ public final class Mc261ScreenHost extends Screen {
 	}
 
 	@Override
+	public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+		// passthrough 屏（HUD 设置）：完全透明背景——默认分支会做模糊后处理 + 菜单
+		// 背景贴图，把下层 HUD 糊掉，用户无法看清/定位拖拽目标
+		if (!hudPassthrough) {
+			super.extractBackground(graphics, mouseX, mouseY, a);
+		}
+	}
+
+	@Override
 	public void resize(int width, int height) {
 		// 只更新尺寸，不重建 root：MC 默认 resize 会重跑 init 重建控件树，
 		// 丢 hover/焦点/拖拽工作状态；尺寸变化由每帧 root.update 触发 relayout
