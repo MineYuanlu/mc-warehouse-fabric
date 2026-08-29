@@ -24,9 +24,19 @@ final class Mc261WorldHighlighter implements WorldHighlighter {
 		return new WorldFrame() {
 			@Override
 			public void box(AABB box, int strokeArgb, int fillArgb, float lineWidth, boolean throughWalls) {
-				var props = Gizmos.cuboid(box, GizmoStyle.strokeAndFill(strokeArgb, lineWidth, fillArgb));
-				if (throughWalls) {
-					props.setAlwaysOnTop();
+				// 填充走双面 Gizmo（debug_filled_box 管线单面剔除，面向玩家的面不渲染）；
+				// 线框仍走原版 cuboid
+				if (fillArgb != 0) {
+					var fill = Gizmos.addGizmo(new DoubleSidedFillGizmo(box, fillArgb));
+					if (throughWalls) {
+						fill.setAlwaysOnTop();
+					}
+				}
+				if (strokeArgb != 0) {
+					var stroke = Gizmos.cuboid(box, GizmoStyle.stroke(strokeArgb, lineWidth));
+					if (throughWalls) {
+						stroke.setAlwaysOnTop();
+					}
 				}
 			}
 
