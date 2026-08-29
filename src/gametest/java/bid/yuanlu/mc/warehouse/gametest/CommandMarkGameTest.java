@@ -55,7 +55,7 @@ import bid.yuanlu.mc.warehouse.api.container.RuleMode;
 import bid.yuanlu.mc.warehouse.api.transport.RunReport;
 import bid.yuanlu.mc.warehouse.api.world.WorldDim;
 import bid.yuanlu.mc.warehouse.api.world.WorldDimPos;
-import bid.yuanlu.mc.warehouse.command.SelectionState;
+import bid.yuanlu.mc.warehouse.core.selection.SelectionState;
 import bid.yuanlu.mc.warehouse.command.WhCommands;
 import bid.yuanlu.mc.warehouse.core.WarehouseServices;
 import bid.yuanlu.mc.warehouse.core.cache.CacheKey;

@@ -23,6 +23,9 @@ public final class UiEvent {
 	public final UiElement target;
 	public final double x;
 	public final double y;
+	/** DRAG 事件的本次移动增量（其余事件为 0）。 */
+	public final double dx;
+	public final double dy;
 	public final int button;
 	public final int keyCode;
 	public final int modifiers;
@@ -32,15 +35,27 @@ public final class UiEvent {
 
 	public UiEvent(Type type, UiElement target, double x, double y, int button,
 			int keyCode, int modifiers, double scrollY) {
-		this(type, target, x, y, button, keyCode, modifiers, scrollY, Phase.BUBBLE);
+		this(type, target, x, y, 0, 0, button, keyCode, modifiers, scrollY, Phase.BUBBLE);
+	}
+
+	public UiEvent(Type type, UiElement target, double x, double y, double dx, double dy,
+			int button, int keyCode, int modifiers, double scrollY) {
+		this(type, target, x, y, dx, dy, button, keyCode, modifiers, scrollY, Phase.BUBBLE);
 	}
 
 	public UiEvent(Type type, UiElement target, double x, double y, int button,
 			int keyCode, int modifiers, double scrollY, Phase phase) {
+		this(type, target, x, y, 0, 0, button, keyCode, modifiers, scrollY, phase);
+	}
+
+	public UiEvent(Type type, UiElement target, double x, double y, double dx, double dy,
+			int button, int keyCode, int modifiers, double scrollY, Phase phase) {
 		this.type = type;
 		this.target = target;
 		this.x = x;
 		this.y = y;
+		this.dx = dx;
+		this.dy = dy;
 		this.button = button;
 		this.keyCode = keyCode;
 		this.modifiers = modifiers;
@@ -58,7 +73,7 @@ public final class UiEvent {
 	}
 
 	UiEvent withPhase(Phase p) {
-		var e = new UiEvent(type, target, x, y, button, keyCode, modifiers, scrollY, p);
+		var e = new UiEvent(type, target, x, y, dx, dy, button, keyCode, modifiers, scrollY, p);
 		e.consumed = consumed;
 		return e;
 	}

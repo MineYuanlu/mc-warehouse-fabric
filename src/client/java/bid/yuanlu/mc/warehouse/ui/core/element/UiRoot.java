@@ -39,8 +39,17 @@ public final class UiRoot extends UiElement {
 	private long lastClickTime;
 	private int lastClickButton;
 
+	// 拖拽状态机（DRAG_* 合成，UI-PDD §3.2）
+	private double pressX, pressY;
+	private double lastDragX, lastDragY;
+	private boolean dragging;
+	private static final double DRAG_THRESHOLD = 3;
+
 	@Nullable
 	private UiDraw draw;
+	/** 根布局器：null = 居中放置子级（Screen 用），非空 = 委托布局（HUD 用）。 */
+	@Nullable
+	private bid.yuanlu.mc.warehouse.ui.core.layout.Layout rootLayout;
 
 	public UiRoot() {
 		this(System::currentTimeMillis);
@@ -54,6 +63,12 @@ public final class UiRoot extends UiElement {
 		if (!inLayout) {
 			layoutDirty = true;
 		}
+	}
+
+	/** 设置根布局器（HUD 定角布局用）；null 恢复默认居中。 */
+	public void setRootLayout(@Nullable bid.yuanlu.mc.warehouse.ui.core.layout.Layout layout) {
+		rootLayout = layout;
+		markDirty();
 	}
 
 	public long tickCount() {
@@ -91,6 +106,18 @@ public final class UiRoot extends UiElement {
 	private void relayoutInner(UiDraw g, int width, int height) {
 		this.width = width;
 		this.height = height;
+		if (rootLayout != null) {
+			for (var c : children()) {
+				c.measurePass(g);
+			}
+			rootLayout.arrange(this, g);
+			for (var c : children()) {
+				if (c.visible()) {
+					c.arrangePass(g, padding() + c.x(), padding() + c.y());
+				}
+			}
+			return;
+		}
 		for (var c : children()) {
 			c.measurePass(g);
 			int cw = c.width() == AUTO ? Math.min(c.prefWidth(), width) : c.width();
@@ -133,6 +160,11 @@ public final class UiRoot extends UiElement {
 			return false;
 		}
 		pressed = target;
+		pressX = mx;
+		pressY = my;
+		lastDragX = mx;
+		lastDragY = my;
+		dragging = false;
 		if (target.enabled) {
 			target.pressed = true;
 		}
@@ -145,6 +177,15 @@ public final class UiRoot extends UiElement {
 
 	public boolean mouseUp(double mx, double my, int button) {
 		var target = hit((int) mx, (int) my);
+		if (dragging && pressed != null) {
+			UiEventDispatcher.dispatch(pressed,
+					new UiEvent(UiEvent.Type.DRAG_END, pressed, mx, my, mx - lastDragX, my - lastDragY,
+							button, -1, 0, 0));
+			pressed.pressed = false;
+			pressed = null;
+			dragging = false;
+			return true;
+		}
 		UiEventDispatcher.dispatch(target != null ? target : this,
 				new UiEvent(UiEvent.Type.MOUSE_UP, target != null ? target : this, mx, my, button, -1, 0, 0));
 		if (pressed != null) {
@@ -179,6 +220,25 @@ public final class UiRoot extends UiElement {
 	public boolean mouseMoved(double mx, double my) {
 		this.mouseX = mx;
 		this.mouseY = my;
+		if (pressed != null) {
+			// 拖拽状态机：超过阈值合成 DRAG_START，此后每次移动合成 DRAG
+			if (!dragging) {
+				if (Math.abs(mx - pressX) < DRAG_THRESHOLD && Math.abs(my - pressY) < DRAG_THRESHOLD) {
+					return false;
+				}
+				dragging = true;
+				UiEventDispatcher.dispatch(pressed,
+						new UiEvent(UiEvent.Type.DRAG_START, pressed, mx, my, mx - lastDragX, my - lastDragY,
+								0, -1, 0, 0));
+			} else {
+				UiEventDispatcher.dispatch(pressed,
+						new UiEvent(UiEvent.Type.DRAG, pressed, mx, my, mx - lastDragX, my - lastDragY,
+								0, -1, 0, 0));
+			}
+			lastDragX = mx;
+			lastDragY = my;
+			return true;
+		}
 		if (hover == null) {
 			return false;
 		}

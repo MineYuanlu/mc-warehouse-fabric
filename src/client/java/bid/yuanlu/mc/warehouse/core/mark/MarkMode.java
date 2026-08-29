@@ -103,6 +103,12 @@ public final class MarkMode {
 		OpenScreenCapture.unregister(OPEN_LISTENER);
 	}
 
+	/** 当前标记会话（未激活时 null，UI 层读取用）。 */
+	@Nullable
+	public Session sessionOrNull() {
+		return session;
+	}
+
 	public boolean isActive() {
 		return session != null;
 	}
