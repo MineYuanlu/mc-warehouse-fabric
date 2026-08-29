@@ -26,15 +26,14 @@ final class EventChatBridge {
 		attached = true;
 		WarehouseEvents.ERROR.register((pos, key) -> {
 			if (key == null) return;
-			if (pos != null) {
-				say(Component.translatable(key, pos).withStyle(net.minecraft.ChatFormatting.RED));
-			} else {
-				say(Component.translatable(key).withStyle(net.minecraft.ChatFormatting.RED));
-			}
+			// 位置恒传：key 带 %s 而 pos 为 null 时，避免聊天栏残留字面 "%s"
+			say(Component.translatable(key, pos == null ? Component.empty() : pos)
+					.withStyle(net.minecraft.ChatFormatting.RED));
 		});
 		WarehouseEvents.RUN_FINISHED.register((RunReport report) -> {
 			say(Component.translatable("commands.wh.report.header",
-					report.grade(), report.rounds(), report.itemsMoved(),
+					Component.translatable("wh.grade." + report.grade().name()), report.rounds(),
+					report.itemsMoved(),
 					String.format("%.1fs", report.durationMs() / 1000.0),
 					componentOfKey(report.detailKey())));
 		});
