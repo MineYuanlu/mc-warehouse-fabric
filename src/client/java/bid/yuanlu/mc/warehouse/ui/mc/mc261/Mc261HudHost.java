@@ -40,7 +40,11 @@ final class Mc261HudHost implements UiPlatform.HudRegistrar, UiPlatform.Resettab
 
 	private void extract(GuiGraphicsExtractor graphics, DeltaTracker delta) {
 		var mc = Minecraft.getInstance();
-		if (mc.player == null || mc.options.hideGui || mc.screen instanceof Mc261ScreenHost) {
+		if (mc.player == null || mc.options.hideGui) {
+			return;
+		}
+		// HUD 设置屏（passthrough）期间保持渲染，供实时预览/拖拽定位
+		if (mc.screen instanceof Mc261ScreenHost h && !h.hudPassthrough()) {
 			return;
 		}
 		var draw = new Mc261Draw(graphics, delta.getGameTimeDeltaPartialTick(true));

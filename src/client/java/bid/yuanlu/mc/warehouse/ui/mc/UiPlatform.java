@@ -19,6 +19,11 @@ public final class UiPlatform {
 
 	public interface ScreenOpener {
 		void open(Supplier<UiRoot> rootFactory);
+
+		/** 打开屏且 HUD 保持显示（HUD 设置屏实时预览用）。 */
+		default void openKeepHud(Supplier<UiRoot> rootFactory) {
+			open(rootFactory);
+		}
 	}
 
 	private static ScreenOpener screenOpener = f -> LOG.error("[ui] UiPlatform 未初始化，无法打开 Screen");
@@ -50,6 +55,11 @@ public final class UiPlatform {
 
 	public static void openScreen(Supplier<UiRoot> rootFactory) {
 		screenOpener.open(rootFactory);
+	}
+
+	/** 打开屏且 HUD 保持显示（HUD 设置屏实时预览）。 */
+	public static void openScreenKeepHud(Supplier<UiRoot> rootFactory) {
+		screenOpener.openKeepHud(rootFactory);
 	}
 
 	public static void closeScreen() {

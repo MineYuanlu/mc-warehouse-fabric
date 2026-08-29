@@ -20,12 +20,23 @@ import bid.yuanlu.mc.warehouse.ui.core.element.UiRoot;
 public final class Mc261ScreenHost extends Screen {
 
 	private final Supplier<UiRoot> rootFactory;
+	/** HUD 设置屏等：本屏打开期间 HUD 保持渲染（实时预览）。 */
+	private final boolean hudPassthrough;
 	@Nullable
 	private UiRoot root;
 
 	public Mc261ScreenHost(Component title, Supplier<UiRoot> rootFactory) {
+		this(title, rootFactory, false);
+	}
+
+	public Mc261ScreenHost(Component title, Supplier<UiRoot> rootFactory, boolean hudPassthrough) {
 		super(title);
 		this.rootFactory = rootFactory;
+		this.hudPassthrough = hudPassthrough;
+	}
+
+	public boolean hudPassthrough() {
+		return hudPassthrough;
 	}
 
 	public @Nullable UiRoot root() {

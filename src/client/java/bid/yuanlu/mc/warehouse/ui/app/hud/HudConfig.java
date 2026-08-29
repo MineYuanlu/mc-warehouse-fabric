@@ -45,6 +45,8 @@ public final class HudConfig {
 		public int offsetY = 4;
 		public int order;
 		public int maxLines = 8;
+		/** 文本行缩放（HUD 设置屏 -/+ 调整，0.5–2.0 步进 0.5）。 */
+		public float scale = 1f;
 
 		public BlockConfig() {
 		}
@@ -94,6 +96,7 @@ public final class HudConfig {
 			c.offsetY = e.getValue().offsetY;
 			c.order = e.getValue().order;
 			c.maxLines = e.getValue().maxLines;
+			c.scale = e.getValue().scale;
 			blocks.put(e.getKey(), c);
 		}
 	}

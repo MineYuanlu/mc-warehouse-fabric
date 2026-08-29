@@ -25,7 +25,17 @@ public final class Mc261UiPlatform {
 	public static void install() {
 		ClientTickEvents.END_CLIENT_TICK.register(client -> tickCounter++);
 		UiPlatform.install(
-				factory -> Minecraft.getInstance().setScreen(new Mc261ScreenHost(defaultTitle(), factory)),
+				new UiPlatform.ScreenOpener() {
+					@Override
+					public void open(Supplier<UiRoot> factory) {
+						Minecraft.getInstance().setScreen(new Mc261ScreenHost(defaultTitle(), factory));
+					}
+
+					@Override
+					public void openKeepHud(Supplier<UiRoot> factory) {
+						Minecraft.getInstance().setScreen(new Mc261ScreenHost(defaultTitle(), factory, true));
+					}
+				},
 				() -> {
 					var mc = Minecraft.getInstance();
 					if (mc.screen instanceof Mc261ScreenHost) {

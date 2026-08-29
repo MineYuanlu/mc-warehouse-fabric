@@ -45,8 +45,9 @@ public final class HudRootFactory {
 		// Column 布局：面板尺寸随文本行自适应（外框=内容尺寸），行变化即 relayout
 		var panel = new PanelElement().padding(4).id(block.name()).layout(new Column(2));
 		List<LabelElement> labels = new ArrayList<>();
+		float scale = HudConfig.get().get(block).scale;
 		for (int i = 0; i < Math.max(1, maxLines); i++) {
-			LabelElement label = new LabelElement(Component.empty()).padding(1);
+			LabelElement label = new LabelElement(Component.empty()).padding(1).scale(scale);
 			labels.add(label);
 			panel.add(label);
 		}

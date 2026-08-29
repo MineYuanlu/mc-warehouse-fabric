@@ -1,117 +1,265 @@
 package bid.yuanlu.mc.warehouse.ui.app.screen;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 import net.minecraft.network.chat.Component;
 
 import bid.yuanlu.mc.warehouse.ui.app.hud.HudConfig;
-import bid.yuanlu.mc.warehouse.ui.core.draw.UiDraw;
 import bid.yuanlu.mc.warehouse.ui.core.element.ButtonElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.CheckboxElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.LabelElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.PanelElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.UiRoot;
+import bid.yuanlu.mc.warehouse.ui.core.draw.UiDraw;
 import bid.yuanlu.mc.warehouse.ui.core.event.UiEvent;
 import bid.yuanlu.mc.warehouse.ui.core.layout.Column;
 import bid.yuanlu.mc.warehouse.ui.core.layout.Row;
+import bid.yuanlu.mc.warehouse.ui.core.theme.Theme;
 import bid.yuanlu.mc.warehouse.ui.mc.UiPlatform;
+import org.jetbrains.annotations.Nullable;
+import org.lwjgl.glfw.GLFW;
 
 /**
- * HUD 设置屏（UI-PDD §6.2）：左侧画布上拖拽区块芯片改角落/偏移，
- * 右侧逐区块开关/排序/偏移微调；[完成] 持久化并重建 HUD。
+ * HUD 设置屏（UI-PDD §6.2，按用户规格重设计）：
+ * <ul>
+ *   <li>本屏打开期间 HUD 按工作状态真实显示（passthrough），设置即所见；</li>
+ *   <li>拖拽屏幕空白处 = 平移对应角的 HUD 组，方向键微调 1px；</li>
+ *   <li>屏幕中央列表逐块：开关 checkbox、拖拽排序、-/+ 调整该块文字缩放；</li>
+ *   <li>外框尺寸由内容（行数/字数/字号）自动决定，无独立尺寸控制；文字行
+ *       只能开关/排序，逐行排列，不可单独设位置。</li>
+ * </ul>
+ * 全部修改实时生效并落盘（malilib 配置屏惯例，无取消语义）。
  */
 public final class HudSettingsScreens {
+
+	private static final int ROW_HEIGHT = 20;
+	private static final float SCALE_STEP = 0.5f;
+	private static final float SCALE_MIN = 0.5f;
+	private static final float SCALE_MAX = 2f;
 
 	private HudSettingsScreens() {
 	}
 
-	/** 打开 HUD 设置屏。 */
+	/** 打开 HUD 设置屏（HUD 保持显示以实时预览）。 */
 	public static void open() {
-		UiPlatform.openScreen(HudSettingsScreens::create);
+		UiPlatform.openScreenKeepHud(HudSettingsScreens::create);
 	}
 
 	public static UiRoot create() {
-		HudConfig working = new HudConfig();
-		working.copyFrom(bid.yuanlu.mc.warehouse.ui.app.hud.HudConfig.get());
-
 		var root = new UiRoot();
-		var panel = new PanelElement().padding(8).layout(new Column(6)).size(400, -1);
-		panel.add(ScreenHeader.create(ScreenHeader.Page.HUD_SETTINGS));
-		panel.add(new LabelElement(Component.translatable("ui.wh.hud.settings.title")));
-
-		// 画布：可拖拽的区块芯片（拖拽 = 角落吸附 + 偏移）
-		var canvas = new CanvasPanel(working).size(400, 120).clipContent(true);
-		panel.add(canvas);
-
-		// 每区块控制行
-		for (HudConfig.Block block : HudConfig.Block.values()) {
-			var cfg = working.get(block);
-			var line = new PanelElement().padding(2).layout(new Row(4));
-			line.add(new CheckboxElement(Component.translatable(block.labelKey), cfg.enabled)
-					.bind(bindOf(cfg)));
-			line.add(new LabelElement(Component.translatable("ui.wh.hud.settings.corner", cfg.corner)));
-			line.add(new ButtonElement(Component.translatable("ui.wh.hud.settings.up"))
-					.onClick(() -> cfg.order = Math.max(0, cfg.order - 1)));
-			line.add(new ButtonElement(Component.translatable("ui.wh.hud.settings.down"))
-					.onClick(() -> cfg.order = cfg.order + 1));
-			line.add(new ButtonElement("-")
-					.onClick(() -> cfg.offsetY = Math.max(0, cfg.offsetY - 1)));
-			line.add(new ButtonElement("+")
-					.onClick(() -> cfg.offsetY = cfg.offsetY + 1));
-			panel.add(line);
-		}
-
-		var buttons = PanelElement.plain().padding(2).layout(new Row(6));
-		buttons.add(new ButtonElement(Component.translatable("ui.wh.hud.settings.done"))
-				.onClick(() -> {
-					bid.yuanlu.mc.warehouse.ui.app.hud.HudConfig.save(working);
-					UiPlatform.resetHud("hud");
-					ScreenHeader.backToMain();
-				}));
-		buttons.add(new ButtonElement(Component.translatable("ui.wh.hud.settings.cancel"))
-				.onClick(ScreenHeader::backToMain));
-		panel.add(buttons);
-		root.add(panel);
+		// 中央列表挂在满屏层下（root 直接子级会被 SCREEN_MARGIN 摆放，pos 无效）
+		var overlay = new OverlayLayer(root);
+		overlay.add(centerList());
+		root.add(overlay);
+		root.add(settingsPanel());
 		return root;
 	}
 
-	private static bid.yuanlu.mc.warehouse.ui.core.bind.Value<Boolean> bindOf(HudConfig.BlockConfig cfg) {
+	// ---- 顶部面板：标题 + 提示 + 完成 ----
+
+	private static PanelElement settingsPanel() {
+		var panel = new PanelElement().padding(10).layout(new Column(6)).size(400, -1).id("hud-settings-panel");
+		panel.add(ScreenHeader.create(ScreenHeader.Page.HUD_SETTINGS));
+		panel.add(new LabelElement(Component.translatable("ui.wh.hud.settings.title")));
+		panel.add(new LabelElement(Component.translatable("ui.wh.hud.settings.tip"))
+				.color(Theme.active().textMuted()));
+		var actions = PanelElement.plain().padding(2).layout(new Row(4));
+		actions.add(new ButtonElement(Component.translatable("ui.wh.hud.settings.done"))
+				.onClick(ScreenHeader::backToMain));
+		panel.add(actions);
+		return panel;
+	}
+
+	// ---- 中央块列表：开关 / 拖拽排序 / 字号 ----
+
+	private static PanelElement centerList() {
+		var list = PanelElement.plain().padding(6).id("hud-block-list").layout(new Column(2));
+		rebuildList(list);
+		return list;
+	}
+
+	private static void rebuildList(PanelElement list) {
+		List<HudConfig.Block> blocks = orderedBlocks();
+		list.clearChildren();
+		list.add(new LabelElement(Component.translatable("ui.wh.hud.settings.blocks")).padding(2));
+		for (HudConfig.Block block : blocks) {
+			list.add(blockRow(list, block));
+		}
+	}
+
+	private static List<HudConfig.Block> orderedBlocks() {
+		List<HudConfig.Block> blocks = new ArrayList<>(List.of(HudConfig.Block.values()));
+		blocks.sort(Comparator.comparingInt(b -> HudConfig.get().get(b).order));
+		return blocks;
+	}
+
+	private static PanelElement blockRow(PanelElement list, HudConfig.Block block) {
+		var cfg = HudConfig.get().get(block);
+		var row = PanelElement.plain().padding(2).layout(new Row(4)).size(300, ROW_HEIGHT - 4);
+		row.add(new CheckboxElement(Component.translatable(block.labelKey), cfg.enabled).bind(bindOf(block)));
+		row.add(new ButtonElement("-").onClick(() -> {
+			float s = Math.max(SCALE_MIN, cfg.scale - SCALE_STEP);
+			if (s != cfg.scale) {
+				cfg.scale = s;
+				applyStructural();
+				UiPlatform.openScreenKeepHud(HudSettingsScreens::create); // 重建刷新缩放显示
+			}
+		}));
+		row.add(new ButtonElement("+").onClick(() -> {
+			float s = Math.min(SCALE_MAX, cfg.scale + SCALE_STEP);
+			if (s != cfg.scale) {
+				cfg.scale = s;
+				applyStructural();
+				UiPlatform.openScreenKeepHud(HudSettingsScreens::create);
+			}
+		}));
+		row.add(new LabelElement(Component.translatable("ui.wh.hud.settings.scale",
+				Math.round(cfg.scale * 10) / 10.0)).color(Theme.active().textMuted()));
+		attachReorder(list, row, block);
+		return row;
+	}
+
+	/** 行拖拽排序：捕获阶段监听（行内任意子级被按住皆可拖），累计位移越过行高即换位。 */
+	private static void attachReorder(PanelElement list, PanelElement row, HudConfig.Block block) {
+		int[] fromIndex = { -1 };
+		double[] accDy = { 0 };
+		row.on(UiEvent.Type.DRAG_START, e -> {
+			fromIndex[0] = orderedBlocks().indexOf(block);
+			accDy[0] = 0;
+		}, true);
+		row.on(UiEvent.Type.DRAG, e -> {
+			int from = fromIndex[0];
+			if (from < 0) {
+				return;
+			}
+			accDy[0] += e.dy;
+			int to = Math.max(0, Math.min(orderedBlocks().size() - 1,
+					from + (int) Math.round(accDy[0] / ROW_HEIGHT)));
+			if (to == from) {
+				return;
+			}
+			var blocks = orderedBlocks();
+			blocks.remove(from);
+			blocks.add(to, block);
+			for (int i = 0; i < blocks.size(); i++) {
+				HudConfig.get().get(blocks.get(i)).order = i;
+			}
+			fromIndex[0] = to;
+			accDy[0] -= (to - from) * (double) ROW_HEIGHT;
+			applyStructural();
+			rebuildList(list); // 树序重排 → relayout 重摆
+		}, true);
+	}
+
+	private static void applyStructural() {
+		HudConfig.save(HudConfig.get());
+		UiPlatform.resetHud("hud");
+	}
+
+	private static bid.yuanlu.mc.warehouse.ui.core.bind.Value<Boolean> bindOf(HudConfig.Block block) {
+		var cfg = HudConfig.get().get(block);
 		var v = bid.yuanlu.mc.warehouse.ui.core.bind.Value.of(cfg.enabled);
-		v.listen(b -> cfg.enabled = b);
+		v.listen(b -> {
+			cfg.enabled = b;
+			applyStructural();
+		});
 		return v;
 	}
 
-	/** 画布：网格背景 + 每区块一枚可拖拽芯片（拖到四角吸附，记录偏移）。 */
-	private static final class CanvasPanel extends PanelElement {
+	// ---- 满屏交互层：拖拽平移角落 HUD 组 + 方向键微调 ----
 
-		private final HudConfig working;
+	private static final class OverlayLayer extends PanelElement {
 
-		CanvasPanel(HudConfig working) {
-			this.working = working;
-			// 无布局器：芯片由配置偏移手动定位（拖拽直接改 pos）
-			for (HudConfig.Block block : HudConfig.Block.values()) {
-				var chip = new LabelElement(Component.translatable(block.labelKey)).padding(2);
-				chip.id(block.name());
-				chip.pos(working.get(block).offsetX, working.get(block).offsetY);
-				chip.on(UiEvent.Type.DRAG, e -> {
-					var cfg = working.get(block);
-					cfg.offsetX = Math.max(0, cfg.offsetX + (int) e.dx);
-					cfg.offsetY = Math.max(0, cfg.offsetY + (int) e.dy);
-					chip.pos(cfg.offsetX, cfg.offsetY);
-				});
-				add(chip);
+		private final UiRoot root;
+		private double lastMouseX = -1;
+		private double lastMouseY = -1;
+		@Nullable
+		private HudConfig.Corner dragCorner;
+
+		OverlayLayer(UiRoot root) {
+			this.root = root;
+			filled(false).bordered(false).id("hud-drag-layer");
+			on(UiEvent.Type.MOUSE_MOVE, e -> {
+				lastMouseX = e.x;
+				lastMouseY = e.y;
+			});
+			on(UiEvent.Type.DRAG_START, e -> {
+				dragCorner = cornerAt(e.x, e.y);
+				HudConfig.save(HudConfig.get());
+			});
+			on(UiEvent.Type.DRAG, e -> {
+				if (dragCorner != null && (e.dx != 0 || e.dy != 0)) {
+					shiftGroup(dragCorner, (int) e.dx, (int) e.dy);
+				}
+			});
+			on(UiEvent.Type.DRAG_END, e -> {
+				dragCorner = null;
+				HudConfig.save(HudConfig.get());
+			});
+			root.on(UiEvent.Type.KEY_DOWN, e -> {
+				int dx = 0;
+				int dy = 0;
+				switch (e.keyCode) {
+					case GLFW.GLFW_KEY_LEFT -> dx = -1;
+					case GLFW.GLFW_KEY_RIGHT -> dx = 1;
+					case GLFW.GLFW_KEY_UP -> dy = -1;
+					case GLFW.GLFW_KEY_DOWN -> dy = 1;
+					default -> {
+						return;
+					}
+				}
+				e.consume();
+				shiftGroup(cornerAt(lastMouseX, lastMouseY), dx, dy);
+				HudConfig.save(HudConfig.get());
+			});
+		}
+
+		@Override
+		protected void onTick() {
+			// 满屏铺满 + 中央列表居中（优先居中，避让顶部面板并 clamp 屏内）
+			size(root.width(), root.height());
+			var list = root.findId("hud-block-list");
+			if (list == null) {
+				return;
 			}
+			int y = (root.height() - list.height()) / 2;
+			var panel = root.findId("hud-settings-panel");
+			if (panel != null) {
+				y = Math.max(y, panel.absY() + panel.height() + 8);
+			}
+			y = Math.max(8, Math.min(y, root.height() - list.height() - 8));
+			list.pos((root.width() - list.width()) / 2, y);
 		}
 
 		@Override
 		protected void drawElement(UiDraw g) {
-			super.drawElement(g);
-			// 网格辅助线（20px 间距）
-			var t = bid.yuanlu.mc.warehouse.ui.core.theme.Theme.active();
-			for (int gx = 0; gx < width(); gx += 20) {
-				g.fill(absX() + gx, absY(), absX() + gx + 1, absY() + height(), t.border() & 0x40FFFFFF);
+			// 全透明：仅交互层
+		}
+
+		private @Nullable HudConfig.Corner cornerAt(double x, double y) {
+			if (x < 0 || y < 0) {
+				return HudConfig.Corner.TOP_LEFT;
 			}
+			boolean right = x >= root.width() / 2.0;
+			boolean bottom = y >= root.height() / 2.0;
+			if (!right) {
+				return bottom ? HudConfig.Corner.BOTTOM_LEFT : HudConfig.Corner.TOP_LEFT;
+			}
+			return bottom ? HudConfig.Corner.BOTTOM_RIGHT : HudConfig.Corner.TOP_RIGHT;
+		}
+
+		/** 平移指定角落全部启用块的 offset（组移动，UI-PDD §6.2）。 */
+		private void shiftGroup(HudConfig.Corner corner, int dx, int dy) {
+			for (HudConfig.Block b : HudConfig.Block.values()) {
+				var bc = HudConfig.get().get(b);
+				if (bc.enabled && bc.corner() == corner) {
+					bc.offsetX = Math.max(0, bc.offsetX + dx);
+					bc.offsetY = Math.max(0, bc.offsetY + dy);
+				}
+			}
+			UiPlatform.resetHud("hud");
 		}
 	}
 }
