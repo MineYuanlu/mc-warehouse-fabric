@@ -20,7 +20,7 @@ public final class UiEvent {
 
 	public final Type type;
 	/** 事件目标（非当前派发节点——当前节点见 dispatcher 回调上下文）。 */
-	public final UiElement target;
+	public final UiElement<?> target;
 	public final double x;
 	public final double y;
 	/** DRAG 事件的本次移动增量（其余事件为 0）。 */

@@ -10,13 +10,13 @@ import bid.yuanlu.mc.warehouse.ui.core.theme.Theme;
  * 主题按钮：悬浮/按下渐变色 + 居中标签；disabled 用暗色且不触发 onClick。
  * 语义色变体（success/danger）经 {@link #semantic}。
  */
-public class ButtonElement extends UiElement {
+public class ButtonElement extends UiElement<ButtonElement> {
 
 	public enum Semantic {
 		ACCENT, SUCCESS, DANGER
 	}
 
-	private final Component label;
+	private Component label;
 	private Semantic semantic = Semantic.ACCENT;
 
 	public ButtonElement(String label) {
@@ -25,6 +25,13 @@ public class ButtonElement extends UiElement {
 
 	public ButtonElement(Component label) {
 		this.label = label;
+	}
+
+	/** 运行期改标签（循环选择器等）。 */
+	public ButtonElement label(Component l) {
+		label = l;
+		markLayoutDirty();
+		return this;
 	}
 
 	public ButtonElement semantic(Semantic s) {

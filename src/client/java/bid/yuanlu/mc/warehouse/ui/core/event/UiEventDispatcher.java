@@ -17,8 +17,8 @@ public final class UiEventDispatcher {
 	}
 
 	/** 构造 target 到根的路径（含 target 自身，索引 0 = target）。 */
-	private static List<UiElement> pathToRoot(@Nullable UiElement target) {
-		var path = new ArrayList<UiElement>();
+	private static List<UiElement<?>> pathToRoot(@Nullable UiElement<?> target) {
+		var path = new ArrayList<UiElement<?>>();
 		for (UiElement e = target; e != null; e = e.parent()) {
 			path.add(e);
 		}
@@ -26,7 +26,7 @@ public final class UiEventDispatcher {
 	}
 
 	/** 派发事件；返回是否被消费。 */
-	public static boolean dispatch(@Nullable UiElement target, UiEvent event) {
+	public static boolean dispatch(@Nullable UiElement<?> target, UiEvent event) {
 		if (target == null) {
 			return false;
 		}
@@ -53,7 +53,7 @@ public final class UiEventDispatcher {
 		return event.consumed();
 	}
 
-	private static boolean dispatchToListeners(UiElement node, UiEvent event, boolean capture) {
+	private static boolean dispatchToListeners(UiElement<?> node, UiEvent event, boolean capture) {
 		var listeners = node.listeners(event.type, capture);
 		if (listeners.isEmpty()) {
 			return false;

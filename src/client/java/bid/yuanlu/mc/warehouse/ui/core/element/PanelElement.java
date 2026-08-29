@@ -7,7 +7,7 @@ import bid.yuanlu.mc.warehouse.ui.core.theme.Theme;
  * 渐变面板（BoxElement 思路：程序化上下渐变 + 描边，零贴图）。
  * 默认取主题 token；可覆盖颜色。
  */
-public class PanelElement extends UiElement {
+public class PanelElement extends UiElement<PanelElement> {
 
 	private int fillTop = -1;
 	private int fillBottom = -1;

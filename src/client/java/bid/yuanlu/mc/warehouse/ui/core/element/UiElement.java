@@ -29,12 +29,12 @@ import bid.yuanlu.mc.warehouse.ui.core.layout.Layout;
  *   <li>hovered/focused/pressed 为引擎管理的伪状态。</li>
  * </ul>
  */
-public abstract class UiElement {
+public abstract class UiElement<S extends UiElement<S>> {
 
 	public static final int AUTO = -1;
 
-	private UiElement parent;
-	private final List<UiElement> children = new ArrayList<>();
+	private UiElement<?> parent;
+	private final List<UiElement<?>> children = new ArrayList<>();
 
 	protected int x, y, width = AUTO, height = AUTO;
 	private int absX, absY;
@@ -59,13 +59,13 @@ public abstract class UiElement {
 	private Supplier<List<Component>> tooltip;
 
 	@SuppressWarnings("unchecked")
-	private <E extends UiElement> E self() {
-		return (E) this;
+	private S self() {
+		return (S) this;
 	}
 
 	// ---- 树 ----
 
-	public <E extends UiElement> E add(UiElement child) {
+	public S add(UiElement<?> child) {
 		if (child.parent != null) {
 			child.parent.children.remove(child);
 		}
@@ -75,7 +75,7 @@ public abstract class UiElement {
 		return self();
 	}
 
-	public <E extends UiElement> E remove(UiElement child) {
+	public S remove(UiElement<?> child) {
 		if (children.remove(child)) {
 			child.parent = null;
 			markLayoutDirty();
@@ -89,7 +89,7 @@ public abstract class UiElement {
 		}
 	}
 
-	public <E extends UiElement> E clearChildren() {
+	public S clearChildren() {
 		for (var c : new ArrayList<>(children)) {
 			c.parent = null;
 		}
@@ -108,14 +108,14 @@ public abstract class UiElement {
 
 	// ---- 几何 ----
 
-	public <E extends UiElement> E pos(int x, int y) {
+	public S pos(int x, int y) {
 		this.x = x;
 		this.y = y;
 		markLayoutDirty();
 		return self();
 	}
 
-	public <E extends UiElement> E size(int width, int height) {
+	public S size(int width, int height) {
 		this.width = width;
 		this.height = height;
 		markLayoutDirty();
@@ -146,7 +146,7 @@ public abstract class UiElement {
 		return absY;
 	}
 
-	public <E extends UiElement> E padding(int p) {
+	public S padding(int p) {
 		padding = p;
 		markLayoutDirty();
 		return self();
@@ -156,14 +156,14 @@ public abstract class UiElement {
 		return padding;
 	}
 
-	public <E extends UiElement> E clipContent(boolean clip) {
+	public S clipContent(boolean clip) {
 		clipContent = clip;
 		return self();
 	}
 
 	// ---- 状态 ----
 
-	public <E extends UiElement> E visible(boolean v) {
+	public S visible(boolean v) {
 		if (visible != v) {
 			visible = v;
 			markLayoutDirty();
@@ -175,7 +175,7 @@ public abstract class UiElement {
 		return visible;
 	}
 
-	public <E extends UiElement> E enabled(boolean e) {
+	public S enabled(boolean e) {
 		enabled = e;
 		return self();
 	}
@@ -184,7 +184,7 @@ public abstract class UiElement {
 		return enabled;
 	}
 
-	public <E extends UiElement> E focusable(boolean f) {
+	public S focusable(boolean f) {
 		focusable = f;
 		return self();
 	}
@@ -201,13 +201,13 @@ public abstract class UiElement {
 		return pressed;
 	}
 
-	public <E extends UiElement> E zIndex(int z) {
+	public S zIndex(int z) {
 		zIndex = z;
 		markLayoutDirty();
 		return self();
 	}
 
-	public <E extends UiElement> E id(String id) {
+	public S id(String id) {
 		this.id = id;
 		return self();
 	}
@@ -216,7 +216,7 @@ public abstract class UiElement {
 		return id;
 	}
 
-	public <E extends UiElement> E classes(String... cs) {
+	public S classes(String... cs) {
 		classes.addAll(List.of(cs));
 		return self();
 	}
@@ -226,13 +226,13 @@ public abstract class UiElement {
 	}
 
 	/** 按 id 深度优先查找子树（含自身）。 */
-	public <E extends UiElement> @Nullable E findId(String id) {
+	public <E extends UiElement<?>> @Nullable E findId(String id) {
 		if (id.equals(this.id)) {
 			@SuppressWarnings("unchecked")
 			var self = (E) this;
 			return self;
 		}
-		for (var c : children) {
+		for (UiElement<?> c : children) {
 			var r = c.<E>findId(id);
 			if (r != null) {
 				return r;
@@ -243,7 +243,7 @@ public abstract class UiElement {
 
 	// ---- 布局 ----
 
-	public <E extends UiElement> E layout(@Nullable Layout l) {
+	public S layout(@Nullable Layout l) {
 		layout = l;
 		markLayoutDirty();
 		return self();
@@ -254,8 +254,8 @@ public abstract class UiElement {
 		return layout;
 	}
 
-	UiElement root() {
-		var e = this;
+	UiElement<?> root() {
+		UiElement<?> e = this;
 		while (e.parent != null) {
 			e = e.parent;
 		}
@@ -317,7 +317,7 @@ public abstract class UiElement {
 	}
 
 	/** 命中测试：与绘制顺序一致（zIndex 升序绘制、逆序命中取最上层）。 */
-	public @Nullable UiElement hit(int px, int py) {
+	public @Nullable UiElement<?> hit(int px, int py) {
 		if (!visible || !containsAbs(px, py)) {
 			return null;
 		}
@@ -334,17 +334,17 @@ public abstract class UiElement {
 
 	// ---- 事件 ----
 
-	public <E extends UiElement> E on(UiEvent.Type type, Consumer<UiEvent> listener) {
+	public S on(UiEvent.Type type, Consumer<UiEvent> listener) {
 		return on(type, listener, false);
 	}
 
-	public <E extends UiElement> E on(UiEvent.Type type, Consumer<UiEvent> listener, boolean capture) {
+	public S on(UiEvent.Type type, Consumer<UiEvent> listener, boolean capture) {
 		var map = capture ? captureListeners : bubbleListeners;
 		map.computeIfAbsent(type, k -> new ArrayList<>()).add(listener);
 		return self();
 	}
 
-	public <E extends UiElement> E onClick(Runnable action) {
+	public S onClick(Runnable action) {
 		return on(UiEvent.Type.CLICK, e -> {
 			if (enabled) {
 				action.run();
@@ -366,7 +366,7 @@ public abstract class UiElement {
 		}
 	}
 
-	public <E extends UiElement> E tooltip(Supplier<List<Component>> lines) {
+	public S tooltip(Supplier<List<Component>> lines) {
 		tooltip = lines;
 		return self();
 	}

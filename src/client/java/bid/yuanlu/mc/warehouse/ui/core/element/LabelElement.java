@@ -13,7 +13,7 @@ import bid.yuanlu.mc.warehouse.ui.core.theme.Theme;
  * 文本标签。text 与 component 二选一（component 优先）；颜色默认主题 textPrimary。
  * 可绑定 {@link Value}（监听器推送，UI-PDD §3.3）。
  */
-public class LabelElement extends UiElement {
+public class LabelElement extends UiElement<LabelElement> {
 
 	@Nullable
 	private Component component;
@@ -47,6 +47,12 @@ public class LabelElement extends UiElement {
 
 	/** 绑定值：值变化即更新文本（推送式绑定）。 */
 	public LabelElement bindText(Value<String> value) {
+		value.listen(this::text);
+		return this;
+	}
+
+	/** 绑定 Component 值（i18n 文本）。 */
+	public LabelElement bindComponent(Value<Component> value) {
 		value.listen(this::text);
 		return this;
 	}

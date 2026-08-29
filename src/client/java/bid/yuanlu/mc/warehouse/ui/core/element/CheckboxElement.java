@@ -10,7 +10,7 @@ import bid.yuanlu.mc.warehouse.ui.core.theme.Theme;
 /**
  * 复选框（方块勾选 + 标签）：点击切换，可绑定 {@link Value<Boolean>}。
  */
-public class CheckboxElement extends UiElement {
+public class CheckboxElement extends UiElement<CheckboxElement> {
 
 	private final Component label;
 	private boolean checked;

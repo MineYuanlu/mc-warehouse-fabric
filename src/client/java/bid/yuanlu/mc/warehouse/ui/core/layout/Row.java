@@ -15,7 +15,7 @@ public final class Row implements Layout {
 	}
 
 	@Override
-	public void arrange(UiElement container, UiDraw g) {
+	public void arrange(UiElement<?> container, UiDraw g) {
 		int contentHeight = Math.max(0, container.height() - container.padding() * 2);
 		int cursor = 0;
 		for (var c : container.children()) {
@@ -32,7 +32,7 @@ public final class Row implements Layout {
 	}
 
 	@Override
-	public int measureWidth(UiElement container, UiDraw g) {
+	public int measureWidth(UiElement<?> container, UiDraw g) {
 		Layout.measureChildren(container, g);
 		int total = 0;
 		int count = 0;
@@ -46,7 +46,7 @@ public final class Row implements Layout {
 	}
 
 	@Override
-	public int measureHeight(UiElement container, UiDraw g) {
+	public int measureHeight(UiElement<?> container, UiDraw g) {
 		Layout.measureChildren(container, g);
 		int max = 0;
 		for (var c : container.children()) {

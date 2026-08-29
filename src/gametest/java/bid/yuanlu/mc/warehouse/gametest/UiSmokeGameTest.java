@@ -7,7 +7,7 @@ import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.network.chat.Component;
 
-import bid.yuanlu.mc.warehouse.ui.app.UiDemoScreens;
+import bid.yuanlu.mc.warehouse.ui.app.screen.WarehouseScreens;
 import bid.yuanlu.mc.warehouse.ui.core.element.PanelElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.UiRoot;
 import bid.yuanlu.mc.warehouse.ui.mc.mc261.Mc261ScreenHost;
@@ -26,7 +26,7 @@ public class UiSmokeGameTest implements FabricClientGameTest {
 	@Override
 	public void runTest(ClientGameTestContext context) {
 		context.setScreen(() -> new Mc261ScreenHost(Component.translatable("ui.wh.demo.title"),
-				UiDemoScreens::create));
+				WarehouseScreens::create));
 		context.waitForScreen(Mc261ScreenHost.class);
 		context.waitTicks(10);
 
@@ -38,6 +38,7 @@ public class UiSmokeGameTest implements FabricClientGameTest {
 
 			// 布局已展开：面板有正尺寸、水平居中
 			assert root.children().size() == 1 : "根应只有一个内容面板";
+			assert !root.children().get(0).children().isEmpty() : "主屏应有页签内容";
 			PanelElement panel = (PanelElement) root.children().get(0);
 			assert panel.width() > 0 && panel.height() > 0 : "面板应完成 measure/arrange";
 			int centeredX = (mc.getWindow().getGuiScaledWidth() - panel.width()) / 2;

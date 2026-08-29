@@ -61,7 +61,7 @@ public final class UiKeybinds {
 
 	private static void poll(Minecraft mc) {
 		while (open.consumeClick()) {
-			UiPlatform.openScreen(HudSettingsScreens::create); // M3 换为仓库管理主屏
+			bid.yuanlu.mc.warehouse.ui.app.screen.WarehouseScreens.open();
 		}
 		while (pos1.consumeClick()) {
 			setCorner(mc, true);

@@ -24,7 +24,7 @@ public final class Anchor implements Layout {
 	}
 
 	@Override
-	public void arrange(UiElement container, UiDraw g) {
+	public void arrange(UiElement<?> container, UiDraw g) {
 		int cw = container.width() - container.padding() * 2;
 		int ch = container.height() - container.padding() * 2;
 		for (var c : container.children()) {
@@ -46,13 +46,13 @@ public final class Anchor implements Layout {
 	}
 
 	@Override
-	public int measureWidth(UiElement container, UiDraw g) {
+	public int measureWidth(UiElement<?> container, UiDraw g) {
 		Layout.measureChildren(container, g);
 		return container.padding() * 2;
 	}
 
 	@Override
-	public int measureHeight(UiElement container, UiDraw g) {
+	public int measureHeight(UiElement<?> container, UiDraw g) {
 		Layout.measureChildren(container, g);
 		return container.padding() * 2;
 	}

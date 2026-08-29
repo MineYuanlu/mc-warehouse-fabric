@@ -26,7 +26,7 @@ public final class Grid implements Layout {
 		this.gapY = gapY;
 	}
 
-	private int rows(UiElement container) {
+	private int rows(UiElement<?> container) {
 		int n = 0;
 		for (var c : container.children()) {
 			if (c.visible()) {
@@ -37,7 +37,7 @@ public final class Grid implements Layout {
 	}
 
 	@Override
-	public void arrange(UiElement container, UiDraw g) {
+	public void arrange(UiElement<?> container, UiDraw g) {
 		int i = 0;
 		for (var c : container.children()) {
 			if (!c.visible()) {
@@ -54,12 +54,12 @@ public final class Grid implements Layout {
 	}
 
 	@Override
-	public int measureWidth(UiElement container, UiDraw g) {
+	public int measureWidth(UiElement<?> container, UiDraw g) {
 		return columns * cellWidth + (columns - 1) * gapX + container.padding() * 2;
 	}
 
 	@Override
-	public int measureHeight(UiElement container, UiDraw g) {
+	public int measureHeight(UiElement<?> container, UiDraw g) {
 		return rows(container) * cellHeight + (rows(container) - 1) * gapY + container.padding() * 2;
 	}
 }

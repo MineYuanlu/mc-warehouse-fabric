@@ -14,7 +14,7 @@ import bid.yuanlu.mc.warehouse.ui.core.event.UiEventDispatcher;
  * 元素树根（UI-PDD §3.1/§3.2）：布局脏驱动（构建时求解，§3.7）、hover 缓存
  * （每帧一次命中测试）、CLICK/DOUBLE_CLICK/ENTER/LEAVE 合成、焦点管理、tooltip 通道。
  */
-public final class UiRoot extends UiElement {
+public final class UiRoot extends UiElement<UiRoot> {
 
 	private static final long DOUBLE_CLICK_MS = 300;
 
@@ -29,13 +29,13 @@ public final class UiRoot extends UiElement {
 	private double mouseX = -1;
 	private double mouseY = -1;
 	@Nullable
-	private UiElement hover;
+	private UiElement<?> hover;
 	@Nullable
-	private UiElement pressed;
+	private UiElement<?> pressed;
 	@Nullable
-	private UiElement focused;
+	private UiElement<?> focused;
 	@Nullable
-	private UiElement lastClickTarget;
+	private UiElement<?> lastClickTarget;
 	private long lastClickTime;
 	private int lastClickButton;
 
@@ -148,7 +148,7 @@ public final class UiRoot extends UiElement {
 		}
 	}
 
-	public @Nullable UiElement hover() {
+	public @Nullable UiElement<?> hover() {
 		return hover;
 	}
 
@@ -265,7 +265,7 @@ public final class UiRoot extends UiElement {
 
 	// ---- 焦点 ----
 
-	public void requestFocus(@Nullable UiElement element) {
+	public void requestFocus(@Nullable UiElement<?> element) {
 		if (focused == element) {
 			return;
 		}
@@ -280,8 +280,7 @@ public final class UiRoot extends UiElement {
 		}
 	}
 
-	@Nullable
-	public UiElement focusedElement() {
+	public @Nullable UiElement<?> focusedElement() {
 		return focused;
 	}
 
@@ -298,7 +297,7 @@ public final class UiRoot extends UiElement {
 	}
 
 	@Override
-	public @Nullable UiElement hit(int px, int py) {
+	public @Nullable UiElement<?> hit(int px, int py) {
 		// 根自身不做命中目标，只按绘制序分发子级
 		var sorted = new ArrayList<>(children());
 		sorted.sort((a, b) -> Integer.compare(a.zIndex, b.zIndex));

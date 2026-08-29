@@ -13,22 +13,22 @@ import bid.yuanlu.mc.warehouse.ui.core.element.UiElement;
  */
 public interface Layout {
 
-	void arrange(UiElement container, UiDraw g);
+	void arrange(UiElement<?> container, UiDraw g);
 
-	int measureWidth(UiElement container, UiDraw g);
+	int measureWidth(UiElement<?> container, UiDraw g);
 
-	int measureHeight(UiElement container, UiDraw g);
+	int measureHeight(UiElement<?> container, UiDraw g);
 
 	/** 子级生效尺寸：显式固定值优先，AUTO 用 measure 结果。 */
-	static int effectiveWidth(UiElement child) {
+	static int effectiveWidth(UiElement<?> child) {
 		return child.width() == UiElement.AUTO ? child.prefWidth() : child.width();
 	}
 
-	static int effectiveHeight(UiElement child) {
+	static int effectiveHeight(UiElement<?> child) {
 		return child.height() == UiElement.AUTO ? child.prefHeight() : child.height();
 	}
 
-	static void measureChildren(UiElement container, UiDraw g) {
+	static void measureChildren(UiElement<?> container, UiDraw g) {
 		for (var c : container.children()) {
 			if (c.visible()) {
 				c.measurePass(g);

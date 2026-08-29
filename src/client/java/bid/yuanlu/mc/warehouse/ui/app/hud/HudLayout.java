@@ -17,7 +17,7 @@ public final class HudLayout implements Layout {
 	private static final int STACK_GAP = 2;
 
 	@Override
-	public void arrange(UiElement container, UiDraw g) {
+	public void arrange(UiElement<?> container, UiDraw g) {
 		record Entry(int order, UiElement el, HudConfig.BlockConfig cfg) {
 		}
 		var entries = new ArrayList<Entry>();
@@ -61,7 +61,7 @@ public final class HudLayout implements Layout {
 		}
 	}
 
-	private static HudConfig.@Nullable BlockConfig configOf(UiElement el) {
+	private static HudConfig.@Nullable BlockConfig configOf(UiElement<?> el) {
 		try {
 			return HudConfig.get().get(HudConfig.Block.valueOf(el.id()));
 		} catch (IllegalArgumentException e) {
@@ -70,13 +70,13 @@ public final class HudLayout implements Layout {
 	}
 
 	@Override
-	public int measureWidth(UiElement container, UiDraw g) {
+	public int measureWidth(UiElement<?> container, UiDraw g) {
 		Layout.measureChildren(container, g);
 		return container.padding() * 2;
 	}
 
 	@Override
-	public int measureHeight(UiElement container, UiDraw g) {
+	public int measureHeight(UiElement<?> container, UiDraw g) {
 		Layout.measureChildren(container, g);
 		return container.padding() * 2;
 	}

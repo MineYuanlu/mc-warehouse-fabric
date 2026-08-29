@@ -26,6 +26,11 @@ public final class HudSettingsScreens {
 	private HudSettingsScreens() {
 	}
 
+	/** 打开 HUD 设置屏。 */
+	public static void open() {
+		UiPlatform.openScreen(HudSettingsScreens::create);
+	}
+
 	public static UiRoot create() {
 		HudConfig working = new HudConfig();
 		working.copyFrom(bid.yuanlu.mc.warehouse.ui.app.hud.HudConfig.get());
