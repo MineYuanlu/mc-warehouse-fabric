@@ -545,8 +545,22 @@ public final class WhCommands {
 				CommandSupport.err(src, "commands.wh.rule.missing", id);
 				return 0;
 			}
-			CommandSupport.RuleTail tail = CommandSupport.parseRuleTail(greedyArg(ctx));
-			String selSpec = tail.selector();
+			Component err = addEntryCore(wh, rule, greedyArg(ctx));
+			if (err != null) {
+				src.sendError(err);
+				return 0;
+			}
+			CommandSupport.fb(ctx, "commands.wh.rule.entry_added", ChatFormatting.GREEN, id);
+			return 1;
+		}
+
+		/**
+		 * 条目添加核心（UI-PDD §5.3：UI 与命令共用同一解析/校验/落盘路径）。
+		 * 成功返回 null；失败返回已本地化的错误组件（不落盘）。
+		 */
+		static Component addEntryCore(Warehouse wh, ContainerRule rule, String tail) {
+			CommandSupport.RuleTail parsedTail = CommandSupport.parseRuleTail(tail);
+			String selSpec = parsedTail.selector();
 			JsonObject selJson = parseTyped(selSpec);
 			ItemSelector selector = null;
 			String exMsg = "";
@@ -558,23 +572,20 @@ public final class WhCommands {
 				}
 			}
 			if (selector == null) {
-				CommandSupport.err(src, "commands.wh.rule.bad_selector", selSpec + ex());
-				return 0;
+				return Component.translatable("commands.wh.rule.bad_selector", selSpec + ex());
 			}
-			CommandSupport.Opts opts = tail.opts();
+			CommandSupport.Opts opts = parsedTail.opts();
 			QuantitySelector quant = null;
 			if (opts.quantity() != null) {
 				try {
 					JsonObject qJson = parseTyped(opts.quantity());
 					quant = qJson == null ? null : SelectorCodecs.quantityFromJson(qJson);
 				} catch (Throwable e) {
-					CommandSupport.err(src, "commands.wh.rule.bad_quantity",
+					return Component.translatable("commands.wh.rule.bad_quantity",
 							opts.quantity() + " (" + e + ")");
-					return 0;
 				}
 				if (quant == null) {
-					CommandSupport.err(src, "commands.wh.rule.bad_quantity", opts.quantity());
-					return 0;
+					return Component.translatable("commands.wh.rule.bad_quantity", opts.quantity());
 				}
 			}
 			ItemRule entry = new ItemRule(selector, opts.negate(), quant);
@@ -584,17 +595,14 @@ public final class WhCommands {
 				d2err = ConfigValidator.validateRuleOnContainers(wh, rule);
 			} catch (Throwable t) {
 				rule.itemRules.remove(entry); // 校验异常同样回滚，不留脏条目
-				CommandSupport.err(src, "commands.wh.error.generic", String.valueOf(t));
-				return 0;
+				return Component.translatable("commands.wh.error.generic", String.valueOf(t));
 			}
 			if (d2err != null) {
 				rule.itemRules.remove(entry); // D2 严格拒载（PDD §3.7）
-				CommandSupport.err(src, "commands.wh.error.generic", d2err);
-				return 0;
+				return Component.translatable("commands.wh.error.generic", d2err);
 			}
 			manager().save(wh);
-			CommandSupport.fb(ctx, "commands.wh.rule.entry_added", ChatFormatting.GREEN, id);
-			return 1;
+			return null;
 		}
 
 		static int removeEntry(CommandContext<FabricClientCommandSource> ctx) {
@@ -1570,6 +1578,33 @@ public final class WhCommands {
 		} catch (IllegalArgumentException e) {
 			return null;
 		}
+	}
+
+	/**
+	 * UI 层等价 /wh rule add（UI-PDD §5.3）：成功返回 null，否则返回错误组件。
+	 */
+	public static Component addRuleEntryDirect(String ruleId, String tail) {
+		Warehouse wh = manager().active();
+		if (wh == null) return Component.translatable("commands.wh.rule.none");
+		ContainerRule rule = wh.rules.get(ruleId);
+		if (rule == null) return Component.translatable("commands.wh.rule.missing", ruleId);
+		return RuleGroup.addEntryCore(wh, rule, tail);
+	}
+
+	/**
+	 * UI 层等价 /wh rule remove（1 起下标）：成功返回 null，否则返回错误组件。
+	 */
+	public static Component removeRuleEntryDirect(String ruleId, int index1based) {
+		Warehouse wh = manager().active();
+		if (wh == null) return Component.translatable("commands.wh.rule.none");
+		ContainerRule rule = wh.rules.get(ruleId);
+		if (rule == null) return Component.translatable("commands.wh.rule.missing", ruleId);
+		if (index1based > rule.itemRules.size()) {
+		return Component.translatable("commands.wh.rule.bad_index", index1based);
+		}
+		rule.itemRules.remove(index1based - 1);
+		manager().save(wh);
+		return null;
 	}
 
 	static WarehouseManagerImpl manager() {

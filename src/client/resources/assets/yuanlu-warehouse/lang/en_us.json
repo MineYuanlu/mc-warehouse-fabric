@@ -201,5 +201,15 @@
   "ui.wh.select.need_active_box": "Requires an active warehouse and a full selection box",
   "ui.wh.select.apply": "Apply",
   "ui.wh.select.applied": "Applied to %s containers",
-  "ui.wh.select.clear": "Clear selection"
+  "ui.wh.select.clear": "Clear selection",
+  "ui.wh.main.tab.rules": "Rules",
+  "ui.wh.main.tab.select": "Selection",
+  "ui.wh.rule.title": "Rule editor (entry syntax = /wh rule add tail)",
+  "ui.wh.rule.no_active": "Requires an active warehouse",
+  "ui.wh.rule.create": "Create",
+  "ui.wh.rule.entry": "%s — entries: %s, used by: %s",
+  "ui.wh.rule.referenced": "Used by %s container(s) — unbind first",
+  "ui.wh.rule.entry.add": "+ Add entry",
+  "ui.wh.rule.entry.item": "#%s %s",
+  "ui.wh.rule.tail.tip": "Same tail syntax as /wh rule add: {\"type\":...} [--quantity {...}] etc."
 }

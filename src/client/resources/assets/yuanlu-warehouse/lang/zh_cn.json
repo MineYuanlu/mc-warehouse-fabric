@@ -201,5 +201,15 @@
   "ui.wh.select.need_active_box": "需要激活仓库和完整选区框",
   "ui.wh.select.apply": "应用",
   "ui.wh.select.applied": "已应用到 %s 个容器",
-  "ui.wh.select.clear": "清除选区"
+  "ui.wh.select.clear": "清除选区",
+  "ui.wh.main.tab.rules": "规则",
+  "ui.wh.main.tab.select": "选区",
+  "ui.wh.rule.title": "规则编辑（条目语法 = /wh rule add 的 tail）",
+  "ui.wh.rule.no_active": "需要先激活仓库",
+  "ui.wh.rule.create": "新建",
+  "ui.wh.rule.entry": "%s — 条目 %s，被引用 %s",
+  "ui.wh.rule.referenced": "被 %s 个容器引用——请先解绑",
+  "ui.wh.rule.entry.add": "+ 添加条目",
+  "ui.wh.rule.entry.item": "#%s %s",
+  "ui.wh.rule.tail.tip": "与 /wh rule add 相同的 tail 语法：{\"type\":...} [--quantity {...}] 等。"
 }

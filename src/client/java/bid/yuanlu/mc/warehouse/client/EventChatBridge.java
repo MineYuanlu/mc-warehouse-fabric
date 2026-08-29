@@ -12,11 +12,16 @@ import bid.yuanlu.mc.warehouse.core.event.WarehouseEvents;
 
 /**
  * 命令层的事件聊天栏桥（PDD §5.9）：ERROR 与 RUN_FINISHED 恒输出；
- * TRANSPORT_STATE / PROGRESS 仅 debug 配置时输出。全部在客户端主线程触发。
+ * TRANSPORT_STATE / PROGRESS 仅 debug 配置时输出。
+ * <p>
+ * 引擎事件可能在非渲染线程触发（如 gametest 线程直接驱动引擎），
+ * 发送聊天统一跳回客户端主线程；实例在 attach（渲染线程）时缓存，
+ * 因为 Minecraft.getInstance() 在非主线程被 fabric gametest 检查禁止。
  */
 final class EventChatBridge {
 
 	private static boolean attached = false;
+	private static @Nullable Minecraft mcRef;
 
 	private EventChatBridge() {
 	}
@@ -24,6 +29,7 @@ final class EventChatBridge {
 	static synchronized void attach() {
 		if (attached) return;
 		attached = true;
+		mcRef = Minecraft.getInstance();
 		WarehouseEvents.ERROR.register((pos, key) -> {
 			if (key == null) return;
 			// 位置恒传：key 带 %s 而 pos 为 null 时，避免聊天栏残留字面 "%s"
@@ -52,7 +58,16 @@ final class EventChatBridge {
 	}
 
 	private static void say(Component c) {
-		Minecraft mc = Minecraft.getInstance();
+		Minecraft mc = mcRef;
+		if (mc == null) return;
+		if (mc.isSameThread()) {
+			send(mc, c);
+		} else {
+			mc.execute(() -> send(mc, c));
+		}
+	}
+
+	private static void send(Minecraft mc, Component c) {
 		if (mc.player != null) {
 			mc.player.sendSystemMessage(c);
 		}

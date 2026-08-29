@@ -71,6 +71,10 @@ public final class WarehouseScreens {
 			var row = new PanelElement().padding(2).layout(new Row(4));
 			row.add(tabButton(root, "ui.wh.main.tab.warehouse", 0));
 			row.add(tabButton(root, "ui.wh.main.tab.engine", 1));
+			row.add(new ButtonElement(Component.translatable("ui.wh.main.tab.rules"))
+					.onClick(bid.yuanlu.mc.warehouse.ui.app.screen.RuleScreens::open));
+			row.add(new ButtonElement(Component.translatable("ui.wh.main.tab.select"))
+					.onClick(bid.yuanlu.mc.warehouse.ui.app.screen.SelectionPanelScreens::open));
 			row.add(new ButtonElement(Component.translatable("ui.wh.main.tab.hudsettings"))
 					.onClick(bid.yuanlu.mc.warehouse.ui.app.screen.HudSettingsScreens::open));
 			return row;
