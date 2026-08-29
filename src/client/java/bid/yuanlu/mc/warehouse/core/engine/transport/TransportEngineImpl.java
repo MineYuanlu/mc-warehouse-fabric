@@ -328,7 +328,7 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 
 	// ---- 访问队列与导航 ----
 
-	private void rebuildQueueIfFresh(IOType io) {
+	private void rebuildQueueIfFresh(IOType io, boolean takeDirection) {
 		Warehouse wh = manager.active();
 		if (wh == null) {
 			visitQueue = List.of();
@@ -342,7 +342,7 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 			q.add(c);
 		}
 		// 缓存预筛（§5.3 访问队列）：未探索一律进队；已探索按缓存口径剔除
-		q.removeIf(c -> cacheJudgesNothingToDo(io, c));
+		q.removeIf(c -> cacheJudgesNothingToDo(io, c, takeDirection));
 		// hard 降序、soft 次级降序
 		q.sort((a, b) -> {
 			int cmp = Integer.compare(b.priority.hard(), a.priority.hard());
@@ -361,9 +361,11 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 	 * <p>
 	 * 防振荡①（仅 INPUT 未探索容器）：背包无空间且 OUTPUT/TEMP 均无可确认空间 → 不去空取。
 	 */
-	private boolean cacheJudgesNothingToDo(IOType io, ContainerInfo c) {
+	 private boolean cacheJudgesNothingToDo(IOType io, ContainerInfo c, boolean takeDirection) {
 		var mem = cache.getValid(keyOf(c), c.cacheType);
-		boolean takeDirection = io == IOType.INPUT || io == IOType.TEMP;
+		// 方向由阶段决定（GET_*=取出 / PUT_*=放入），不得按 IO 类型推断——
+		// TEMP 兼具取出与放入两个阶段，按类型推断会把 PUT_TEMP 的空 TEMP
+		// 误判为「无事可做」踢出队列，余货永远放不回去（§5.4 缓存只决定要不要去）。
 		if (mem == null) {
 			// 未探索
 			if (io == IOType.INPUT) {
@@ -957,7 +959,16 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 			any = true;
 			var mem = cache.getValid(keyOf(c), c.cacheType);
 			if (mem == null) return false; // 未探索→不满足
-			if (hasAnyNonEmpty(mem.snapshot())) return false;
+			if (io == IOType.INPUT) {
+				// 出口②规则口径（PDD §5.2「全空」= 无物品可取出）：
+				// 保留型数量规则（如 count:N）达标后即视为空，而非快照非空。
+				// 否则引擎对「只剩保留量」的 INPUT 永远不算空，滑向 no_progress 误报。
+				var plans = RuleApplicator.planTake(c, resolveRules(wh, c), mem.snapshot(),
+						RuleApplicator.TakeMode.RULES);
+				if (!plans.isEmpty()) return false;
+			} else if (hasAnyNonEmpty(mem.snapshot())) {
+				return false;
+			}
 		}
 		return any || io == IOType.INPUT; // 无 INPUT 容器视作空源满足
 	}
@@ -985,10 +996,10 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 		navRetries = 0;
 		navStarted = false;
 		switch (s) {
-			case GET_TEMP -> prepareQueue(IOType.TEMP);
-			case GET_INPUT -> prepareQueue(IOType.INPUT);
-			case PUT_OUTPUT -> prepareQueue(IOType.OUTPUT);
-			case PUT_TEMP -> prepareQueue(IOType.TEMP);
+			case GET_TEMP -> prepareQueue(IOType.TEMP, true);
+			case GET_INPUT -> prepareQueue(IOType.INPUT, true);
+			case PUT_OUTPUT -> prepareQueue(IOType.OUTPUT, false);
+			case PUT_TEMP -> prepareQueue(IOType.TEMP, false);
 			default -> {
 				visitQueue = List.of();
 				queueIdx = 0;
@@ -1000,8 +1011,8 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 		}
 	}
 
-	private void prepareQueue(IOType io) {
-		rebuildQueueIfFresh(io);
+	private void prepareQueue(IOType io, boolean takeDirection) {
+		rebuildQueueIfFresh(io, takeDirection);
 	}
 
 	private void fireProgress(String action) {
