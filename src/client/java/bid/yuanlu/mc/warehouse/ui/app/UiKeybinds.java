@@ -70,8 +70,7 @@ public final class UiKeybinds {
 			setCorner(mc, false);
 		}
 		while (showSelection.consumeClick()) {
-			// 选区盒常显开关由 M2 高亮渲染读取（此处仅反馈）
-			LOG.debug("[ui] selection show toggled");
+			bid.yuanlu.mc.warehouse.ui.app.highlight.HighlightRenderer.get().toggleSelectionVisible();
 		}
 		while (clearSelection.consumeClick()) {
 			SelectionState.get().clear();

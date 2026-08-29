@@ -26,6 +26,10 @@ public interface WorldHighlighter {
 			}
 
 			@Override
+			public void quad(Vec3 a, Vec3 b, Vec3 c, Vec3 d, int argb) {
+			}
+
+			@Override
 			public void label(String text, Vec3 pos, int argb) {
 			}
 
@@ -37,6 +41,9 @@ public interface WorldHighlighter {
 		void box(AABB box, int strokeArgb, int fillArgb, float lineWidth, boolean throughWalls);
 
 		void line(Vec3 a, Vec3 b, int argb, float width);
+
+		/** 四角定义的填充面（朝向由顶点顺序决定）。 */
+		void quad(Vec3 a, Vec3 b, Vec3 c, Vec3 d, int argb);
 
 		void label(String text, Vec3 pos, int argb);
 

@@ -36,6 +36,11 @@ final class Mc261WorldHighlighter implements WorldHighlighter {
 			}
 
 			@Override
+			public void quad(Vec3 a, Vec3 b, Vec3 c, Vec3 d, int argb) {
+				Gizmos.rect(a, b, c, d, GizmoStyle.fill(argb));
+			}
+
+			@Override
 			public void label(String text, Vec3 pos, int argb) {
 				Gizmos.billboardText(text, pos, TextGizmo.Style.forColorAndCentered(argb));
 			}
