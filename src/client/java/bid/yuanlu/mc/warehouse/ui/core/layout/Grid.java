@@ -46,7 +46,7 @@ public final class Grid implements Layout {
 			int col = i % columns;
 			int row = i / columns;
 			if (c.width() == UiElement.AUTO && c.height() == UiElement.AUTO) {
-				c.size(cellWidth, cellHeight);
+				c.applySize(cellWidth, cellHeight);
 			}
 			c.pos(col * (cellWidth + gapX), row * (cellHeight + gapY));
 			i++;

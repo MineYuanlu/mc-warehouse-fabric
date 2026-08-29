@@ -37,6 +37,8 @@ public abstract class UiElement<S extends UiElement<S>> {
 	private final List<UiElement<?>> children = new ArrayList<>();
 
 	protected int x, y, width = AUTO, height = AUTO;
+	/** 声明尺寸：使用者显式 size() 的值；布局器写入的生效尺寸不回写这里（见 {@link #applySize}）。 */
+	private int declaredWidth = AUTO, declaredHeight = AUTO;
 	private int absX, absY;
 	private int prefWidth, prefHeight;
 
@@ -118,8 +120,25 @@ public abstract class UiElement<S extends UiElement<S>> {
 	public S size(int width, int height) {
 		this.width = width;
 		this.height = height;
+		this.declaredWidth = width;
+		this.declaredHeight = height;
 		markLayoutDirty();
 		return self();
+	}
+
+	/** 布局器写入生效尺寸（不记为声明值，resetAutoSizes 后会被重新求解）。 */
+	public void applySize(int width, int height) {
+		this.width = width;
+		this.height = height;
+	}
+
+	/** relayout 前调用：把整棵子树的生效尺寸复位为声明值，AUTO 重新测量（文本变化即跟随）。 */
+	public void resetAutoSizes() {
+		width = declaredWidth;
+		height = declaredHeight;
+		for (var c : children) {
+			c.resetAutoSizes();
+		}
 	}
 
 	public int x() {

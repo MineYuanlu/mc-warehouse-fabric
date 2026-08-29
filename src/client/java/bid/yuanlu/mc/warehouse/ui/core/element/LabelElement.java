@@ -96,12 +96,13 @@ public class LabelElement extends UiElement<LabelElement> {
 	@Override
 	protected int onMeasureWidth(UiDraw g) {
 		int w = component != null ? g.textWidthComponent(component) : g.textWidth(display());
-		return Math.round(w * textScale) + padding() * 2;
+		// padding 在绘制时随 pose 缩放（局部 padding*scale），测量必须一致计入
+		return Math.round((w + padding() * 2) * textScale);
 	}
 
 	@Override
 	protected int onMeasureHeight(UiDraw g) {
-		return Math.round(g.lineHeight() * textScale) + padding() * 2;
+		return Math.round((g.lineHeight() + padding() * 2) * textScale);
 	}
 
 	@Override

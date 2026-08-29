@@ -98,4 +98,24 @@ class LayoutTest {
 		assertEquals(UiRoot.SCREEN_MARGIN + 5, inner.absX());
 		assertEquals(300, root.height());
 	}
+
+	@Test
+	void relayoutReMeasuresAfterTextChange() {
+		// 宽度冻结回归：arrange 写回的生效尺寸不得覆盖 AUTO 声明，文本变长背景必须跟随
+		var label = new LabelElement("ab").padding(0); // 12 x 9
+		var root = rootOf(label);
+		assertEquals(12, label.width());
+		label.text("abcdefgh"); // 8 字符 → 48
+		root.update(g, 400, 300, -1, -1); // markLayoutDirty → relayout 重新测量
+		assertEquals(48, label.width());
+	}
+
+	@Test
+	void scaledLabelScalesPaddingToo() {
+		// measure 与 draw 一致：padding 随 pose 缩放，测量需计入 (w+2p)*s
+		var label = new LabelElement("ab").padding(2).scale(2f);
+		rootOf(label);
+		assertEquals((12 + 4) * 2, label.width());
+		assertEquals((9 + 4) * 2, label.height());
+	}
 }

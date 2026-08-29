@@ -23,7 +23,7 @@ public final class Row implements Layout {
 				continue;
 			}
 			if (c.height() == UiElement.AUTO) {
-				c.size(c.width(), contentHeight);
+				c.applySize(c.width(), contentHeight);
 			}
 			int cw = Layout.effectiveWidth(c);
 			c.pos(cursor, 0);

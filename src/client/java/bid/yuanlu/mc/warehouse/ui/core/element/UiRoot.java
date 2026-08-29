@@ -106,6 +106,9 @@ public final class UiRoot extends UiElement<UiRoot> {
 	}
 
 	private void relayoutInner(UiDraw g, int width, int height) {
+		// 复位上轮 arrange 写入的生效尺寸，AUTO 元素重新测量（否则文本变化后宽度冻结）；
+		// 必须在写根尺寸之前（根的声明尺寸是 AUTO，会被复位）
+		resetAutoSizes();
 		this.width = width;
 		this.height = height;
 		if (rootLayout != null) {
@@ -125,12 +128,7 @@ public final class UiRoot extends UiElement<UiRoot> {
 			int cw = c.width() == AUTO ? c.prefWidth() : c.width();
 			cw = Math.max(0, Math.min(cw, width - SCREEN_MARGIN * 2));
 			int ch = c.height() == AUTO ? c.prefHeight() : c.height();
-			if (c.width() != cw) {
-				c.size(cw, c.height());
-			}
-			if (c.height() == AUTO) {
-				c.size(c.width(), ch);
-			}
+			c.applySize(cw, c.height() == AUTO ? ch : c.height());
 			c.arrangePass(g, SCREEN_MARGIN, SCREEN_MARGIN);
 		}
 		layoutDirty = false;

@@ -23,7 +23,7 @@ public final class Column implements Layout {
 				continue;
 			}
 			if (c.width() == UiElement.AUTO) {
-				c.size(contentWidth, c.height());
+				c.applySize(contentWidth, c.height());
 			}
 			int ch = Layout.effectiveHeight(c);
 			c.pos(0, cursor);
