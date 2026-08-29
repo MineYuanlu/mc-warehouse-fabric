@@ -101,7 +101,7 @@ public class LabelElement extends UiElement<LabelElement> {
 			case CENTER -> absX() + width() / 2;
 			case RIGHT -> absX() + width() - padding();
 		};
-		int cy = absY() + (height() - g.lineHeight()) / 2;
+		int cy = Math.max(absY(), absY() + (height() - g.lineHeight()) / 2);
 		if (component != null) {
 			g.textComponent(component, cx, cy, c, shadow, anchor);
 		} else {

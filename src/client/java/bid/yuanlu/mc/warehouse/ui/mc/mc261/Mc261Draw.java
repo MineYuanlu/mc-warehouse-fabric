@@ -52,6 +52,12 @@ public final class Mc261Draw implements UiDraw {
 	}
 
 	@Override
+	public void sprite(String id, int x, int y, int width, int height, int argb) {
+		g.blitSprite(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED,
+				net.minecraft.resources.Identifier.parse(id), x, y, width, height, argb);
+	}
+
+	@Override
 	public void text(String s, int x, int y, int argb, boolean shadow, TextAnchor anchor) {
 		g.text(font, s, anchoredX(x, font.width(s), anchor), y, argb, shadow);
 	}

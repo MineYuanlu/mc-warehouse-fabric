@@ -268,10 +268,21 @@ public abstract class UiElement<S extends UiElement<S>> {
 		}
 	}
 
-	/** measure 遍：求解首选尺寸（自底向上；树小，重复调用无碍）。 */
+	/**
+	 * measure 遍：求解首选尺寸（自底向上；树小，重复调用无碍）。
+	 * <p>
+	 * 无条件递归测量可见子树：自身尺寸固定时 layout 的 measureChildren 不会被
+	 * onMeasure 触达，若不在此兜底，整棵子树的 pref 将保持 0（多行重叠/命中框
+	 * 为 0 的根因）。
+	 */
 	public void measurePass(UiDraw g) {
 		prefWidth = width >= 0 ? width : onMeasureWidth(g);
 		prefHeight = height >= 0 ? height : onMeasureHeight(g);
+		for (var c : children) {
+			if (c.visible()) {
+				c.measurePass(g);
+			}
+		}
 	}
 
 	public int prefWidth() {
@@ -384,7 +395,8 @@ public abstract class UiElement<S extends UiElement<S>> {
 			return;
 		}
 		drawElement(g);
-		if (clipContent && width > 0 && height > 0) {
+		boolean clip = clipContent && width > 0 && height > 0;
+		if (clip) {
 			g.pushClip(absX + padding, absY + padding, absX + width - padding, absY + height - padding);
 		}
 		var sorted = new ArrayList<>(children);
@@ -392,7 +404,7 @@ public abstract class UiElement<S extends UiElement<S>> {
 		for (var c : sorted) {
 			c.extract(g);
 		}
-		if (clipContent) {
+		if (clip) {
 			g.popClip();
 		}
 	}

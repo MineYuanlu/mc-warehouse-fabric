@@ -47,7 +47,9 @@ public final class UiRoot extends UiElement<UiRoot> {
 
 	@Nullable
 	private UiDraw draw;
-	/** 根布局器：null = 居中放置子级（Screen 用），非空 = 委托布局（HUD 用）。 */
+	/** Screen 根子级的统一左上角边距（malilib 式：面板锚定屏幕左上，位置不随页面变化）。 */
+	public static final int SCREEN_MARGIN = 10;
+	/** 根布局器：null = 左上角放置子级（Screen 用），非空 = 委托布局（HUD 用）。 */
 	@Nullable
 	private bid.yuanlu.mc.warehouse.ui.core.layout.Layout rootLayout;
 
@@ -65,7 +67,7 @@ public final class UiRoot extends UiElement<UiRoot> {
 		}
 	}
 
-	/** 设置根布局器（HUD 定角布局用）；null 恢复默认居中。 */
+	/** 设置根布局器（HUD 定角布局用）；null 恢复默认左上角。 */
 	public void setRootLayout(@Nullable bid.yuanlu.mc.warehouse.ui.core.layout.Layout layout) {
 		rootLayout = layout;
 		markDirty();
@@ -120,15 +122,16 @@ public final class UiRoot extends UiElement<UiRoot> {
 		}
 		for (var c : children()) {
 			c.measurePass(g);
-			int cw = c.width() == AUTO ? Math.min(c.prefWidth(), width) : c.width();
+			int cw = c.width() == AUTO ? c.prefWidth() : c.width();
+			cw = Math.max(0, Math.min(cw, width - SCREEN_MARGIN * 2));
 			int ch = c.height() == AUTO ? c.prefHeight() : c.height();
-			if (c.width() == AUTO) {
+			if (c.width() != cw) {
 				c.size(cw, c.height());
 			}
 			if (c.height() == AUTO) {
 				c.size(c.width(), ch);
 			}
-			c.arrangePass(g, (width - cw) / 2, (height - ch) / 2);
+			c.arrangePass(g, SCREEN_MARGIN, SCREEN_MARGIN);
 		}
 		layoutDirty = false;
 	}

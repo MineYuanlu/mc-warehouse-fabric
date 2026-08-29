@@ -58,7 +58,7 @@ public final class WarehouseScreens {
 
 		UiRoot build() {
 			var root = new UiRoot();
-			var panel = new PanelElement().padding(10).layout(new Column(6)).size(460, -1);
+			var panel = new PanelElement().padding(10).layout(new Column(6)).size(400, -1);
 			panel.add(header(root));
 			panel.add(tab == 0 ? warehousesTab(root) : engineTab(root));
 			root.add(panel);
@@ -68,7 +68,7 @@ public final class WarehouseScreens {
 		// ---- 头部页签（互斥按钮 + accent 指示，UI-PDD §9 规范 1）----
 
 		private PanelElement header(UiRoot root) {
-			var row = new PanelElement().padding(2).layout(new Row(4));
+			var row = PanelElement.plain().padding(2).layout(new Row(4));
 			row.add(tabButton(root, "ui.wh.main.tab.warehouse", 0));
 			row.add(tabButton(root, "ui.wh.main.tab.engine", 1));
 			row.add(new ButtonElement(Component.translatable("ui.wh.main.tab.rules"))
@@ -95,7 +95,7 @@ public final class WarehouseScreens {
 		private void refresh(UiRoot root) {
 			Modal.close();
 			root.clearChildren();
-			var panel = new PanelElement().padding(10).layout(new Column(6)).size(460, -1);
+			var panel = new PanelElement().padding(10).layout(new Column(6)).size(400, -1);
 			panel.add(header(root));
 			panel.add(tab == 0 ? warehousesTab(root) : engineTab(root));
 			root.add(panel);
@@ -105,16 +105,16 @@ public final class WarehouseScreens {
 
 		private PanelElement warehousesTab(UiRoot root) {
 			var mgr = WarehouseManagerImpl.get();
-			var body = new PanelElement().padding(2).layout(new Column(6));
+			var body = PanelElement.plain().padding(2).layout(new Column(6));
 
 			// 仓库列表 + 详情侧栏
-			var columns = new PanelElement().padding(2).layout(new Row(6));
+			var columns = PanelElement.plain().padding(2).layout(new Row(6));
 			columns.add(warehouseList(root, mgr));
 			columns.add(detailPanel(root, mgr));
 			body.add(columns);
 
 			// 新建行
-			var createRow = new PanelElement().padding(2).layout(new Row(4));
+			var createRow = PanelElement.plain().padding(2).layout(new Row(4));
 			var nameField = new TextFieldElement("").maxLength(24);
 			nameField.size(160, -1);
 			createRow.add(nameField);
@@ -139,7 +139,7 @@ public final class WarehouseScreens {
 		}
 
 		private PanelElement warehouseList(UiRoot root, WarehouseManagerImpl mgr) {
-			var list = new PanelElement().padding(4).id("wh-list").clipContent(true).size(180, 180);
+			var list = new PanelElement().padding(4).id("wh-list").clipContent(true).size(170, 180);
 			list.layout(new Column(2));
 			var active = mgr.active();
 			for (Warehouse wh : mgr.list()) {
@@ -167,7 +167,7 @@ public final class WarehouseScreens {
 		}
 
 		private PanelElement detailPanel(UiRoot root, WarehouseManagerImpl mgr) {
-			var detail = new PanelElement().padding(4).id("wh-detail").clipContent(true).size(220, 180);
+			var detail = new PanelElement().padding(4).id("wh-detail").clipContent(true).size(200, 180);
 			detail.layout(new Column(2));
 			Warehouse wh = selectedId == null ? null : mgr.get(selectedId);
 			if (wh == null) {
@@ -176,7 +176,7 @@ public final class WarehouseScreens {
 				return detail;
 			}
 			detail.add(new LabelElement(Component.literal(wh.id)).color(Theme.active().textAccent()));
-			var ops = new PanelElement().padding(2).layout(new Row(4));
+			var ops = PanelElement.plain().padding(2).layout(new Row(4));
 			var active = mgr.active();
 			var useBtn = new ButtonElement(Component.translatable("ui.wh.main.use"))
 					.semantic(ButtonElement.Semantic.SUCCESS)
@@ -256,7 +256,7 @@ public final class WarehouseScreens {
 
 			// 规则绑定：全局/仓库规则 id 循环选择 + 加/解
 			List<String> ruleIds = new ArrayList<>(wh.rules.keySet());
-			var ruleRow = new PanelElement().padding(2).layout(new Row(4));
+			var ruleRow = PanelElement.plain().padding(2).layout(new Row(4));
 			if (!ruleIds.isEmpty()) {
 				CycleSelector<String> ruleSel = new CycleSelector<>(ruleIds,
 						id -> Component.translatable("ui.wh.main.container.rule", id), 0, id -> {
@@ -276,7 +276,7 @@ public final class WarehouseScreens {
 			}
 			dialog.add(ruleRow);
 
-			var actions = new PanelElement().padding(2).layout(new Row(4));
+			var actions = PanelElement.plain().padding(2).layout(new Row(4));
 			actions.add(new ButtonElement(Component.translatable("ui.wh.main.container.memory.clear"))
 					.onClick(() -> clearMemory(c.canonicalPos())));
 			actions.add(new ButtonElement(Component.translatable("ui.wh.modal.done"))
@@ -301,11 +301,11 @@ public final class WarehouseScreens {
 		// ---- 页签 B：引擎 ----
 
 		private PanelElement engineTab(UiRoot root) {
-			var body = new PanelElement().padding(2).layout(new Column(6));
+			var body = PanelElement.plain().padding(2).layout(new Column(6));
 			var presenter = HudPresenter.get();
 
 			// 状态卡（复用 Presenter 的 Value，跨 UI 持续显示的样板）
-			var status = new PanelElement().padding(4).layout(new Column(2));
+			var status = PanelElement.plain().padding(4).layout(new Column(2));
 			status.add(new LabelElement(Component.empty()).bindComponent(compValue(presenter, 0)));
 			status.add(new LabelElement(Component.empty()).bindComponent(compValue(presenter, 1)));
 			status.add(new LabelElement(Component.empty()).bindComponent(compValue(presenter, 2)));
@@ -315,7 +315,7 @@ public final class WarehouseScreens {
 			var engine = WarehouseServices.transportEngine();
 			boolean running = engine != null && engine.isRunning();
 			boolean suspended = engine != null && engine.state() == bid.yuanlu.mc.warehouse.api.transport.TransportState.SUSPENDED;
-			var controls = new PanelElement().padding(2).layout(new Row(4));
+			var controls = PanelElement.plain().padding(2).layout(new Row(4));
 			controls.add(engineButton("ui.wh.engine.start", !running, () -> engine.start()));
 			controls.add(engineButton("ui.wh.engine.stop", running, () -> engine.stop()));
 			controls.add(engineButton("ui.wh.engine.continue", suspended, () -> engine.continueRun()));
@@ -324,9 +324,9 @@ public final class WarehouseScreens {
 			body.add(controls);
 
 			// 跨仓库搬运
-			var transfer = new PanelElement().padding(4).layout(new Column(4));
+			var transfer = PanelElement.plain().padding(4).layout(new Column(4));
 			transfer.add(new LabelElement(Component.translatable("ui.wh.engine.transfer")));
-			var picks = new PanelElement().padding(2).layout(new Row(4));
+			var picks = PanelElement.plain().padding(2).layout(new Row(4));
 			List<Warehouse> warehouses = WarehouseManagerImpl.get().list();
 			if (warehouses.size() >= 2) {
 				List<String> ids = warehouses.stream().map(w -> w.id).toList();
@@ -377,7 +377,8 @@ public final class WarehouseScreens {
 				protected void onTick() {
 					size(root.width(), root.height());
 				}
-			}.colors(theme.overlayScrim(), theme.overlayScrim(), theme.overlayScrim(), theme.overlayScrim());
+			}.filled(true).bordered(false)
+					.colors(theme.overlayScrim(), theme.overlayScrim(), theme.overlayScrim(), theme.overlayScrim());
 			scrim.zIndex(100).size(root.width(), root.height()).id("modal-scrim");
 			scrim.onClick(() -> {
 			});

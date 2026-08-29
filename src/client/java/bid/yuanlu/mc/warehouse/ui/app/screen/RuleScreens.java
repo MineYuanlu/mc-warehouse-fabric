@@ -36,10 +36,10 @@ public final class RuleScreens {
 
 	public static UiRoot create() {
 		var root = new UiRoot();
-		var panel = new PanelElement().padding(10).layout(new Column(6)).size(420, -1);
+		var panel = new PanelElement().padding(10).layout(new Column(6)).size(400, -1);
 		panel.add(new LabelElement(Component.translatable("ui.wh.rule.title")));
 		panel.add(body(root));
-		var actions = new PanelElement().padding(2).layout(new Row(4));
+		var actions = PanelElement.plain().padding(2).layout(new Row(4));
 		actions.add(new ButtonElement(Component.translatable("ui.wh.modal.cancel"))
 				.onClick(UiPlatform::closeScreen));
 		panel.add(actions);
@@ -57,7 +57,7 @@ public final class RuleScreens {
 
 	private static PanelElement body(UiRoot root) {
 		Warehouse wh = activeWarehouse();
-		var body = new PanelElement().padding(2).layout(new Column(4));
+		var body = PanelElement.plain().padding(2).layout(new Column(4));
 		if (wh == null) {
 			body.add(new LabelElement(Component.translatable("ui.wh.rule.no_active"))
 					.color(Theme.active().textMuted()));
@@ -65,7 +65,7 @@ public final class RuleScreens {
 		}
 
 		// 新建规则
-		var createRow = new PanelElement().padding(2).layout(new Row(4));
+		var createRow = PanelElement.plain().padding(2).layout(new Row(4));
 		var idField = new TextFieldElement("").maxLength(32);
 		idField.size(160, -1);
 		createRow.add(idField);
@@ -84,7 +84,7 @@ public final class RuleScreens {
 		// 规则列表（选中 → 条目编辑）
 		for (ContainerRule rule : wh.rules.values()) {
 			long refs = wh.containers.stream().filter(c -> c.rules.contains(rule.id)).count();
-			var row = new PanelElement().padding(2).layout(new Row(4));
+			var row = PanelElement.plain().padding(2).layout(new Row(4));
 			row.add(new LabelElement(Component.translatable("ui.wh.rule.entry",
 					rule.id, rule.itemRules.size(), refs)).padding(1));
 			var del = new ButtonElement(Component.translatable("ui.wh.main.remove"))
@@ -108,9 +108,9 @@ public final class RuleScreens {
 
 	/** 选中规则的条目编辑（展开式：非空规则显示条目列表 + 添加框）。 */
 	private static PanelElement entryEditor(ContainerRule rule) {
-		var box = new PanelElement().padding(4).layout(new Column(2));
+		var box = PanelElement.plain().padding(4).layout(new Column(2));
 		box.classes("rule-editor");
-		var addRow = new PanelElement().padding(2).layout(new Row(4));
+		var addRow = PanelElement.plain().padding(2).layout(new Row(4));
 		var tailField = new TextFieldElement("").maxLength(256);
 		tailField.size(220, -1);
 		tailField.tooltip(() -> List.of(Component.translatable("ui.wh.rule.tail.tip")));
@@ -134,7 +134,7 @@ public final class RuleScreens {
 
 		int index = 1;
 		for (var item : rule.itemRules) {
-			var line = new PanelElement().padding(1).layout(new Row(4));
+			var line = PanelElement.plain().padding(1).layout(new Row(4));
 			String desc = item.selector.getClass().getSimpleName()
 					+ (item.negative ? " !" : "")
 					+ (item.isUnlimited() ? "" : " ×" + item.quantity);

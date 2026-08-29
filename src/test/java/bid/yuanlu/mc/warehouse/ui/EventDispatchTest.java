@@ -20,7 +20,7 @@ import bid.yuanlu.mc.warehouse.ui.core.layout.Column;
 
 /**
  * L1 事件系统（UI-PDD §3.2）：三阶段派发、consume 断链、CLICK/DOUBLE_CLICK 合成、焦点。
- * 注意：根把 100x100 的 panel 居中到 (150,100)-(250,200)，按钮 a 在 (150,100)、b 在 (150,120)。
+ * 注意：根把 100x100 的 panel 锚定左上 SCREEN_MARGIN(10,10)-(110,110)，按钮 a 在 (10,10)、b 在 (10,30)。
  */
 class EventDispatchTest {
 
@@ -40,7 +40,7 @@ class EventDispatchTest {
 		var button = new ButtonElement("ok").padding(0).size(100, 20);
 		panel.add(button);
 		var root = rootOf(panel);
-		root.update(g, 400, 300, 200, 110); // hover 命中 button（abs 150,100）
+		root.update(g, 400, 300, 60, 20); // hover 命中 button（abs 10,10）
 
 		var order = new ArrayList<String>();
 		root.on(UiEvent.Type.CLICK, e -> order.add("root-bubble"), false);
@@ -49,8 +49,8 @@ class EventDispatchTest {
 		panel.on(UiEvent.Type.CLICK, e -> order.add("panel-capture"), true);
 		button.on(UiEvent.Type.CLICK, e -> order.add("button-target"), false);
 
-		assertTrue(root.mouseDown(200, 110, 0));
-		assertTrue(root.mouseUp(200, 110, 0));
+		assertTrue(root.mouseDown(60, 20, 0));
+		assertTrue(root.mouseUp(60, 20, 0));
 		assertEquals(List.of("root-capture", "panel-capture", "button-target", "panel-bubble", "root-bubble"), order);
 	}
 
@@ -60,7 +60,7 @@ class EventDispatchTest {
 		var button = new ButtonElement("ok").padding(0).size(100, 20);
 		panel.add(button);
 		var root = rootOf(panel);
-		root.update(g, 400, 300, 200, 110);
+		root.update(g, 400, 300, 60, 20);
 
 		var hits = new ArrayList<String>();
 		button.on(UiEvent.Type.CLICK, e -> {
@@ -70,8 +70,8 @@ class EventDispatchTest {
 		panel.on(UiEvent.Type.CLICK, e -> hits.add("panel"), false);
 		root.on(UiEvent.Type.CLICK, e -> hits.add("root"), false);
 
-		root.mouseDown(200, 110, 0);
-		root.mouseUp(200, 110, 0);
+		root.mouseDown(60, 20, 0);
+		root.mouseUp(60, 20, 0);
 		assertEquals(List.of("button"), hits);
 	}
 
@@ -83,7 +83,7 @@ class EventDispatchTest {
 		panel.add(a);
 		panel.add(b);
 		var root = rootOf(panel);
-		root.update(g, 400, 300, 200, 110);
+		root.update(g, 400, 300, 60, 20);
 
 		var clicks = new ArrayList<String>();
 		a.onClick(() -> clicks.add("a"));
@@ -91,12 +91,12 @@ class EventDispatchTest {
 		panel.onClick(() -> clicks.add("panel"));
 
 		// 按下 a，移到 b 上松开 → 不合成 click
-		root.mouseDown(200, 110, 0);
-		root.mouseUp(200, 130, 0);
+		root.mouseDown(60, 20, 0);
+		root.mouseUp(60, 40, 0);
 		assertEquals(List.of(), clicks);
 		// 原位按下松开 → click（onClick 自动消费，不冒泡到 panel）
-		root.mouseDown(200, 110, 0);
-		root.mouseUp(200, 110, 0);
+		root.mouseDown(60, 20, 0);
+		root.mouseUp(60, 20, 0);
 		assertEquals(List.of("a"), clicks);
 	}
 
@@ -106,20 +106,20 @@ class EventDispatchTest {
 		var a = new ButtonElement("a").padding(0).size(100, 20);
 		panel.add(a);
 		var root = rootOf(panel);
-		root.update(g, 400, 300, 200, 110);
+		root.update(g, 400, 300, 60, 20);
 
 		var dbl = new ArrayList<Boolean>();
 		a.on(UiEvent.Type.DOUBLE_CLICK, e -> dbl.add(true));
-		root.mouseDown(200, 110, 0);
-		root.mouseUp(200, 110, 0);
+		root.mouseDown(60, 20, 0);
+		root.mouseUp(60, 20, 0);
 		nowMs += 100; // 窗口内
-		root.mouseDown(200, 110, 0);
-		root.mouseUp(200, 110, 0);
+		root.mouseDown(60, 20, 0);
+		root.mouseUp(60, 20, 0);
 		assertEquals(1, dbl.size());
 
 		nowMs += 1000; // 窗口外
-		root.mouseDown(200, 110, 0);
-		root.mouseUp(200, 110, 0);
+		root.mouseDown(60, 20, 0);
+		root.mouseUp(60, 20, 0);
 		assertEquals(1, dbl.size());
 	}
 
@@ -130,11 +130,11 @@ class EventDispatchTest {
 		panel.add(a);
 		var root = rootOf(panel);
 
-		root.update(g, 400, 300, 200, 110);
+		root.update(g, 400, 300, 60, 20);
 		assertTrue(a.hovered());
 		assertEquals(a, root.hover());
 
-		root.update(g, 400, 300, 200, 150); // 移到 button 之外 → hover 落在 panel 容器上
+		root.update(g, 400, 300, 60, 80); // 移到 button 之外 → hover 落在 panel 容器上
 		assertFalse(a.hovered());
 		assertEquals(panel, root.hover());
 	}

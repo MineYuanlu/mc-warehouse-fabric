@@ -18,6 +18,13 @@ public interface UiDraw {
 
 	void outline(int x, int y, int width, int height, int argb);
 
+	/**
+	 * 原版 GUI sprite 绘制（如 {@code "minecraft:widget/button"}）。
+	 * L1 用中立字符串定位（不依赖 net.minecraft 资源类），L2 负责 parse 与 nine-slice 拉伸。
+	 * argb 为乘法着色（0xFFFFFFFF = 原色）。
+	 */
+	void sprite(String id, int x, int y, int width, int height, int argb);
+
 	void text(String s, int x, int y, int argb, boolean shadow, TextAnchor anchor);
 
 	void textComponent(Component c, int x, int y, int argb, boolean shadow, TextAnchor anchor);

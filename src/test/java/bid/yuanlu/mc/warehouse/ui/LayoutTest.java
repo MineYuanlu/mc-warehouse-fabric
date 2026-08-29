@@ -27,15 +27,15 @@ class LayoutTest {
 
 	@Test
 	void columnAutoHeightSumsChildren() {
-		// 标签 "ab"：宽 2*6+2*2(padding)=16，高 9+4=13；按钮 "xy"：宽 2*6+4*4=28，高 9+8=17
+		// 标签 "ab"：宽 2*6+2*2(padding)=16，高 9+4=13；按钮 "xy"：原版高 20，宽 2*6+2*4+16=36
 		var panel = new PanelElement().padding(2).layout(new Column(3));
 		panel.add(new LabelElement("ab").padding(2));
 		panel.add(new ButtonElement("xy").padding(4));
 		rootOf(panel);
-		// 容器高 = 13 + 3 + 17 + 2*2(padding)
-		assertEquals(13 + 3 + 17 + 4, panel.height());
-		// 容器宽 = max(16,28) + 4
-		assertEquals(28 + 4, panel.width());
+		// 容器高 = 13 + 3 + 20 + 2*2(padding)
+		assertEquals(13 + 3 + ButtonElement.VANILLA_HEIGHT + 4, panel.height());
+		// 容器宽 = max(16,36) + 4
+		assertEquals(36 + 4, panel.width());
 		// 子级纵向排布（相对内容区）
 		assertEquals(0, panel.children().get(0).y());
 		assertEquals(13 + 3, panel.children().get(1).y());
@@ -66,11 +66,11 @@ class LayoutTest {
 	}
 
 	@Test
-	void rootCentersContent() {
+	void rootAnchorsTopLeft() {
 		var label = new LabelElement("abcd").padding(0); // 24 x 9
 		var root = rootOf(label);
-		assertEquals((400 - 24) / 2, label.absX());
-		assertEquals((300 - 9) / 2, label.absY());
+		assertEquals(UiRoot.SCREEN_MARGIN, label.absX());
+		assertEquals(UiRoot.SCREEN_MARGIN, label.absY());
 		assertEquals(400, root.width());
 	}
 
@@ -94,8 +94,8 @@ class LayoutTest {
 		inner.add(new LabelElement("x").padding(0)); // 6 x 9
 		outer.add(inner);
 				var root = rootOf(outer);
-		// outer 居中：absX = (400-100)/2；inner 位于 outer 内容区 (absX+5, absY+5)
-		assertEquals((400 - 100) / 2 + 5, inner.absX());
+		// outer 锚定左上：absX = SCREEN_MARGIN；inner 位于 outer 内容区 (absX+5, absY+5)
+		assertEquals(UiRoot.SCREEN_MARGIN + 5, inner.absX());
 		assertEquals(300, root.height());
 	}
 }

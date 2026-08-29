@@ -5,12 +5,17 @@ import net.minecraft.network.chat.Component;
 import bid.yuanlu.mc.warehouse.ui.core.bind.Value;
 import bid.yuanlu.mc.warehouse.ui.core.draw.TextAnchor;
 import bid.yuanlu.mc.warehouse.ui.core.draw.UiDraw;
-import bid.yuanlu.mc.warehouse.ui.core.theme.Theme;
 
 /**
- * 复选框（方块勾选 + 标签）：点击切换，可绑定 {@link Value<Boolean>}。
+ * 复选框（原版风格）：widget/checkbox 系列 sprite（boxSize = 行高+8，与原版
+ * Checkbox 一致），点击切换，可绑定 {@link Value<Boolean>}。
  */
 public class CheckboxElement extends UiElement<CheckboxElement> {
+
+	private static final String SPRITE_CHECKED = "minecraft:widget/checkbox_selected";
+	private static final String SPRITE_CHECKED_HL = "minecraft:widget/checkbox_selected_highlighted";
+	private static final String SPRITE_UNCHECKED = "minecraft:widget/checkbox";
+	private static final String SPRITE_UNCHECKED_HL = "minecraft:widget/checkbox_highlighted";
 
 	private final Component label;
 	private boolean checked;
@@ -47,27 +52,30 @@ public class CheckboxElement extends UiElement<CheckboxElement> {
 		return this;
 	}
 
+	private int boxSize(UiDraw g) {
+		return g.lineHeight() + 8;
+	}
+
 	@Override
 	protected int onMeasureWidth(UiDraw g) {
-		return 10 + 3 + g.textWidthComponent(label) + padding() * 2;
+		return boxSize(g) + 4 + g.textWidthComponent(label) + padding() * 2;
 	}
 
 	@Override
 	protected int onMeasureHeight(UiDraw g) {
-		return Math.max(10, g.lineHeight()) + padding() * 2;
+		return Math.max(boxSize(g), g.lineHeight()) + padding() * 2;
 	}
 
 	@Override
 	protected void drawElement(UiDraw g) {
-		var t = Theme.active();
-		int box = absX();
-		int by = absY() + (height() - 10) / 2;
-		g.fill(box, by, box + 10, by + 10, checked ? t.accent() : 0xFF20242B);
-		g.outline(box, by, 10, 10, hovered() ? t.accentHover() : t.border());
-		if (checked) {
-			g.fill(box + 2, by + 2, box + 8, by + 8, 0xFFFFFFFF);
-		}
-		g.textComponent(label, box + 13, absY() + (height() - g.lineHeight()) / 2,
-				enabled() ? t.textPrimary() : t.textMuted(), true, TextAnchor.LEFT);
+		int box = boxSize(g);
+		int bx = absX();
+		int by = absY() + (height() - box) / 2;
+		boolean hl = hovered() || focused();
+		g.sprite(checked ? (hl ? SPRITE_CHECKED_HL : SPRITE_CHECKED)
+				: (hl ? SPRITE_UNCHECKED_HL : SPRITE_UNCHECKED),
+				bx, by, box, box, 0xFFFFFFFF);
+		g.textComponent(label, bx + box + 4, absY() + (height() - g.lineHeight()) / 2,
+				enabled() ? 0xFFFFFFFF : 0xFFA0A0A0, true, TextAnchor.LEFT);
 	}
 }

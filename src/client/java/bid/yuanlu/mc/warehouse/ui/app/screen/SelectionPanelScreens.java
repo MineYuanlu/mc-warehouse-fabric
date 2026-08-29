@@ -42,7 +42,7 @@ public final class SelectionPanelScreens {
 
 	public static UiRoot create() {
 		var root = new UiRoot();
-		var panel = new PanelElement().padding(10).layout(new Column(6)).size(360, -1);
+		var panel = new PanelElement().padding(10).layout(new Column(6)).size(400, -1);
 		panel.add(new LabelElement(Component.translatable("ui.wh.select.title")));
 
 		SelectionState sel = SelectionState.get();
@@ -50,7 +50,7 @@ public final class SelectionPanelScreens {
 		WorldDimPos p2 = sel.pos2();
 
 		// 选区信息
-		var info = new PanelElement().padding(4).layout(new Column(2));
+		var info = PanelElement.plain().padding(4).layout(new Column(2));
 		if (p1 == null && p2 == null) {
 			info.add(new LabelElement(Component.translatable("ui.wh.select.empty"))
 					.color(Theme.active().textMuted()));
@@ -72,7 +72,7 @@ public final class SelectionPanelScreens {
 		boolean ready = wh != null && sel.hasBox();
 		panel.add(batchRows(root, wh, sel, ready));
 
-		var actions = new PanelElement().padding(2).layout(new Row(4));
+		var actions = PanelElement.plain().padding(2).layout(new Row(4));
 		actions.add(new ButtonElement(Component.translatable("ui.wh.select.clear"))
 				.onClick(() -> {
 					SelectionState.get().clear();
@@ -87,7 +87,7 @@ public final class SelectionPanelScreens {
 
 	private static PanelElement batchRows(UiRoot root, @Nullable Warehouse wh,
 			SelectionState sel, boolean ready) {
-		var body = new PanelElement().padding(2).layout(new Column(4));
+		var body = PanelElement.plain().padding(2).layout(new Column(4));
 		if (!ready) {
 			body.add(new LabelElement(Component.translatable("ui.wh.select.need_active_box"))
 					.color(Theme.active().textMuted()));
@@ -95,7 +95,7 @@ public final class SelectionPanelScreens {
 		}
 
 		// 批量改 IOType
-		var typeRow = new PanelElement().padding(2).layout(new Row(4));
+		var typeRow = PanelElement.plain().padding(2).layout(new Row(4));
 		List<IOType> types = List.of(IOType.values());
 		CycleSelector<IOType> typeSel = new CycleSelector<>(types,
 				t -> Component.translatable("ui.wh.main.container.type", t.name()), 0, t -> {
@@ -110,7 +110,7 @@ public final class SelectionPanelScreens {
 		// 批量绑规则
 		List<String> ruleIds = new ArrayList<>(wh.rules.keySet());
 		if (!ruleIds.isEmpty()) {
-			var ruleRow = new PanelElement().padding(2).layout(new Row(4));
+			var ruleRow = PanelElement.plain().padding(2).layout(new Row(4));
 			CycleSelector<String> ruleSel = new CycleSelector<>(ruleIds,
 					id -> Component.translatable("ui.wh.main.container.rule", id), 0, id -> {
 					});
@@ -131,7 +131,7 @@ public final class SelectionPanelScreens {
 		}
 
 		// 批量改缓存类型
-		var cacheRow = new PanelElement().padding(2).layout(new Row(4));
+		var cacheRow = PanelElement.plain().padding(2).layout(new Row(4));
 		List<CacheType> caches = List.of(CacheType.NONE, CacheType.MEMORY, CacheType.DISK);
 		CycleSelector<CacheType> cacheSel = new CycleSelector<>(caches,
 				ct -> Component.translatable("ui.wh.main.container.cache", ct.name()), 0, ct -> {

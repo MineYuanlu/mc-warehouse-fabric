@@ -3,14 +3,16 @@ package bid.yuanlu.mc.warehouse.ui.core.element;
 import bid.yuanlu.mc.warehouse.ui.core.draw.TextAnchor;
 import bid.yuanlu.mc.warehouse.ui.core.draw.UiDraw;
 import bid.yuanlu.mc.warehouse.ui.core.event.UiEvent;
-import bid.yuanlu.mc.warehouse.ui.core.theme.Theme;
 import org.lwjgl.glfw.GLFW;
 
 /**
- * 单行文本框（M3）：点击聚焦 → 键盘输入追加/退格删除；焦点外点击失焦。
- * 闪烁光标经 partialTick + tickCounter 合成（tick 级缓存纪律）。
+ * 单行文本框（原版风格，M3）：widget/text_field sprite 两态（聚焦高亮），
+ * 文字内边距与原版 EditBox 一致（4px）；点击聚焦 → 键盘输入追加/退格删除。
  */
 public class TextFieldElement extends UiElement<TextFieldElement> {
+
+	private static final String SPRITE_NORMAL = "minecraft:widget/text_field";
+	private static final String SPRITE_FOCUSED = "minecraft:widget/text_field_highlighted";
 
 	private final StringBuilder text = new StringBuilder();
 	private Runnable onChange = () -> {
@@ -77,25 +79,24 @@ public class TextFieldElement extends UiElement<TextFieldElement> {
 
 	@Override
 	protected int onMeasureHeight(UiDraw g) {
-		return g.lineHeight() + padding() * 2 + 2;
+		return ButtonElement.VANILLA_HEIGHT;
 	}
 
 	@Override
 	protected void drawElement(UiDraw g) {
-		var t = Theme.active();
-		g.fill(absX(), absY(), absX() + width(), absY() + height(),
-				focused() ? 0xFF101317 : 0xFF0C0E11);
-		g.outline(absX(), absY(), width(), height(), focused() ? t.accent() : t.border());
+		g.sprite(focused() ? SPRITE_FOCUSED : SPRITE_NORMAL, absX(), absY(), width(), height(), 0xFFFFFFFF);
+		// 原版 EditBox 有边框时文字内缩 4px
+		int inset = 4;
 		int ty = absY() + (height() - g.lineHeight()) / 2;
 		String s = text.toString();
 		// 简单截断：超宽从尾部省略
-		while (s.length() > 1 && g.textWidth(s) > width() - padding() * 2 - 2) {
+		while (s.length() > 1 && g.textWidth(s) > width() - inset * 2) {
 			s = s.substring(0, s.length() - 1);
 		}
-		g.text(s, absX() + padding(), ty, t.textPrimary(), false, TextAnchor.LEFT);
+		g.text(s, absX() + inset, ty, enabled() ? 0xFFFFFFFF : 0xFFA0A0A0, false, TextAnchor.LEFT);
 		if (focused() && (((g.tickCounter() / 10) % 2) == 0)) {
-			int cx = absX() + padding() + g.textWidth(s);
-			g.fill(cx, ty - 1, cx + 1, ty + g.lineHeight() + 1, t.textPrimary());
+			int cx = absX() + inset + g.textWidth(s);
+			g.fill(cx, ty - 1, cx + 1, ty + g.lineHeight() + 1, 0xFFFFFFFF);
 		}
 	}
 

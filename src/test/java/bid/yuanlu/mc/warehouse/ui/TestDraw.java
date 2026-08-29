@@ -27,6 +27,10 @@ public final class TestDraw implements UiDraw {
 	}
 
 	@Override
+	public void sprite(String id, int x, int y, int width, int height, int argb) {
+	}
+
+	@Override
 	public void text(String s, int x, int y, int argb, boolean shadow, TextAnchor anchor) {
 	}
 
