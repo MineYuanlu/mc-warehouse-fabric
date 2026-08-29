@@ -162,6 +162,7 @@
   "ui.wh.hud.settings.down": "v",
   "ui.wh.hud.settings.done": "Done",
   "ui.wh.hud.settings.cancel": "Cancel",
+"ui.wh.modal.back": "Back",
   "ui.wh.modal.confirm": "Confirm",
   "ui.wh.modal.cancel": "Cancel",
   "ui.wh.modal.done": "Save",

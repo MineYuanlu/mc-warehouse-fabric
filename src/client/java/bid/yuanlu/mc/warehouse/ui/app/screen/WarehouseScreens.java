@@ -43,11 +43,20 @@ public final class WarehouseScreens {
 	}
 
 	public static void open() {
-		UiPlatform.openScreen(WarehouseScreens::create);
+		open(0);
+	}
+
+	/** 打开主屏并定位页签（0=仓库 1=引擎），供 ScreenHeader 导航。 */
+	public static void open(int tab) {
+		UiPlatform.openScreen(() -> create(tab));
 	}
 
 	public static UiRoot create() {
-		var state = new State();
+		return create(0);
+	}
+
+	public static UiRoot create(int initialTab) {
+		var state = new State(initialTab);
 		return state.build();
 	}
 
@@ -56,47 +65,30 @@ public final class WarehouseScreens {
 		String selectedId;
 		int tab;
 
+		State(int tab) {
+			this.tab = tab;
+		}
+
 		UiRoot build() {
 			var root = new UiRoot();
 			var panel = new PanelElement().padding(10).layout(new Column(6)).size(400, -1);
-			panel.add(header(root));
+			panel.add(header());
 			panel.add(tab == 0 ? warehousesTab(root) : engineTab(root));
 			root.add(panel);
 			return root;
 		}
 
-		// ---- 头部页签（互斥按钮 + accent 指示，UI-PDD §9 规范 1）----
+		// ---- 头部页签（共享导航，UI-PDD §5.1 UX 决策）----
 
-		private PanelElement header(UiRoot root) {
-			var row = PanelElement.plain().padding(2).layout(new Row(4));
-			row.add(tabButton(root, "ui.wh.main.tab.warehouse", 0));
-			row.add(tabButton(root, "ui.wh.main.tab.engine", 1));
-			row.add(new ButtonElement(Component.translatable("ui.wh.main.tab.rules"))
-					.onClick(bid.yuanlu.mc.warehouse.ui.app.screen.RuleScreens::open));
-			row.add(new ButtonElement(Component.translatable("ui.wh.main.tab.select"))
-					.onClick(bid.yuanlu.mc.warehouse.ui.app.screen.SelectionPanelScreens::open));
-			row.add(new ButtonElement(Component.translatable("ui.wh.main.tab.hudsettings"))
-					.onClick(bid.yuanlu.mc.warehouse.ui.app.screen.HudSettingsScreens::open));
-			return row;
-		}
-
-		private ButtonElement tabButton(UiRoot root, String key, int index) {
-			var b = new ButtonElement(Component.translatable(key)).onClick(() -> {
-				tab = index;
-				refresh(root);
-			});
-			// 激活页签用 hover 色高亮（按钮底色由 ButtonElement 绘制，这里附加前缀）
-			if (tab == index) {
-				b.label(Component.literal("▸ ").append(Component.translatable(key)));
-			}
-			return b;
+		private PanelElement header() {
+			return ScreenHeader.create(tab == 0 ? ScreenHeader.Page.WAREHOUSE : ScreenHeader.Page.ENGINE);
 		}
 
 		private void refresh(UiRoot root) {
 			Modal.close();
 			root.clearChildren();
 			var panel = new PanelElement().padding(10).layout(new Column(6)).size(400, -1);
-			panel.add(header(root));
+			panel.add(header());
 			panel.add(tab == 0 ? warehousesTab(root) : engineTab(root));
 			root.add(panel);
 		}

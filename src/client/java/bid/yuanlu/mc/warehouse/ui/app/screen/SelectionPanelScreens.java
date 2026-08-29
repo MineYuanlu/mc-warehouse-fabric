@@ -43,6 +43,7 @@ public final class SelectionPanelScreens {
 	public static UiRoot create() {
 		var root = new UiRoot();
 		var panel = new PanelElement().padding(10).layout(new Column(6)).size(400, -1);
+		panel.add(ScreenHeader.create(ScreenHeader.Page.SELECTION));
 		panel.add(new LabelElement(Component.translatable("ui.wh.select.title")));
 
 		SelectionState sel = SelectionState.get();
@@ -78,8 +79,8 @@ public final class SelectionPanelScreens {
 					SelectionState.get().clear();
 					UiPlatform.openScreen(SelectionPanelScreens::create); // 重建刷新
 				}));
-		actions.add(new ButtonElement(Component.translatable("ui.wh.modal.cancel"))
-				.onClick(UiPlatform::closeScreen));
+		actions.add(new ButtonElement(Component.translatable("ui.wh.modal.back"))
+				.onClick(ScreenHeader::backToMain));
 		panel.add(actions);
 		root.add(panel);
 		return root;

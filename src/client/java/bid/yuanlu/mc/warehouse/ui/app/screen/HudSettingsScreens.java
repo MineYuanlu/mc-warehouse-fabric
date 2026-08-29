@@ -36,7 +36,8 @@ public final class HudSettingsScreens {
 		working.copyFrom(bid.yuanlu.mc.warehouse.ui.app.hud.HudConfig.get());
 
 		var root = new UiRoot();
-		var panel = new PanelElement().padding(8).layout(new Column(6)).size(420, -1);
+		var panel = new PanelElement().padding(8).layout(new Column(6)).size(400, -1);
+		panel.add(ScreenHeader.create(ScreenHeader.Page.HUD_SETTINGS));
 		panel.add(new LabelElement(Component.translatable("ui.wh.hud.settings.title")));
 
 		// 画布：可拖拽的区块芯片（拖拽 = 角落吸附 + 偏移）
@@ -61,15 +62,15 @@ public final class HudSettingsScreens {
 			panel.add(line);
 		}
 
-		var buttons = new PanelElement().padding(2).layout(new Row(6));
+		var buttons = PanelElement.plain().padding(2).layout(new Row(6));
 		buttons.add(new ButtonElement(Component.translatable("ui.wh.hud.settings.done"))
 				.onClick(() -> {
 					bid.yuanlu.mc.warehouse.ui.app.hud.HudConfig.save(working);
 					UiPlatform.resetHud("hud");
-					UiPlatform.closeScreen();
+					ScreenHeader.backToMain();
 				}));
 		buttons.add(new ButtonElement(Component.translatable("ui.wh.hud.settings.cancel"))
-				.onClick(UiPlatform::closeScreen));
+				.onClick(ScreenHeader::backToMain));
 		panel.add(buttons);
 		root.add(panel);
 		return root;

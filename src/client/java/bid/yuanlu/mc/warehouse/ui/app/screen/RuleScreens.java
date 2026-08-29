@@ -37,11 +37,12 @@ public final class RuleScreens {
 	public static UiRoot create() {
 		var root = new UiRoot();
 		var panel = new PanelElement().padding(10).layout(new Column(6)).size(400, -1);
+		panel.add(ScreenHeader.create(ScreenHeader.Page.RULES));
 		panel.add(new LabelElement(Component.translatable("ui.wh.rule.title")));
 		panel.add(body(root));
 		var actions = PanelElement.plain().padding(2).layout(new Row(4));
-		actions.add(new ButtonElement(Component.translatable("ui.wh.modal.cancel"))
-				.onClick(UiPlatform::closeScreen));
+		actions.add(new ButtonElement(Component.translatable("ui.wh.modal.back"))
+				.onClick(ScreenHeader::backToMain));
 		panel.add(actions);
 		root.add(panel);
 		return root;

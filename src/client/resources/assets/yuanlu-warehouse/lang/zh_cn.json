@@ -162,6 +162,7 @@
   "ui.wh.hud.settings.down": "↓",
   "ui.wh.hud.settings.done": "完成",
   "ui.wh.hud.settings.cancel": "取消",
+"ui.wh.modal.back": "返回",
   "ui.wh.modal.confirm": "确认",
   "ui.wh.modal.cancel": "取消",
   "ui.wh.modal.done": "保存",

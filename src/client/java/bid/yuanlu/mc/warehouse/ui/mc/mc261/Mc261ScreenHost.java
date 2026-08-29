@@ -34,7 +34,17 @@ public final class Mc261ScreenHost extends Screen {
 
 	@Override
 	protected void init() {
-		root = rootFactory.get();
+		if (root == null) {
+			root = rootFactory.get();
+		}
+	}
+
+	@Override
+	public void resize(int width, int height) {
+		// 只更新尺寸，不重建 root：MC 默认 resize 会重跑 init 重建控件树，
+		// 丢 hover/焦点/拖拽工作状态；尺寸变化由每帧 root.update 触发 relayout
+		this.width = width;
+		this.height = height;
 	}
 
 	@Override
