@@ -128,5 +128,11 @@
   "wh.report.empty_warehouse": "warehouse has no containers",
   "wh.report.no_progress": "no progress — possible logic bug",
   "wh.report.player_gone": "player left the world",
-  "wh.report.aborted": "transport aborted"
+  "wh.report.aborted": "transport aborted",
+  "ui.wh.title": "Yuanlu Warehouse",
+  "ui.wh.demo.title": "UI Engine Demo (M0)",
+  "ui.wh.demo.clicks": "clicks: %s",
+  "ui.wh.demo.poke": "Poke",
+  "ui.wh.demo.close": "Close",
+  "ui.wh.demo.tip": "Closes the demo screen"
 }

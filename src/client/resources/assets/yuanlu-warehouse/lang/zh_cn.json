@@ -128,5 +128,11 @@
   "wh.report.empty_warehouse": "仓库没有可处理的容器",
   "wh.report.no_progress": "连续无进展——疑似逻辑漏洞",
   "wh.report.player_gone": "玩家已离开世界",
-  "wh.report.aborted": "搬运已中止"
+  "wh.report.aborted": "搬运已中止",
+  "ui.wh.title": "元路仓库",
+  "ui.wh.demo.title": "UI 引擎 Demo（M0）",
+  "ui.wh.demo.clicks": "点击次数：%s",
+  "ui.wh.demo.poke": "点我",
+  "ui.wh.demo.close": "关闭",
+  "ui.wh.demo.tip": "关闭 demo 界面"
 }

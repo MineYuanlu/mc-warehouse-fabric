@@ -1,0 +1,113 @@
+package bid.yuanlu.mc.warehouse.ui.mc.mc261;
+
+import java.util.function.Supplier;
+import org.jetbrains.annotations.Nullable;
+
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.CharacterEvent;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.network.chat.Component;
+
+import bid.yuanlu.mc.warehouse.ui.core.element.UiRoot;
+
+/**
+ * Screen 薄壳挂载点（UI-PDD §4.2，LDLib2 ModularUIScreen 思想）：
+ * 输入事件翻译成 UiEvent 投入根元素；渲染转发根元素提取；
+ * 全部 UI 输入处理收敛在 UiRoot，本类不含业务。
+ */
+public final class Mc261ScreenHost extends Screen {
+
+	private final Supplier<UiRoot> rootFactory;
+	@Nullable
+	private UiRoot root;
+
+	public Mc261ScreenHost(Component title, Supplier<UiRoot> rootFactory) {
+		super(title);
+		this.rootFactory = rootFactory;
+	}
+
+	public @Nullable UiRoot root() {
+		return root;
+	}
+
+	@Override
+	protected void init() {
+		root = rootFactory.get();
+	}
+
+	@Override
+	public void tick() {
+		if (root != null) {
+			root.tick();
+		}
+	}
+
+	@Override
+	public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+		if (root == null) {
+			return;
+		}
+		var draw = new Mc261Draw(graphics, a);
+		root.update(draw, width, height, mouseX, mouseY);
+		root.extract(draw);
+	}
+
+	// ---- 输入翻译 ----
+
+	@Override
+	public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+		return root != null && root.mouseDown(event.x(), event.y(), event.button());
+	}
+
+	@Override
+	public boolean mouseReleased(MouseButtonEvent event) {
+		return root != null && root.mouseUp(event.x(), event.y(), event.button());
+	}
+
+	@Override
+	public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
+		return root != null && root.mouseMoved(event.x(), event.y());
+	}
+
+	@Override
+	public boolean mouseScrolled(double x, double y, double scrollX, double scrollY) {
+		return root != null && root.mouseScroll(x, y, scrollY);
+	}
+
+	@Override
+	public void mouseMoved(double x, double y) {
+		if (root != null) {
+			root.mouseMoved(x, y);
+		}
+	}
+
+	@Override
+	public boolean keyPressed(KeyEvent event) {
+		if (super.keyPressed(event)) {
+			return true;
+		}
+		return root != null && root.keyDown(event.key(), event.scancode(), event.modifiers());
+	}
+
+	@Override
+	public boolean keyReleased(KeyEvent event) {
+		return root != null && root.keyUp(event.key(), event.scancode(), event.modifiers());
+	}
+
+	@Override
+	public boolean charTyped(CharacterEvent event) {
+		return root != null && root.charTyped(event.codepoint());
+	}
+
+	@Override
+	public boolean isPauseScreen() {
+		return false;
+	}
+
+	@Override
+	public void removed() {
+		root = null;
+	}
+}
