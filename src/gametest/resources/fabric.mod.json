@@ -12,7 +12,8 @@
       "bid.yuanlu.mc.warehouse.gametest.TransportEngineGameTest",
       "bid.yuanlu.mc.warehouse.gametest.CommandMarkGameTest",
       "bid.yuanlu.mc.warehouse.gametest.RulesEngineGameTest",
-      "bid.yuanlu.mc.warehouse.gametest.TempStrategyTransferCacheGameTest"
+      "bid.yuanlu.mc.warehouse.gametest.TempStrategyTransferCacheGameTest",
+      "bid.yuanlu.mc.warehouse.gametest.SelectorsQuantitiesMultiBlockGameTest"
     ]
   },
   "depends": {

@@ -36,6 +36,35 @@ public final class ChestDetector extends BlockEntityDetector {
 		return containerSlots > 0 && containerSlots % 9 == 0;
 	}
 
+	/**
+	 * 大箱子标题放宽（§8.5）：26.1 双箱菜单标题 = container.chestDouble（"Large Chest"，
+	 * 任一半边有自定义名时为该名），与半边 BE 默认名 container.chest 不同源——
+	 * 标题差异不构成身份否定。仅对 54 格（GENERIC_9x6）菜单放行，单箱校验保持严格。
+	 */
+	@Override
+	protected boolean titleMismatchAllowed(net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?> screen,
+			@Nullable bid.yuanlu.mc.warehouse.api.container.ContainerOpenContext ctx) {
+		if (screen.getMenu().getType() != MenuType.GENERIC_9x6) return false;
+		net.minecraft.network.chat.Component title = screen.getTitle();
+		if (title.getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents tc
+				&& "container.chestDouble".equals(tc.getKey())) {
+			return true;
+		}
+		// 自定义名分支：标题 = 任一半边的 DisplayName
+		if (ctx == null) return false;
+		BlockState state = ctx.block().getState();
+		if (!(state.getBlock() instanceof ChestBlock)) return false;
+		if (ctx.block().getEntity() instanceof net.minecraft.world.level.block.entity.BaseContainerBlockEntity named
+				&& title.equals(named.getDisplayName())) {
+			return true;
+		}
+		BlockPos other = ChestBlock.getConnectedBlockPos(ctx.block().getPos(), state);
+		var level = ctx.block().getLevel();
+		return other != null && level != null
+				&& level.getBlockEntity(other) instanceof net.minecraft.world.level.block.entity.BaseContainerBlockEntity named2
+				&& title.equals(named2.getDisplayName());
+	}
+
 	private static String safeWorldId() {
 		try {
 			return java.util.Objects.requireNonNullElse(WorldSessionTracker.get().currentWorldId(), "");

@@ -56,9 +56,10 @@ public abstract class BlockEntityDetector implements ContainerDetector {
 		if (be == null || !blockEntities.contains(be.getType())) return false;
 		// §8.1 标题一致性：26.1 开屏包标题即 provider.getDisplayName()（ServerPlayer.openMenu），
 		// 与预检 BE 的 DisplayName 同源——改名容器不误杀，打开的容器与预检方块不符必杀。
-		// 非 Nameable BE（如末影箱）跳过。
+		// 非 Nameable BE（如末影箱）跳过；子类可经 titleMismatchAllowed 放宽特殊菜单标题。
 		if (be instanceof net.minecraft.world.level.block.entity.BaseContainerBlockEntity named
-				&& !titleMatches(screen.getTitle(), named.getDisplayName())) {
+				&& !titleMatches(screen.getTitle(), named.getDisplayName())
+				&& !titleMismatchAllowed(screen, ctx)) {
 			return false;
 		}
 		return slotCountMatches(containerSlotCount(screen.getMenu()));
@@ -68,6 +69,15 @@ public abstract class BlockEntityDetector implements ContainerDetector {
 	protected boolean titleMatches(net.minecraft.network.chat.Component screenTitle,
 			net.minecraft.network.chat.Component beDisplayName) {
 		return screenTitle.equals(beDisplayName);
+	}
+
+	/**
+	 * 标题不一致时的子类放宽钩子：菜单标题与半边 BE 默认名不同源的特殊场景
+	 * （如大箱子 container.chestDouble，§8.5）。默认不放行——保持身份校验严格性。
+	 */
+	protected boolean titleMismatchAllowed(AbstractContainerScreen<?> screen,
+			@org.jetbrains.annotations.Nullable ContainerOpenContext ctx) {
+		return false;
 	}
 
 	/** 槽位数约束；默认不限 */

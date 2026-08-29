@@ -407,6 +407,7 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 		if (wh == null) return false;
 		for (ContainerInfo c : wh.containers) {
 			if (c.ioType != io) continue;
+			if (!sameDimHere(c.canonicalPos())) continue; // 出口/聚合口径与访问队列一致（仅本维度）
 			if (skippedKeys.contains(keyOf(c))) continue; // 已跳过不算未知
 			if (!cache.isExplored(keyOf(c), c.cacheType)) return true;
 		}
@@ -418,6 +419,7 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 		if (wh == null) return false;
 		for (ContainerInfo c : wh.containers) {
 			if (c.ioType != io) continue;
+			if (!sameDimHere(c.canonicalPos())) continue; // 出口/聚合口径与访问队列一致（仅本维度）
 			var mem = cache.getValid(keyOf(c), c.cacheType);
 			if (mem != null && hasAnyFreeSpace(mem.snapshot())) return true;
 		}
@@ -675,6 +677,7 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 	private boolean hasUnexploredOutput(Warehouse wh) {
 		for (ContainerInfo c : wh.containers) {
 			if (c.ioType != IOType.OUTPUT) continue;
+			if (!sameDimHere(c.canonicalPos())) continue; // 跨维度容器不在本轮可达范围
 			if (!cache.isExplored(keyOf(c), c.cacheType)) return true;
 		}
 		return false;
@@ -911,6 +914,7 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 		if (wh == null) return true;
 		for (ContainerInfo c : wh.containers) {
 			if (c.ioType != io) continue;
+			if (!sameDimHere(c.canonicalPos())) continue; // 出口/聚合口径与访问队列一致（仅本维度）
 			var mem = cache.getValid(keyOf(c), c.cacheType);
 			if (mem == null) return false; // 未探索视为不满足
 			if (hasAnyFreeSpace(mem.snapshot())) {
@@ -956,6 +960,7 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 		boolean any = false;
 		for (ContainerInfo c : wh.containers) {
 			if (c.ioType != io) continue;
+			if (!sameDimHere(c.canonicalPos())) continue; // 出口/聚合口径与访问队列一致（仅本维度）
 			any = true;
 			var mem = cache.getValid(keyOf(c), c.cacheType);
 			if (mem == null) return false; // 未探索→不满足
