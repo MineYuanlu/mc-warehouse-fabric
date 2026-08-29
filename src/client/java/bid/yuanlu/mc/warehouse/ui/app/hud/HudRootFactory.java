@@ -10,6 +10,7 @@ import bid.yuanlu.mc.warehouse.ui.core.element.LabelElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.PanelElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.UiElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.UiRoot;
+import bid.yuanlu.mc.warehouse.ui.core.layout.Column;
 import bid.yuanlu.mc.warehouse.ui.core.theme.Theme;
 import bid.yuanlu.mc.warehouse.ui.mc.UiPlatform;
 
@@ -41,7 +42,8 @@ public final class HudRootFactory {
 
 	public static UiElement createBlock(HudConfig.Block block, int maxLines) {
 		var presenter = HudPresenter.get();
-		var panel = new PanelElement().padding(4).id(block.name()).clipContent(true);
+		// Column 布局：面板尺寸随文本行自适应（外框=内容尺寸），行变化即 relayout
+		var panel = new PanelElement().padding(4).id(block.name()).layout(new Column(2));
 		List<LabelElement> labels = new ArrayList<>();
 		for (int i = 0; i < Math.max(1, maxLines); i++) {
 			LabelElement label = new LabelElement(Component.empty()).padding(1);

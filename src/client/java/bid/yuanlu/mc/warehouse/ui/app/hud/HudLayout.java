@@ -41,22 +41,24 @@ public final class HudLayout implements Layout {
 			for (var e : inCorner) {
 				int w = Layout.effectiveWidth(e.el());
 				int h = Layout.effectiveHeight(e.el());
+				// offsetX/offsetY 语义 = 同角堆叠基础上的额外边距微调；
+				// 堆叠游标逐块累加（旧实现把 offsetY 当绝对位置，同角区块全部重叠）
 				int ox = e.cfg() != null ? e.cfg().offsetX : 0;
-				int oy = e.cfg() != null ? e.cfg().offsetY : cursor;
+				int along = cursor + (e.cfg() != null ? e.cfg().offsetY : 0);
 				int x = switch (corner) {
 					case TOP_LEFT, BOTTOM_LEFT -> ox;
 					case TOP_RIGHT, BOTTOM_RIGHT -> container.width() - w - ox;
 				};
 				int y = switch (corner) {
-					case TOP_LEFT, TOP_RIGHT -> oy;
-					case BOTTOM_LEFT, BOTTOM_RIGHT -> container.height() - h - oy;
+					case TOP_LEFT, TOP_RIGHT -> along;
+					case BOTTOM_LEFT, BOTTOM_RIGHT -> container.height() - h - along;
 				};
 				if (e.cfg() == null) {
 					x = (container.width() - w) / 2;
 					y = (container.height() - h) / 2;
 				}
 				e.el().pos(x, y);
-				cursor = (e.cfg() != null ? e.cfg().offsetY : oy) + h + STACK_GAP;
+				cursor += h + STACK_GAP;
 			}
 		}
 	}
