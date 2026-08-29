@@ -106,6 +106,7 @@ public class SelectorsQuantitiesMultiBlockGameTest implements FabricClientGameTe
 
 		RunReport r = runAndWait(context, h);
 		LOGGER.info("[l14-1] {} moved={} detail={}", r.grade(), r.itemsMoved(), r.detailKey());
+		snap(context, "l14-1-negative");
 
 		check(countAwaited(context, sp, output, Items.DIAMOND) == 30,
 				"OUTPUT 应收 30 钻石，实际=" + countAwaited(context, sp, output, Items.DIAMOND));
@@ -141,6 +142,7 @@ public class SelectorsQuantitiesMultiBlockGameTest implements FabricClientGameTe
 
 		RunReport r = runAndWait(context, h);
 		LOGGER.info("[l14-2] {} moved={} detail={}", r.grade(), r.itemsMoved(), r.detailKey());
+		snap(context, "l14-2-group");
 
 		check(countAwaited(context, sp, output, Items.DIAMOND) == 64,
 				"group:1 目标 64，OUTPUT 应收 64，实际=" + countAwaited(context, sp, output, Items.DIAMOND));
@@ -172,6 +174,7 @@ public class SelectorsQuantitiesMultiBlockGameTest implements FabricClientGameTe
 
 		RunReport r = runAndWait(context, h);
 		LOGGER.info("[l14-3] {} moved={} detail={}", r.grade(), r.itemsMoved(), r.detailKey());
+		snap(context, "l14-3-fill-slots");
 
 		check(countAwaited(context, sp, output, Items.DIAMOND) == 64,
 				"fill_slots:26 目标 64，OUTPUT 应收 64，实际=" + countAwaited(context, sp, output, Items.DIAMOND));
@@ -203,6 +206,7 @@ public class SelectorsQuantitiesMultiBlockGameTest implements FabricClientGameTe
 
 		RunReport r = runAndWait(context, h);
 		LOGGER.info("[l14-4] {} moved={} detail={}", r.grade(), r.itemsMoved(), r.detailKey());
+		snap(context, "l14-4-percent");
 
 		check(countAwaited(context, sp, output, Items.DIAMOND) == 86,
 				"percent:5 目标 86，OUTPUT 应收 86，实际=" + countAwaited(context, sp, output, Items.DIAMOND));
@@ -237,6 +241,7 @@ public class SelectorsQuantitiesMultiBlockGameTest implements FabricClientGameTe
 
 		RunReport r = runAndWait(context, h);
 		LOGGER.info("[l14-5] {} moved={} detail={}", r.grade(), r.itemsMoved(), r.detailKey());
+		snap(context, "l14-5-cross-dim");
 
 		check("wh.report.input_empty".equals(r.detailKey()),
 				"跨维度容器不应阻塞出口②（应 input_empty 而非 no_progress），实际=" + r.detailKey());
@@ -302,6 +307,7 @@ public class SelectorsQuantitiesMultiBlockGameTest implements FabricClientGameTe
 
 		RunReport r = runAndWait(context, h);
 		LOGGER.info("[l14-6] {} moved={} detail={}", r.grade(), r.itemsMoved(), r.detailKey());
+		snap(context, "l14-6-double-chest");
 
 		int left = countAwaited(context, sp, halfA, Items.DIAMOND)
 				+ countAwaited(context, sp, halfB, Items.DIAMOND);
@@ -426,6 +432,14 @@ public class SelectorsQuantitiesMultiBlockGameTest implements FabricClientGameTe
 		return false;
 	}
 
+
+	private static void snap(ClientGameTestContext context, String name) {
+		try {
+			context.takeScreenshot("yuanlu-warehouse-" + name);
+		} catch (Exception e) {
+			LOGGER.warn("screenshot {} failed: {}", name, e.toString());
+		}
+	}
 	private static void check(boolean cond, String msg) {
 		if (!cond) throw new AssertionError(msg);
 	}

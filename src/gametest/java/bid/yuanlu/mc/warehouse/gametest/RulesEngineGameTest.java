@@ -91,6 +91,7 @@ public class RulesEngineGameTest implements FabricClientGameTest {
 		RunReport r = runAndWait(context, h);
 		LOGGER.info("[l12-1] {} rounds={} moved={} detail={}", r.grade(), r.rounds(),
 				r.itemsMoved(), r.detailKey());
+		snap(context, "l12-1-count-32");
 
 		check(countAwaited(context, sp, input, Items.DIAMOND) == 0, "INPUT 应清空");
 		check(countAwaited(context, sp, output, Items.DIAMOND) == 32,
@@ -130,6 +131,7 @@ public class RulesEngineGameTest implements FabricClientGameTest {
 		RunReport r = runAndWait(context, h);
 		LOGGER.info("[l12-2] {} rounds={} moved={} detail={}", r.grade(), r.rounds(),
 				r.itemsMoved(), r.detailKey());
+		snap(context, "l12-2-retain-16");
 
 		check("wh.report.input_empty".equals(r.detailKey()),
 				"保留规则达标后出口②应 input_empty 结束（而非 no_progress），实际=" + r.detailKey());
@@ -165,6 +167,7 @@ public class RulesEngineGameTest implements FabricClientGameTest {
 		RunReport r = runAndWait(context, h);
 		LOGGER.info("[l12-3] {} rounds={} moved={} detail={}", r.grade(), r.rounds(),
 				r.itemsMoved(), r.detailKey());
+		snap(context, "l12-3-whitelist");
 
 		check(countAwaited(context, sp, input, Items.DIAMOND) == 0
 				&& countAwaited(context, sp, input, Items.DIRT) == 0, "INPUT 应清空");
@@ -287,6 +290,14 @@ public class RulesEngineGameTest implements FabricClientGameTest {
 		return r;
 	}
 
+
+	private static void snap(ClientGameTestContext context, String name) {
+		try {
+			context.takeScreenshot("yuanlu-warehouse-" + name);
+		} catch (Exception e) {
+			LOGGER.warn("screenshot {} failed: {}", name, e.toString());
+		}
+	}
 	private static void check(boolean cond, String msg) {
 		if (!cond) throw new AssertionError(msg);
 	}

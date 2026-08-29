@@ -119,6 +119,7 @@ public class TempStrategyTransferCacheGameTest implements FabricClientGameTest {
 		RunReport r = runAndWait(context);
 		LOGGER.info("[l13-1] {} rounds={} moved={} detail={}", r.grade(), r.rounds(),
 				r.itemsMoved(), r.detailKey());
+		snap(context, "l13-1-temp-dual");
 
 		// 终态收敛：无振荡、dirt 不进 OUTPUT、不丢失
 		check(countAwaited(context, sp, input, Items.DIAMOND) == 0, "INPUT 应清空");
@@ -173,6 +174,7 @@ public class TempStrategyTransferCacheGameTest implements FabricClientGameTest {
 		RunReport r = awaitReport(context);
 		LOGGER.info("[l13-2] {} rounds={} moved={} detail={}", r.grade(), r.rounds(),
 				r.itemsMoved(), r.detailKey());
+		snap(context, "l13-2-transfer");
 
 		check(countAwaited(context, sp, srcChest, Items.DIAMOND) == 0, "源仓库 chest 应清空");
 		check(countAwaited(context, sp, dstChest, Items.DIAMOND) == 40,
@@ -227,6 +229,8 @@ public class TempStrategyTransferCacheGameTest implements FabricClientGameTest {
 			if (McScreens.current() instanceof AbstractContainerScreen<?> s) s.onClose();
 		}));
 
+		snap(context, "l13-3-chest-open");
+
 		ContainerInfo info = context.computeOnClient(mc -> {
 			Warehouse wh = WarehouseManagerImpl.get().active();
 			WorldDimPos rel = wh.toRelative(dim(), chest);
@@ -251,6 +255,7 @@ public class TempStrategyTransferCacheGameTest implements FabricClientGameTest {
 					.mapToInt(ItemStack::getCount).sum();
 		});
 		LOGGER.info("[l13-3] disk backfill items={}", items);
+		snap(context, "l13-3-disk-done");
 		check(items == 3, "重启后 DISK 回填应含 3 钻石，实际=" + items);
 		clearBag(context);
 	}
@@ -427,6 +432,14 @@ public class TempStrategyTransferCacheGameTest implements FabricClientGameTest {
 		}
 	}
 
+
+	private static void snap(ClientGameTestContext context, String name) {
+		try {
+			context.takeScreenshot("yuanlu-warehouse-" + name);
+		} catch (Exception e) {
+			LOGGER.warn("screenshot {} failed: {}", name, e.toString());
+		}
+	}
 	private static void check(boolean cond, String msg) {
 		if (!cond) throw new AssertionError(msg);
 	}
