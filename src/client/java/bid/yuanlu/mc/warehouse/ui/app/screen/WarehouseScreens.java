@@ -140,10 +140,16 @@ public final class WarehouseScreens {
 				var label = Component.translatable("ui.wh.main.entry",
 						(isActive ? "● " : "") + wh.id, wh.containers.size(), wh.rules.size());
 				var row = new LabelElement(label).padding(2);
-				row.onClick(() -> selectedId = wh.id);
+				row.onClick(() -> {
+					selectedId = wh.id;
+					refresh(root); // 选中高亮 + 右侧详情即时刷新
+				});
 				// 双击激活
 				row.on(bid.yuanlu.mc.warehouse.ui.core.event.UiEvent.Type.DOUBLE_CLICK,
-						e -> mgr.activate(wh.id));
+						e -> {
+							mgr.activate(wh.id);
+							refresh(root); // 激活圆点即时刷新
+						});
 				if (isSelected) {
 					row.color(Theme.active().textAccent());
 				} else {
