@@ -32,12 +32,12 @@ public class HighlightSmokeGameTest implements FabricClientGameTest {
 			context.runOnClient(mc -> {
 				assert mc.player != null && mc.level != null : "应已在世界中";
 				var trk = WorldSessionTracker.get();
-				String worldId = trk == null ? null : trk.currentWorldId();
+				String worldName = trk == null ? null : trk.currentWorldName();
 				String dimId = mc.level.dimension().identifier().toString();
 				var feet = mc.player.blockPosition();
-				SelectionState.get().set1(new WorldDimPos(worldId, dimId,
+				SelectionState.get().set1(new WorldDimPos(worldName, dimId,
 						feet.getX() - 2, feet.getY(), feet.getZ() - 2));
-				SelectionState.get().set2(new WorldDimPos(worldId, dimId,
+				SelectionState.get().set2(new WorldDimPos(worldName, dimId,
 						feet.getX() + 2, feet.getY() + 2, feet.getZ() + 2));
 				HighlightManager.get().refresh();
 				// 无激活仓库：容器快照为空但构建路径无异常

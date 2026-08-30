@@ -52,6 +52,7 @@ import bid.yuanlu.mc.warehouse.core.engine.transport.TransportEngineImpl;
 import bid.yuanlu.mc.warehouse.core.event.WarehouseEvents;
 import bid.yuanlu.mc.warehouse.core.registry.WarehouseRegistryImpl;
 import bid.yuanlu.mc.warehouse.core.warehouse.WarehouseManagerImpl;
+import bid.yuanlu.mc.warehouse.core.world.WorldNameMapper;
 import bid.yuanlu.mc.warehouse.core.world.WorldSessionTracker;
 import bid.yuanlu.mc.warehouse.impl.quantity.CountSelector;
 import bid.yuanlu.mc.warehouse.impl.selector.IdSelector;
@@ -237,7 +238,7 @@ public class TempStrategyTransferCacheGameTest implements FabricClientGameTest {
 			return wh.containerAt(dim(), rel.toBlockPos());
 		});
 		Path expectFile = CFG_DIR.resolve("cache")
-				.resolve(StackCodecs.sanitizeWorldDir(dim().worldId()))
+				.resolve(StackCodecs.sanitizeWorldDir(dim().worldName()))
 				.resolve(StackCodecs.sanitizeWorldDir(dim().dimId()) + "__"
 						+ info.canonicalPos().x() + "_" + info.canonicalPos().y() + "_"
 						+ info.canonicalPos().z() + ".json");
@@ -268,9 +269,9 @@ public class TempStrategyTransferCacheGameTest implements FabricClientGameTest {
 				WarehouseRegistryImpl.resetForTest();
 				YuanluWarehouseClient.registerBuiltins();
 				ModConfig cfg = new ConfigIO(CFG_DIR).loadModConfig();
-				WorldSessionTracker trk = new WorldSessionTracker(List.of(
-						new bid.yuanlu.mc.warehouse.impl.world.SingleplayerWorldIdentifier(),
-						new bid.yuanlu.mc.warehouse.impl.world.MultiplayerWorldIdentifier()));
+				WorldNameMapper.setInstance(new WorldNameMapper(CFG_DIR.resolve("world-map.json"),
+						(serverId, worldId) -> worldId));
+				WorldSessionTracker trk = new WorldSessionTracker();
 				trk.tick();
 				WorldSessionTracker.setInstance(trk);
 				ContainerMemoryStore store = new ContainerMemoryStore(cfg, trk,
@@ -311,7 +312,8 @@ public class TempStrategyTransferCacheGameTest implements FabricClientGameTest {
 	}
 
 	private static WorldDim dim() {
-		return new WorldDim(WorldSessionTracker.get().currentWorldId(),
+		return new WorldDim(WorldSessionTracker.get().currentServerId(),
+				WorldSessionTracker.get().currentWorldName(),
 				Level.OVERWORLD.identifier().toString());
 	}
 

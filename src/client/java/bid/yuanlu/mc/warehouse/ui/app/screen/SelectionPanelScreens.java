@@ -15,6 +15,7 @@ import bid.yuanlu.mc.warehouse.api.world.WorldDim;
 import bid.yuanlu.mc.warehouse.api.world.WorldDimPos;
 import bid.yuanlu.mc.warehouse.core.selection.SelectionState;
 import bid.yuanlu.mc.warehouse.core.warehouse.WarehouseManagerImpl;
+import bid.yuanlu.mc.warehouse.core.world.WorldSessionTracker;
 import bid.yuanlu.mc.warehouse.ui.app.presenter.HudPresenter;
 import bid.yuanlu.mc.warehouse.ui.app.widget.CycleSelector;
 import bid.yuanlu.mc.warehouse.ui.app.widget.ScreenScaffold;
@@ -186,8 +187,21 @@ public final class SelectionPanelScreens {
 		if (!sel.hasBox() || c.pos.isEmpty()) {
 			return false;
 		}
+		String serverId;
+		try {
+			serverId = WorldSessionTracker.get().currentServerId();
+		} catch (IllegalStateException e) {
+			return false;
+		}
+		if (serverId == null) {
+			return false;
+		}
 		for (WorldDimPos p : c.pos) {
-			WorldDim dim = new WorldDim(p.world(), p.dim());
+			// 绝对化：canonical 相对坐标 → 世界绝对坐标对比选区
+			if (!p.hasWorld()) {
+				continue;
+			}
+			WorldDim dim = new WorldDim(serverId, p.world(), p.dim());
 			var anchor = wh.anchorOf(dim);
 			if (anchor == null) {
 				continue;

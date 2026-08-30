@@ -190,7 +190,8 @@ public class RulesEngineGameTest implements FabricClientGameTest {
 	}
 
 	private static WorldDim dim() {
-		return new WorldDim(WorldSessionTracker.get().currentWorldId(),
+		return new WorldDim(WorldSessionTracker.get().currentServerId(),
+				WorldSessionTracker.get().currentWorldName(),
 				Level.OVERWORLD.identifier().toString());
 	}
 

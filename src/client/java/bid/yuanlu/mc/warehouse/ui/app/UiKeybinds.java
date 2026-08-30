@@ -2,6 +2,7 @@ package bid.yuanlu.mc.warehouse.ui.app;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.logging.LogUtils;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -97,7 +98,10 @@ public final class UiKeybinds {
 			p = mc.player.blockPosition();
 		}
 		WorldDim dim = currentDim(mc);
-		var pos = new WorldDimPos(dim.worldId(), dim.dimId(), p.getX(), p.getY(), p.getZ());
+		if (dim == null) {
+			return;
+		}
+		var pos = new WorldDimPos(dim.worldName(), dim.dimId(), p.getX(), p.getY(), p.getZ());
 		if (first) {
 			SelectionState.get().set1(pos);
 		} else {
@@ -105,10 +109,21 @@ public final class UiKeybinds {
 		}
 	}
 
-	private static WorldDim currentDim(Minecraft mc) {
-		String worldId = WorldSessionTracker.get() == null ? null : WorldSessionTracker.get().currentWorldId();
+	/** 当前 (serverId, worldName, dimId)；会话未就绪/无维度返回 null（对齐 CommandSupport.currentDim）。 */
+	private static @Nullable WorldDim currentDim(Minecraft mc) {
+		WorldSessionTracker trk;
+		try {
+			trk = WorldSessionTracker.get();
+		} catch (IllegalStateException e) {
+			return null;
+		}
+		String serverId = trk.currentServerId();
+		String worldName = trk.currentWorldName();
 		String dimId = mc.level == null ? null : mc.level.dimension().identifier().toString();
-		return new WorldDim(worldId, dimId == null ? "unknown" : dimId);
+		if (serverId == null || worldName == null || dimId == null) {
+			return null;
+		}
+		return new WorldDim(serverId, worldName, dimId);
 	}
 
 	private static void toggleMark() {

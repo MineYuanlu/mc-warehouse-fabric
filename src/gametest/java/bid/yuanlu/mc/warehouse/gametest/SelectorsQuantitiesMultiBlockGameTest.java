@@ -235,7 +235,7 @@ public class SelectorsQuantitiesMultiBlockGameTest implements FabricClientGameTe
 			// 下界「容器」：最高优先、本维度不可达——不应阻塞出口判定（跨维度搬运属二阶段寻路）
 			ContainerInfo nether = new ContainerInfo(IOType.INPUT);
 			nether.priority = new Priority(99, 99);
-			nether.pos.add(new WorldDimPos(dim().worldId(), "minecraft:the_nether", 0, 99, 0));
+			nether.pos.add(new WorldDimPos(dim().worldName(), "minecraft:the_nether", 0, 99, 0));
 			wh.containers.add(nether);
 		});
 
@@ -327,7 +327,8 @@ public class SelectorsQuantitiesMultiBlockGameTest implements FabricClientGameTe
 	}
 
 	private static WorldDim dim() {
-		return new WorldDim(WorldSessionTracker.get().currentWorldId(),
+		return new WorldDim(WorldSessionTracker.get().currentServerId(),
+				WorldSessionTracker.get().currentWorldName(),
 				Level.OVERWORLD.identifier().toString());
 	}
 

@@ -109,8 +109,11 @@ public final class HighlightManager {
 			return null;
 		}
 		var trk = WorldSessionTracker.get();
-		String worldId = trk == null ? null : trk.currentWorldId();
-		return new WorldDim(worldId, mc.level.dimension().identifier().toString());
+		if (trk == null) return null;
+		String serverId = trk.currentServerId();
+		String worldName = trk.currentWorldName();
+		if (serverId == null || worldName == null) return null;
+		return new WorldDim(serverId, worldName, mc.level.dimension().identifier().toString());
 	}
 
 	private static @Nullable AABB boxOf(Warehouse wh, WorldDim dim, WorldDimPos p) {
@@ -119,8 +122,8 @@ public final class HighlightManager {
 		}
 		try {
 			// 配置 pos 可省略 world（§11.3），按当前世界补全
-			WorldDimPos withWorld = p.hasWorld() ? p : p.withWorld(dim.worldId());
-			var abs = wh.resolveAbsolute(withWorld);
+			WorldDimPos withWorld = p.hasWorld() ? p : p.withWorld(dim.worldName());
+			var abs = wh.resolveAbsolute(dim.serverId(), withWorld);
 			if (abs == null) {
 				return null;
 			}

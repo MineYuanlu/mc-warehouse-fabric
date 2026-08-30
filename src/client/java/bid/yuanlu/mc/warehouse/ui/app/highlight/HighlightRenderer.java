@@ -187,8 +187,10 @@ public final class HighlightRenderer {
 			return null;
 		}
 		var trk = bid.yuanlu.mc.warehouse.core.world.WorldSessionTracker.get();
-		String worldId = trk == null ? null : trk.currentWorldId();
-		return new WorldDim(worldId, mc.level.dimension().identifier().toString());
+		String serverId = trk.currentServerId();
+		String worldName = trk.currentWorldName();
+		if (serverId == null || worldName == null) return null;
+		return new WorldDim(serverId, worldName, mc.level.dimension().identifier().toString());
 	}
 
 }
