@@ -8,13 +8,16 @@ import net.minecraft.network.chat.Component;
 
 import bid.yuanlu.mc.warehouse.ui.app.hud.HudConfig;
 import bid.yuanlu.mc.warehouse.ui.app.hud.HudLayout;
+import bid.yuanlu.mc.warehouse.ui.core.bind.Value;
 import bid.yuanlu.mc.warehouse.ui.core.element.ButtonElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.CheckboxElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.LabelElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.PanelElement;
+import bid.yuanlu.mc.warehouse.ui.core.element.SliderElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.UiRoot;
 import bid.yuanlu.mc.warehouse.ui.core.draw.UiDraw;
 import bid.yuanlu.mc.warehouse.ui.core.event.UiEvent;
+import bid.yuanlu.mc.warehouse.ui.core.layout.Center;
 import bid.yuanlu.mc.warehouse.ui.core.layout.Column;
 import bid.yuanlu.mc.warehouse.ui.core.layout.Row;
 import bid.yuanlu.mc.warehouse.ui.core.theme.Theme;
@@ -29,7 +32,7 @@ import org.lwjgl.glfw.GLFW;
  *       设置即所见，被面板遮住也能先拖走；</li>
  *   <li>按住 HUD 本体（按布局 bounds 命中）拖拽 = 平移该角 HUD 组，附近空白退回象限
  *       猜测；方向键微调 1px；offset 钳在屏内防失联；</li>
- *   <li>屏幕中央列表逐块：开关 checkbox、拖拽排序、-/+ 调整该块文字缩放；</li>
+ *   <li>屏幕中央列表逐块：开关 checkbox、拖拽排序、滑条调整该块文字缩放；</li>
  *   <li>外框尺寸由内容（行数/字数/字号）自动决定，无独立尺寸控制；文字行
  *       只能开关/排序，逐行排列，不可单独设位置。</li>
  * </ul>
@@ -94,26 +97,26 @@ public final class HudSettingsScreens {
 		var cfg = HudConfig.get().get(block);
 		var row = PanelElement.plain().padding(2).layout(new Row(4)).size(300, ROW_HEIGHT - 4);
 		row.add(new CheckboxElement(Component.translatable(block.labelKey), cfg.enabled).bind(bindOf(block)));
-		row.add(new ButtonElement("-").onClick(() -> {
-			float s = Math.max(SCALE_MIN, cfg.scale - SCALE_STEP);
-			if (s != cfg.scale) {
-				cfg.scale = s;
-				applyStructural();
-				UiPlatform.openScreenKeepHud(HudSettingsScreens::create); // 重建刷新缩放显示
-			}
-		}));
-		row.add(new ButtonElement("+").onClick(() -> {
-			float s = Math.min(SCALE_MAX, cfg.scale + SCALE_STEP);
-			if (s != cfg.scale) {
-				cfg.scale = s;
-				applyStructural();
-				UiPlatform.openScreenKeepHud(HudSettingsScreens::create);
-			}
-		}));
-		row.add(new LabelElement(Component.translatable("ui.wh.hud.settings.scale",
-				Math.round(cfg.scale * 10) / 10.0)).color(Theme.active().textMuted()));
+		// 缩放滑条：拖动实时预览并就地刷新标签——不整屏重建（重建首帧中央面板闪现
+		// 左上角，onTick 居中是 20Hz tick 驱动的）；落盘推迟到拖拽/点击结束
+		var scaleText = Value.of(scaleLabel(cfg.scale));
+		var slider = new SliderElement(SCALE_MIN, SCALE_MAX, SCALE_STEP, cfg.scale)
+				.grow(1)
+				.onChange(v -> {
+					cfg.scale = v;
+					UiPlatform.resetHud("hud");
+					scaleText.set(scaleLabel(v));
+				});
+		slider.on(UiEvent.Type.DRAG_END, e -> HudConfig.save(HudConfig.get()));
+		slider.on(UiEvent.Type.CLICK, e -> HudConfig.save(HudConfig.get()));
+		row.add(slider.id("hud-scale-" + block.name()));
+		row.add(new LabelElement(scaleText.get()).bindComponent(scaleText).color(Theme.active().textMuted()));
 		attachReorder(list, row, block);
 		return row;
+	}
+
+	private static Component scaleLabel(float scale) {
+		return Component.translatable("ui.wh.hud.settings.scale", Math.round(scale * 10) / 10.0);
 	}
 
 	/** 行拖拽排序：捕获阶段监听（行内任意子级被按住皆可拖），累计位移越过行高即换位；
@@ -122,6 +125,9 @@ public final class HudSettingsScreens {
 		int[] fromIndex = { -1 };
 		double[] accDy = { 0 };
 		row.on(UiEvent.Type.DRAG_START, e -> {
+			if (e.target instanceof SliderElement) {
+				return; // 滑条拖拽调值：不启动行排序，让事件落到滑条
+			}
 			fromIndex[0] = orderedBlocks().indexOf(block);
 			accDy[0] = 0;
 			e.consume();
@@ -186,6 +192,10 @@ public final class HudSettingsScreens {
 		OverlayLayer(UiRoot root) {
 			this.root = root;
 			filled(false).bordered(false).id("hud-drag-layer");
+			// 根级权重满铺 + Center 布局期居中：原 onTick 定位由 20Hz tick 驱动，
+			// 整屏重建后的首帧（update 不跑 tick）中央面板会闪现在左上角
+			grow(1);
+			layout(new Center(8));
 			on(UiEvent.Type.MOUSE_MOVE, e -> {
 				lastMouseX = e.x;
 				lastMouseY = e.y;
@@ -244,19 +254,6 @@ public final class HudSettingsScreens {
 		}
 
 		@Override
-		protected void onTick() {
-			// 满屏铺满 + 中央面板居中（clamp 屏内）
-			size(root.width(), root.height());
-			var list = root.findId("hud-block-list");
-			if (list == null) {
-				return;
-			}
-			int y = Math.max(8, Math.min((root.height() - list.height()) / 2,
-					root.height() - list.height() - 8));
-			list.pos((root.width() - list.width()) / 2, y);
-		}
-
-		@Override
 		protected void drawElement(UiDraw g) {
 			// 全透明：仅交互层
 		}
@@ -265,7 +262,8 @@ public final class HudSettingsScreens {
 		private @Nullable HudConfig.Corner groupAt(double x, double y) {
 			for (HudConfig.Corner corner : HudConfig.Corner.values()) {
 				int[] b = HudLayout.groupBounds(corner);
-				if (b == null) {
+				if (b == null || !hasBlocks(corner)) {
+					// hasBlocks 门：区块全关后 bounds 是上一帧的残留，不能据此抢占
 					continue;
 				}
 				if (x >= b[0] - GRAB_MARGIN && x < b[0] + b[2] + GRAB_MARGIN

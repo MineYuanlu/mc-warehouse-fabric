@@ -349,7 +349,7 @@ HUD 本体永不接收输入；对其位置与内容的调整经一个 passthrou
 
 - 入口：仓库管理主屏"HUD 设置"按钮（或快捷键）→ `openScreenKeepHud`（`hudPassthrough=true`：跳过 MC 模糊/菜单背景，世界透出）。
 - **z 序（v0.2）**：HUD 层在 `extractGui` 更早 stratum，必被 Screen 盖住——passthrough 屏打开期间 `Mc261HudHost` 不在 HUD 层渲染，改由 `Mc261ScreenHost` 在自身内容提取后**代渲染 HUD**：设置中的 HUD 永远显示在面板之上，被面板遮住也能先拖走。
-- 编辑交互：屏幕中央面板逐区块开关（checkbox）、行拖拽排序（捕获阶段，越行高换位）、-/+ 调文字缩放（0.1 步进）；**按住 HUD 本体拖拽 = 平移该角组**——按 `HudLayout` 布局期记录的每角真实 bounds（±2px 余量）抓取（捕获阶段抢占，面板行不干扰），附近空白退回象限猜测；方向键 1px 微调。
+- 编辑交互：屏幕中央面板逐区块开关（checkbox）、行拖拽排序（捕获阶段，越行高换位，滑条上起拖除外）、滑条调文字缩放（0.1 步进，`SliderElement`：拖动实时预览 + 标签就地刷新，**不整屏重建**——重建首帧中央面板闪现左上角曾是缺陷根源；落盘推迟到 DRAG_END/CLICK）；**按住 HUD 本体拖拽 = 平移该角组**——按 `HudLayout` 布局期记录的每角真实 bounds（±2px 余量，区块全关即失效）抓取（捕获阶段抢占，面板行不干扰），附近空白退回象限猜测；方向键 1px 微调。中央面板定位 = `OverlayLayer` 根级 `grow(1)` 满铺 + `Center` 布局器布局期居中钳制（不依赖 20Hz tick）。
 - 跟手性：拖拽增量在 double 累加器中保留小数残量（GUI Scale≥2 时单帧位移不足 1px，直接取整会整体卡顿），逐像素跟手；offset 钳在 `[0, 屏-8px]`，组永远留在屏内可再抓取。
 - 持久化：`config/yuanlu-warehouse-hud.json`：`{ blocks: { "<id>": { enabled, corner, offsetX, offsetY, order, maxLines, scale } } }`，拖拽中仅写内存、START/END 落盘。
 - 实现要点：拖拽命中/移动全部是 Screen 内常规输入事件，走 L1 事件系统（DRAG_*），无跨版本风险。

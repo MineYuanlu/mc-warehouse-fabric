@@ -45,7 +45,7 @@ public final class HudConfig {
 		public int offsetY = 4;
 		public int order;
 		public int maxLines = 8;
-		/** 文本行缩放（HUD 设置屏 -/+ 调整，0.5–2.0 步进 0.5）。 */
+		/** 文本行缩放（HUD 设置屏滑条调整，0.5–2.0 步进 0.1）。 */
 		public float scale = 1f;
 
 		public BlockConfig() {

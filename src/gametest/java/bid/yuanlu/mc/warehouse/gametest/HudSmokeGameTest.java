@@ -21,7 +21,8 @@ import bid.yuanlu.mc.warehouse.ui.mc.mc261.Mc261ScreenHost;
 /**
  * HUD E2E 冒烟（UI-PDD §14 M1 验收）：进入世界 → 建仓库使 HUD 有内容 →
  * HUD extract 渲染（截图）→ HUD 设置屏开屏（HUD 组置于屏幕中央与面板重叠，
- * 验证 HUD 渲染在面板之上）→ 模拟按住 HUD 本体拖拽（bounds 抓取 + 子像素累加）。
+ * 验证 HUD 渲染在面板之上）→ 模拟按住 HUD 本体拖拽（bounds 抓取 + 子像素累加）→
+ * 缩放滑条拖到最右（就地生效不整屏重建 + DRAG_END 落盘）。
  * 断言用原生 assert（与其他 gametest 一致）。
  * CI grep {@code yuanlu-warehouse HUD smoke assertions passed} 判定成功。
  */
@@ -90,11 +91,46 @@ public class HudSmokeGameTest implements FabricClientGameTest {
 								+ bc.offsetX + "," + bc.offsetY + " vs " + (beforeX + 1) + "," + (beforeY + 1);
 			});
 
-			// 还原 HUD 位置（测试不留痕）
+			// 还原 HUD 位置（测试不留痕）；临时禁用全部区块再测缩放滑条——
+			// 组 bounds 与中央面板重叠时拖拽层按视觉层级（HUD 在上）抢占，需避开
 			context.runOnClient(mc -> {
 				for (HudConfig.Block b : HudConfig.Block.values()) {
-					HudConfig.get().get(b).offsetX = 4;
-					HudConfig.get().get(b).offsetY = 4;
+					HudConfig.get().get(b).enabled = false;
+				}
+				HudConfig.save(HudConfig.get());
+				UiPlatform.resetHud("hud");
+			});
+			context.waitTicks(2);
+
+			// 缩放滑条 E2E：按住滑条拖到最右 → scale=2.0 且就地生效；同屏实例不变
+			// （旧实现每次改缩放 openScreenKeepHud 整屏重建，正是"闪回左上角"的根源）
+			context.runOnClient(mc -> {
+				var host = (Mc261ScreenHost) mc.screen;
+				UiRoot root = host.root();
+				assert root != null : "设置屏根元素应已构建";
+				var slider = root.<bid.yuanlu.mc.warehouse.ui.core.element.SliderElement>findId(
+						"hud-scale-" + HudConfig.Block.WAREHOUSE.name());
+				assert slider != null : "WAREHOUSE 行应有缩放滑条";
+				float before = HudConfig.get().get(HudConfig.Block.WAREHOUSE).scale;
+				int y = slider.absY() + slider.height() / 2;
+				assert root.mouseDown(slider.absX() + 2, y, 0) : "滑条应可命中";
+				root.mouseMoved(slider.absX() + slider.width() - 1, y); // 越阈值 → DRAG_START → 取最右
+				root.mouseUp(slider.absX() + slider.width() - 1, y, 0); // DRAG_END → 落盘
+				float after = HudConfig.get().get(HudConfig.Block.WAREHOUSE).scale;
+				assert Math.abs(after - 2f) < 0.01f
+						: "滑条拖到最右 scale 应为 2.0: " + after;
+				assert after > before : "滑条拖到最右 scale 应增大: " + before + " -> " + after;
+				assert mc.screen == host : "滑条调缩放不应重建设置屏（整屏重建即闪烁来源）";
+			});
+
+			// 还原全部 HUD 配置（测试不留痕）
+			context.runOnClient(mc -> {
+				for (HudConfig.Block b : HudConfig.Block.values()) {
+					var bc = HudConfig.get().get(b);
+					bc.enabled = true;
+					bc.offsetX = 4;
+					bc.offsetY = 4;
+					bc.scale = 1f;
 				}
 				HudConfig.save(HudConfig.get());
 				UiPlatform.resetHud("hud");

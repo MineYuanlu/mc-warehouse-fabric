@@ -24,6 +24,11 @@ public final class HudLayout implements Layout {
 	public void arrange(UiElement<?> container, UiDraw g) {
 		for (var wrapper : container.children()) {
 			if (!wrapper.visible()) {
+				// 该角区块全关（wrapper 隐藏）时清掉 bounds 残留，防设置屏据此抢占拖拽
+				var corner = cornerOf(wrapper);
+				if (corner != null) {
+					LAST_BOUNDS.remove(corner);
+				}
 				continue;
 			}
 			HudConfig.Corner corner = cornerOf(wrapper);
