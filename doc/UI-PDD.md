@@ -1,7 +1,9 @@
-# Yuanlu Warehouse — UI 层设计文档 v0.2
+# Yuanlu Warehouse — UI 层设计文档 v0.3
 
 > 本文档是 `doc/PDD.md` 的 UI 层专篇。主 PDD §2 中「UI 层暂不实现」的预留位由此文档接管。
 > v0.2：布局引擎 flex 化（grow 权重 / ScrollElement / 全屏脚手架）+ HUD 设置屏 z 序与拖拽语义实装（§3.4/§5.1/§6.2/D5）。
+> v0.3：**全量命令等价补齐**——七页导航（新增世界/配置页）、规则编辑器完整版（结构化表单+物品网格+tail 兜底）、
+> 选区全功能（坐标/expand 设定与快捷键 + SelectionOps 共享）、HUD 设置模拟容器参照与拖拽贴靠（§5/§6.2/§8/D13–D16）。
 > 设计依据：`doc/ui-research.md`（对 11 个参考源的调研结论）。
 > 基线：**MC 26.1**（编译目标 = universal jar 编译线），26.2 适配后续按同一 SPI 追加。
 
@@ -46,6 +48,7 @@
 | 引用 26.2 经验 | 采纳 Wurst7 报告的 4 个已知漂移点作为 L2 接口切分的依据 |
 
 **一期交付**（用户已确认）：L1 引擎核心 + L2 适配层**完整框架**；L3 选择重点做——**仓库管理主屏**、**选区/批量操作 + 世界高亮**、**HUD（纯展示 + 快捷键）**。规则编辑器做框架内可扩展的最小版（列表 + 条目增删），物品选择网格等完整交互留里程碑弹性；容器 Screen 覆盖层、3D 场景 widget 留二期。
+**v0.3 现状**：上述全部落地并补齐至「零命令等价」——12 项仅有命令入口的功能全部获得 UI 形态（见 §5/§6.2/§8；能力映射复核见 `doc/ui-research.md` §5）；容器 Screen 覆盖层维持二期（D16）。
 
 ---
 
@@ -304,22 +307,49 @@ public interface WorldHighlighter {
 
 数据源：`WarehouseManager`（读 `list()/active()`）+ `WarehouseEvents`（TRANSPORT_STATE/PROGRESS/RUN_FINISHED/WAREHOUSE_CHANGED → Presenter `Value`）。写操作直接调 manager/engine —— 与 `WhCommands` 各 Group 相同的调用序列（UI 层复用其语义，不经过命令层）。
 
-### 5.2 选区与批量操作
+### 5.2 选区与批量操作（v0.3 全功能版）
 
-复用 `SelectionState`（现位于 `command/`，一期**上移到 `core/selection/`**，命令层与 UI 共用同一状态——见 §15）：
+复用 `SelectionState`（`core/selection/`，命令层与 UI 共用同一状态——见 §15）：
 
 - **世界交互**（HUD 快捷键驱动，见 §8）：设 pos1/pos2（脚下/准星 `--look` 等价）、扩展角 2、显示/清除。
+- **共享操作核心**：`core/selection/SelectionOps`——inBox 判定 / countInBox / expand / dominantAxis（视线主轴），
+  命令层 `SelectGroup.inBox` 与选区面板同一实现（D9 延伸，消除双实现漂移）；`~` 相对坐标解析同样抽取为
+  `util/RelativeCoords` 共用（`CommandSupport.coord` 委托）。
 - **选区盒渲染**：`WorldHighlighter` 画三轴三色线框 + 角块高亮 + 半透明面（Litematica `renderSelectionBox` 分层配色语义：主体 X 红/Y 绿/Z 蓝，角块 pos1 红 pos2 蓝，选中角统一 accent 色）。
-- **选区面板**（Screen）：显示 pos1/pos2/尺寸；批量操作三组互斥按钮 + 参数（`set-type`：INPUT/OUTPUT/TEMP/IGNORE 互斥组；`set-rule`：规则下拉；`set-cache`：NONE/MEMORY/DISK 互斥组）+ [应用到选区] 确认——交互照搬 Create 互斥按钮组+指示灯模式。
-- 标记模式（`MarkMode`）：HUD 快捷键开关（等价 `container mark`），开启时 HUD 显示当前 session（type/rule/template）与操作提示；配合 §7 容器高亮辨识待标记目标。
+- **选区面板**（Screen，v0.3）：pos1/pos2 三种设定形态（脚下 / 准星 / XYZ 输入框支持 `~` 相对语法）；
+  expand 行 = 次数输入 + 六方向按钮（等价 `select expand <count> <dir>`）；信息行 = world/dim、体积、
+  选区内容器数；批量操作（`set-type`：IOType 互斥组 + mode 回落默认、`set-rule` 加/解、`set-cache`）+ [应用到选区]。
+- 标记模式（`MarkMode`）：HUD 快捷键开关（等价 `container mark`），开启时 HUD 显示当前 session（type/rule/template）与操作提示；仓库页「标记模式」Modal 可带完整参数开启/退出，参数经 `lastConfigured` 记忆供快捷键沿用；配合 §7 容器高亮辨识待标记目标。
 
-### 5.3 规则编辑（最小版，已确认保持）
+### 5.3 规则编辑（v0.3 完整版，替换原「最小版」）
 
-- 规则列表（等价 `rule list/show`）：每规则一行（id、条目数、引用容器数——引用数>0 时删除禁用并 tooltip 说明，等价 `rule delete` 语义）。
-- 条目编辑（等价 `rule add/remove`）：**文本输入（selector JSON/既有语法）+ 条目列表**——用户已确认此形态一期足够；复用现有 `WhCommands.parseTyped` 解析路径，条目行 hover 显示解析结果（selector 类型/参数）；解析失败行内红色错误（MaLiLib MessageRenderer 模式）。
-- 物品选择网格（EMI 式搜索/分页 + ghost 槽）为里程碑 M4 弹性项（§14），UI 元素框架已预留 `ItemGridElement` 抽象位。
+- **双栏布局**：左列规则 CRUD（新建 id 校验、引用数>0 禁删 + tooltip——等价 `rule list/create/delete`）；
+  右列选中规则的条目列表 + 结构化编辑器。
+- **条目列表**：序号 + 结构化摘要（`!name(fuzzy):stone ×64 count` 形态，由 codec toJson 派生）+ tooltip 展示
+  完整 JSON；双击载入编辑器、↑↓ 重排（UI 便捷项，语义无变化故不走 D2 重校验）、× 删除（等价 `rule remove`）。
+- **结构化编辑器**（等价 `rule add` 的表单形态）：选择器类型循环选择（清单来自 `SelectorCodecs.itemTypeNames()`
+  注册表枚举）→ 按类型出参数字段（id/tag/name/nbt 文本框，name 附 fuzzy/exact checkbox，composite 走原始
+  JSON）；取反 checkbox；数量 = 不限量/count/group/fill_slots/percent 循环选择 + 数值框。
+  **即时校验** = 构造 JsonObject → `SelectorCodecs.itemFromJson/quantityFromJson` round-trip，错误行内红色；
+  **保存** = `WhCommands.upsertRuleEntryDirect`（与命令同一 D2 校验 + 回滚 + 落盘路径）。
+- **物品选择网格** `ItemGridElement`：玩家背包 36 格快照 9 列（原版 18px 槽位），点击物品把注册 id 填进
+  id 选择器参数；Modal 弹出。插件注册的额外 codec 类型自动出现在类型清单（label 兜底字面量）。
+- **命令语法兜底**：tail 语法输入保留为 Modal 形态（复用 `WhCommands.addRuleEntryDirect`），
+  服务高级用户与粘贴既有命令的场景。
 
 ### 5.4 HUD 元素（详见 §6）与高亮渲染（详见 §7）都是 L3 组件，共享 §3.3 的 Presenter 机制。
+
+### 5.5 世界映射页与配置页（v0.3 新增，等价 world/config 两组命令）
+
+- **世界页** `WorldScreens`：会话身份卡（serverId / 当前 worldId / 激活 worldName / 当前维度，等价 `world info`）；
+  worldName→worldId 映射列表（`*` 标激活名，等价 `world list`），每行 [绑当前会话]（快捷换绑恢复入口）与
+  [绑 worldId…] / [重命名] Modal（等价 `world bind/rename`）；服务端报告维度列表。
+  写操作直接经 `WorldNameMapper`（与命令 WorldGroup 同一调用序列）。
+- **配置页** `ConfigScreens`：11 个配置项类型化控件——bool=checkbox、int=NumberField（范围钳制）、
+  slotAllocator=注册表下拉（`WarehouseRegistryImpl.allocators()`）、reachLimit=double 文本框。
+  开关/枚举即改即存，数值/文本**失焦（BLUR）落盘**（避免逐键写盘）；落盘路径与 `config set` 一致
+  （`ConfigIO.saveModConfig`）；[重载配置] 等价 `/wh reload`。
+- 导航：`ScreenHeader` 扩为七页（WAREHOUSE / ENGINE / RULES / SELECTION / WORLD / CONFIG / HUD_SETTINGS）。
 
 ---
 
@@ -352,6 +382,11 @@ HUD 本体永不接收输入；对其位置与内容的调整经一个 passthrou
 - 编辑交互：屏幕中央面板逐区块开关（checkbox）、行拖拽排序（捕获阶段，越行高换位，滑条上起拖除外）、滑条调文字缩放（0.1 步进，`SliderElement`：拖动实时预览 + 标签就地刷新，**不整屏重建**——重建首帧中央面板闪现左上角曾是缺陷根源；落盘推迟到 DRAG_END/CLICK）；**按住 HUD 本体拖拽 = 平移该角组**——按 `HudLayout` 布局期记录的每角真实 bounds（±2px 余量，区块全关即失效）抓取（捕获阶段抢占，面板行不干扰），附近空白退回象限猜测；方向键 1px 微调。中央面板定位 = `OverlayLayer` 根级 `grow(1)` 满铺 + `Center` 布局器布局期居中钳制（不依赖 20Hz tick）。
 - 跟手性：拖拽增量在 double 累加器中保留小数残量（GUI Scale≥2 时单帧位移不足 1px，直接取整会整体卡顿），逐像素跟手；offset 钳在 `[0, 屏-8px]`，组永远留在屏内可再抓取。
 - 持久化：`config/yuanlu-warehouse-hud.json`：`{ blocks: { "<id>": { enabled, corner, offsetX, offsetY, order, maxLines, scale } } }`，拖拽中仅写内存、START/END 落盘。
+- **模拟容器参照与贴靠（v0.3）**：中央面板「模拟容器」行（启用 + 预设循环选择，会话级不落盘）——
+  `ContainerGhostElement` 按原版 GUI 尺寸与贴图分段 blit 渲染常见容器预设（单箱27/双箱54/潜影盒/投掷器/熔炉/
+  背包段，generic_54 body+背包段 UV 拼接；`UiDraw.blit` 纹理区域端口），屏幕居中、zIndex -1 不拦输入；
+  拖拽 HUD 组时以容器矩形为 snap 目标——`HudLayout.snapDelta` 四向边缘最小修正（阈值 6px，纯函数可 JUnit），
+  吸附成功沿容器被对齐的边画 1px accent 引导线。用途：把 HUD 拖到不遮挡容器界面的位置/贴靠容器边缘（D15）。
 - 实现要点：拖拽命中/移动全部是 Screen 内常规输入事件，走 L1 事件系统（DRAG_*），无跨版本风险。
 
 ---
@@ -381,7 +416,7 @@ record UiKeybind(String id, String category, KeyMapping key, boolean requiresWor
 |---|---|---|
 | `wh.ui.open` | `K` | 打开仓库管理主屏 |
 | `wh.select.pos1` / `pos2` | 未绑定 | 设角 1/2（脚下；与 `shift` 组合 = 准星方块） |
-| `wh.select.expand` | 未绑定 | 按住 + 滚轮 = 沿视线扩展角 2（Litematica grab 语义） |
+| `wh.select.expand` | 未绑定 | 按压 = 角 2 沿视线主轴扩展 1 格，`shift` = 反向收缩 1 格（v0.3 修订：等价 `select expand 1 <dir>`；精确多格扩展在选区面板；grab+滚轮语义需滚轮拦截 mixin，经 D14 裁剪） |
 | `wh.select.show` | 未绑定 | 切换选区盒常显 |
 | `wh.select.clear` | 未绑定 | 清除选区 |
 | `wh.mark.toggle` | 未绑定 | 标记模式开关 |
@@ -458,7 +493,8 @@ src/client/java/bid/yuanlu/mc/warehouse/
 │       │                          #   RuleListScreen(最小版), HudSettingsScreen
 │       ├── hud/                   # HudPanel(区块元素), HudRoot
 │       ├── highlight/             # HighlightRenderer（渲染侧；HighlightManager 留 core/highlight/）
-│       └── widget/                # 复合控件：Badge, IconRow, ConfirmDialog, MessageBar, ItemGridElement(预留)
+│       └── widget/                # 复合控件：Modal, ScreenScaffold, CycleSelector, DropdownElement,
+│                                  #   ItemGridElement, RuleEntryEditor, ContainerGhostElement
 ├── core/selection/                # ★ SelectionState 自 command/ 上移（命令层同步改引用）
 └── (其余不变，见主 PDD §12)
 ```
@@ -486,6 +522,7 @@ src/client/java/bid/yuanlu/mc/warehouse/
 | M2 世界高亮 | §7（`HighlightManager` + `HighlightRenderer` + 选区盒/标记目标）+ `WorldHighlighter` 端口 | gametest：三种 IOType 容器高亮颜色正确；选区盒随快捷键更新 |
 | M3 主屏 | §5.1 仓库管理主屏两页签 + 确认浮层 + 容器编辑浮层；§5.2 选区面板 | gametest：零命令完成 create→mark→select→set-type→start→abort 全链路 |
 | M4 弹性项 | §5.3 规则最小版完善；物品选择网格（ItemGridElement）起步；overlay 挂载根调研 | 按剩余容量裁剪 |
+| M5 全量绘制（v0.3，已完成） | 规则编辑器完整版（§5.3）；选区全功能 + expand 快捷键（§5.2/§8）；HUD 模拟容器 + 贴靠（§6.2）；世界页/配置页 + 七页导航（§5.5）；引擎页 pathfinder/status/transfer、anchor/容器增删/标记 Modal（§5.1 补全）；L1 补强（EditBuffer 光标编辑/NumberField/Dropdown/blit 端口） | 七页逐页开屏 gametest 冒烟绿；`doc/ui-research.md` §5 能力映射「零命令等价」全部有 UI 形态 |
 
 每个里程碑独立可发布（HUD-only 或 main-screen-only 都不破坏命令层）。26.2 适配作为独立任务排在 M0 后任意时点：跑版本矩阵 → 新增 `ui/mc/mc262/` 子包 + 探测分支 → L1/L3 零 diff 验证。
 
@@ -540,3 +577,23 @@ vanilla 不向 HUD 分发鼠标/键盘输入（MouseHandler 只派发给当前 S
 
 ### D12 为什么 HUD 设置做成 Screen 而不是"HUD 上的编辑模式"？
 同一原因链：HUD 无输入（D8）→ 编辑交互必须发生在 Screen 里 → 干脆让设置屏显示实时 HUD 预览并在其上编辑（拖拽/开关/排序都是 Screen 内常规事件）。额外收益：同一 `HudRoot` 元素在 HudHost 与设置屏画布两处渲染，天然验证了 L1"同树多挂载"的设计假设，为插件 HUD 区块（§11）提供实现样板。
+
+### D13 为什么规则条目结构化编辑走 SelectorCodecs 注册表而不是 UI 自建类型表？
+类型清单 = `SelectorCodecs.itemTypeNames()/quantityTypeNames()` 注册序枚举——内置与插件 codec 自动出现，
+UI 不维护第二份类型表；校验 = JSON round-trip（`itemFromJson`），与命令解析同一口径（D2 严格校验），
+UI 与命令的语义漂移在机制上不可能发生。插件类型的 label 缺省字面量展示（无 i18n 键也不破坏可用性）。
+
+### D14 为什么 expand 快捷键选「按压沿视线主轴 1 格」而不是「按住+滚轮 grab」？
+滚轮拦截需要新增 MouseHandler 注入点（第 4 个业务 mixin，成为跨版本维护面）；按压语义已覆盖
+「快捷键方向性扩展」的核心需求（潜行反向 = 收缩），精确多格扩展由选区面板次数+方向按钮承接，
+命令层 `select expand <count> <dir>` 保持完整能力。grab 语义若未来确需，作为独立 mixin 提案评审。
+
+### D15 为什么 HUD 设置的模拟容器用原版贴图分段 blit 而不是程序化绘制？
+贴靠对齐的前提是尺寸与真实容器 GUI 一致——原版 `generic_54` 等贴图按 256 网格 UV 分段 blit
+（body 段 rows*18+17 + 背包段 96px）即得像素级一致；程序化绘制要么近似（对齐偏差）要么复刻原版
+绘制逻辑（维护成本）。为此给 L1 端口加了 `UiDraw.blit`（纹理路径 + UV 子区域），仍是版本无关签名。
+
+### D16 为什么「打开原版容器界面时 HUD 继续显示」维持二期？
+需要 GameRenderer 级挂载（OverlayHost，§4.2）或容器 Screen 渲染注入，z 序与拖拽配置需独立设计；
+HUD 定位需求已由设置屏模拟容器参照（D15）解决——用户可在无容器的设置屏里按真实容器尺寸完成贴靠，
+运行时收益增量小、跨版本风险高一档，故按原规划留二期，不因 v0.3 扩容顺手做掉。
