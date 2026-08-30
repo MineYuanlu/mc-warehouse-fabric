@@ -147,8 +147,8 @@ public final class MarkMode {
 			return;
 		}
 		WorldDim dim = currentDim();
-		if (dim.worldId() == null || dim.dimId() == null) return;
-		lastLookedAt = new Target(new WorldDimPos(dim.worldId(), dim.dimId(),
+		if (dim == null) return;
+		lastLookedAt = new Target(new WorldDimPos(dim.worldName(), dim.dimId(),
 				pos.getX(), pos.getY(), pos.getZ()));
 		boolean registered = findContainer(lastLookedAt.abs()) != null;
 		player.sendOverlayMessage(Component.translatable(
@@ -188,20 +188,38 @@ public final class MarkMode {
 		return null;
 	}
 
+	@Nullable
 	private static WorldDim currentDim() {
 		Minecraft mc = Minecraft.getInstance();
-		WorldSessionTracker trk = WorldSessionTracker.get();
-		String worldId = trk == null ? null : trk.currentWorldId();
+		WorldSessionTracker trk;
+		try {
+			trk = WorldSessionTracker.get();
+		} catch (IllegalStateException e) {
+			return null;
+		}
+		String serverId = trk == null ? null : trk.currentServerId();
+		String worldName = trk == null ? null : trk.currentWorldName();
 		String dimId = mc.level == null ? null : mc.level.dimension().identifier().toString();
-		return new WorldDim(worldId, dimId);
+		if (serverId == null || worldName == null || dimId == null) return null;
+		return new WorldDim(serverId, worldName, dimId);
 	}
 
 	/** 按 canonical 相对坐标在激活仓库内查找容器 */
+	@Nullable
 	static ContainerInfo findContainer(WorldDimPos abs) {
 		WarehouseManagerImpl mgr = WarehouseManagerImpl.get();
 		if (mgr == null || mgr.active() == null) return null;
+		if (!abs.hasWorld()) return null;
+		WorldSessionTracker trk;
+		try {
+			trk = WorldSessionTracker.get();
+		} catch (IllegalStateException e) {
+			return null;
+		}
+		String serverId = trk == null ? null : trk.currentServerId();
+		if (serverId == null) return null;
 		var wh = mgr.active();
-		WorldDim dim = new WorldDim(abs.world(), abs.dim());
+		WorldDim dim = new WorldDim(serverId, abs.world(), abs.dim());
 		WorldDimPos rel = wh.toRelative(dim, abs.toBlockPos());
 		if (rel == null) return null;
 		return wh.containerAt(dim, rel.toBlockPos());
@@ -230,7 +248,16 @@ public final class MarkMode {
 		}
 		WarehouseManagerImpl mgr = WarehouseManagerImpl.get();
 		var wh = mgr.active();
-		WorldDim tdim = new WorldDim(target.abs().world(), target.abs().dim());
+		if (!target.abs().hasWorld()) return;
+		WorldSessionTracker trk;
+		try {
+			trk = WorldSessionTracker.get();
+		} catch (IllegalStateException e) {
+			return;
+		}
+		String serverId = trk == null ? null : trk.currentServerId();
+		if (serverId == null) return;
+		WorldDim tdim = new WorldDim(serverId, target.abs().world(), target.abs().dim());
 		ContainerInfo info = new ContainerInfo(s.type());
 		// §3.2 双箱合并：大箱子的另一半一并入库（canonical = 被点击的半边）
 		for (BlockPos part : multiblockParts(target.abs().toBlockPos())) {

@@ -53,7 +53,7 @@ public class ConfigIOTest extends McBootstrap {
 
 	private Warehouse sampleWarehouse() {
 		Warehouse w = new Warehouse("main");
-		w.setAnchor(new bid.yuanlu.mc.warehouse.api.world.WorldDim("singleplayer:New World", "minecraft:overworld"),
+		w.setAnchor(new bid.yuanlu.mc.warehouse.api.world.WorldDim("singleplayer:New World", "", "minecraft:overworld"),
 				new net.minecraft.core.BlockPos(0, 64, 0));
 
 		ContainerInfo output = new ContainerInfo(IOType.OUTPUT);
@@ -90,14 +90,14 @@ public class ConfigIOTest extends McBootstrap {
 		Warehouse loaded = result.warehouses().getFirst();
 		assertEquals("main", loaded.id);
 		assertEquals(new net.minecraft.core.BlockPos(0, 64, 0), loaded.anchorOf(
-				new bid.yuanlu.mc.warehouse.api.world.WorldDim("singleplayer:New World", "minecraft:overworld")));
+				new bid.yuanlu.mc.warehouse.api.world.WorldDim("singleplayer:New World", "", "minecraft:overworld")));
 
 		ContainerInfo c = loaded.containers.getFirst();
 		assertEquals(IOType.OUTPUT, c.ioType);
 		var pos = c.pos.getFirst();
-		assertTrue(pos.hasWorld(), "省略的 world 已按唯一 anchor 键补全");
-		assertEquals("singleplayer:New World", pos.world());
-		assertEquals(new WorldDimPos("singleplayer:New World", "minecraft:overworld", 10, -64, 20), pos,
+		assertTrue(pos.hasWorld(), "省略的 world 已按唯一 worldName 补全");
+		assertEquals("", pos.world(), "v2：补全的是 anchors 中的 worldName（缺省世界为 \"\"）");
+		assertEquals(new WorldDimPos("", "minecraft:overworld", 10, -64, 20), pos,
 				"存档保持相对坐标，仅补全 world");
 
 		// 规则与选择器（多态）保真
@@ -152,7 +152,7 @@ public class ConfigIOTest extends McBootstrap {
 	@Test
 	void unlimitedQuantityOnOutputRejected() throws Exception {
 		Warehouse w = new Warehouse("bad");
-		w.setAnchor(new bid.yuanlu.mc.warehouse.api.world.WorldDim("sp:w", "minecraft:overworld"),
+		w.setAnchor(new bid.yuanlu.mc.warehouse.api.world.WorldDim("sp:w", "", "minecraft:overworld"),
 				net.minecraft.core.BlockPos.ZERO);
 		ContainerInfo output = new ContainerInfo(IOType.OUTPUT);
 		output.pos.add(new WorldDimPos("sp:w", "minecraft:overworld", 1, 0, 1));
@@ -172,7 +172,7 @@ public class ConfigIOTest extends McBootstrap {
 	@Test
 	void unknownReferencedRuleRejected() {
 		Warehouse w = new Warehouse("w2");
-		w.setAnchor(new bid.yuanlu.mc.warehouse.api.world.WorldDim("sp:w", "minecraft:overworld"),
+		w.setAnchor(new bid.yuanlu.mc.warehouse.api.world.WorldDim("sp:w", "", "minecraft:overworld"),
 				net.minecraft.core.BlockPos.ZERO);
 		ContainerInfo c = new ContainerInfo(IOType.INPUT);
 		c.pos.add(new WorldDimPos("sp:w", "minecraft:overworld", 1, 0, 1));

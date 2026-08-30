@@ -462,9 +462,9 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 
 	private Navigator resolveNavigator() {
 		LocalPlayer p = Minecraft.getInstance().player;
-		String worldId = p == null ? null : bid.yuanlu.mc.warehouse.core.world.WorldSessionTracker.get().currentWorldId();
+		String serverId = p == null ? null : bid.yuanlu.mc.warehouse.core.world.WorldSessionTracker.get().currentServerId();
 		String dimId = currentDimId();
-		String wanted = pathfinderOverride != null ? pathfinderOverride : config.pathfinder(worldId, dimId);
+		String wanted = pathfinderOverride != null ? pathfinderOverride : config.pathfinder(serverId, dimId);
 		Navigator nav = WarehouseRegistryImpl.navigator(wanted);
 		return nav != null ? nav : new NoOpNavigator();
 	}
@@ -1099,7 +1099,13 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 	private WorldDimPos absPos(ContainerInfo c) {
 		Warehouse wh = manager.active();
 		if (wh == null) return c.canonicalPos();
-		var abs = wh.resolveAbsolute(c.canonicalPos());
+		String serverId;
+		try {
+			serverId = bid.yuanlu.mc.warehouse.core.world.WorldSessionTracker.get().currentServerId();
+		} catch (IllegalStateException e) {
+			return c.canonicalPos();
+		}
+		var abs = wh.resolveAbsolute(serverId, c.canonicalPos());
 		return abs != null ? abs : c.canonicalPos();
 	}
 

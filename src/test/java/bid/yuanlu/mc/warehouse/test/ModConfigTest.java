@@ -39,7 +39,7 @@ public class ModConfigTest {
 		var world = new ModConfig.WorldEntry();
 		world.interactionSpeed = 3;
 		world.pathfinder = "walk";
-		c.worlds.put("w", world);
+		c.servers.put("w", world);
 
 		// world 级默认
 		assertEquals(3, c.interactionSpeed("w", "dim_a"));

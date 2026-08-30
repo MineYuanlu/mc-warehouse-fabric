@@ -41,8 +41,12 @@ import bid.yuanlu.mc.warehouse.impl.selector.IdSelector;
 import bid.yuanlu.mc.warehouse.impl.selector.NameSelector;
 import bid.yuanlu.mc.warehouse.impl.selector.NbtSelector;
 import bid.yuanlu.mc.warehouse.impl.selector.TagSelector;
-import bid.yuanlu.mc.warehouse.impl.world.MultiplayerWorldIdentifier;
-import bid.yuanlu.mc.warehouse.impl.world.SingleplayerWorldIdentifier;
+import bid.yuanlu.mc.warehouse.impl.world.MultiplayerServerIdentifier;
+import bid.yuanlu.mc.warehouse.impl.world.ServerPushedWorldIdentifier;
+import bid.yuanlu.mc.warehouse.impl.world.SingleplayerServerIdentifier;
+import bid.yuanlu.mc.warehouse.core.world.ClientWorldIdReceiver;
+import bid.yuanlu.mc.warehouse.core.world.ServerWorldIdHolder;
+import bid.yuanlu.mc.warehouse.core.world.WorldNameMapper;
 
 /**
  * 客户端入口装配（PDD §12）：内置实现注册 → 插件加载 → 注册表冻结 →
@@ -54,6 +58,7 @@ public final class YuanluWarehouseClient implements ClientModInitializer {
 
 	@Override
 	public void onInitializeClient() {
+		ClientWorldIdReceiver.register();
 		registerBuiltins();
 		loadPlugins();
 		WarehouseRegistryImpl.freeze();
@@ -91,6 +96,7 @@ public final class YuanluWarehouseClient implements ClientModInitializer {
 		reg.registerInteraction(new VanillaGuiInteraction());
 		reg.registerNavigator(new NoOpNavigator());
 		reg.registerSlotAllocator(new FirstFitAllocator());
+		reg.registerWorldIdentifier(new ServerPushedWorldIdentifier());
 		reg.registerItemSelectorCodec(IdSelector.codec());
 		reg.registerItemSelectorCodec(TagSelector.codec());
 		reg.registerItemSelectorCodec(NameSelector.codec());
@@ -123,9 +129,21 @@ public final class YuanluWarehouseClient implements ClientModInitializer {
 	static void bootstrapServices() {
 		ConfigIO io = new ConfigIO(ConfigIO.defaultRoot());
 		ModConfig config = io.loadModConfig();
-		WorldSessionTracker sessions = new WorldSessionTracker(List.of(
-				new SingleplayerWorldIdentifier(),
-				new MultiplayerWorldIdentifier()));
+		WorldNameMapper mapper = new WorldNameMapper(io.root().resolve("world-map.json"),
+				(serverId, worldId) -> {
+					String pushed = ServerWorldIdHolder.getLevelName();
+					if (pushed != null && !pushed.isBlank()) return pushed;
+					if (serverId.startsWith(SingleplayerServerIdentifier.ID + ":")) {
+						String levelName = SingleplayerServerIdentifier.currentLevelName();
+						if (levelName != null && !levelName.isBlank()) return levelName;
+					}
+					return worldId;
+				});
+		WorldNameMapper.setInstance(mapper);
+		WorldSessionTracker sessions = new WorldSessionTracker(
+				List.of(new SingleplayerServerIdentifier(), new MultiplayerServerIdentifier()),
+				WarehouseRegistryImpl.worldIdentifiers(),
+				mapper);
 		WorldSessionTracker.setInstance(sessions);
 		bid.yuanlu.mc.warehouse.core.cache.DiskCacheStore disk =
 				new bid.yuanlu.mc.warehouse.core.cache.DiskCacheStore(io.root());

@@ -63,8 +63,8 @@ Warehouse {
 }
 ```
 
-- 仓库可跨世界、跨维度，每个 `(worldId, dimId)` 有一个基准点
-- 容器的 pos 存为**相对坐标**（相对于同 `(worldId, dimId)` 的 anchor），便于整体偏移
+- 仓库可跨 world、跨维度，每个 `(serverId, worldName, dimId)` 有一个基准点（WorldDim 见 §4.5，JSON 嵌套结构见 §11.3）；服务器维度是会话相对的（运行时按当前 serverId 解析，天然跨游戏复用）
+- 容器的 pos 存为**相对坐标**（相对于同 `(world,dim)` 的 anchor），便于整体偏移
 - `rules` 字段使得规则可以在仓库级别定义，也可在全局共享（见 §11 配置持久化）；全局与内嵌规则 id 冲突 = 加载报错拒载（§11.3）
 - **v0.2**：删除 `active` 字段。激活态是运行时概念，由 `WarehouseManager.activeWarehouseId` 内存持有，不持久化（旧项目该字段持久化后从未被读取，见 §15.2）
 
@@ -72,7 +72,7 @@ Warehouse {
 
 ```java
 ContainerInfo {
-    pos: WorldDimPos[]            // (worldId, dimId, x, y, z)，支持多格容器；
+    pos: WorldDimPos[]            // (worldName, dimId, x, y, z)，支持多格容器；
                                   // pos[0] 为 canonical pos（缓存键与日志的主标识）
     ioType: IOType                // INPUT | OUTPUT | TEMP | IGNORE
     ruleMode: RuleMode            // WHITELIST | BLACKLIST
@@ -282,33 +282,67 @@ enum PlanDirection {
 
 ## 4. 世界与服务器标识
 
-仓库与配置必须回答「这是哪个服务器/存档」的问题，否则不同服务器的同名坐标会互相污染配置与缓存。
+仓库与配置必须回答「这是哪个服务器/存档、哪个世界」的问题，否则不同服务器的同名坐标会互相污染配置与缓存。
 
-### 4.1 WorldIdentifier — 接口
+### 4.1 三层概念（v0.5 修订）
+
+| 概念       | 来源                                                                                     | 职责                                       |
+| ---------- | ---------------------------------------------------------------------------------------- | ------------------------------------------ |
+| **serverId** | 内置固定实现（非 SPI）：单人 `singleplayer:<存档目录名>`；多人 `mp:<host>:<port>`       | 配置隔离根、缓存命名空间、会话生命周期     |
+| **worldId**  | 服务端推送的**存档级随机 id 文件**（§4.2）；id 文件不可用时缺省 `""`                    | 世界的物理身份；会话切换判定               |
+| **worldName**| 玩家可控命名，world-map.json 中 `worldName → worldId` 映射的键                          | **anchors 与 pos.world 实际引用的名字**    |
 
 ```java
+public interface ServerIdentifier {
+    /** 当前会话的服务器标识；会话未就绪（主菜单/已断开）返回 null */
+    @Nullable String currentServerId();
+}
+
 public interface WorldIdentifier {
     String id();
-    /** 当前会话的 world 标识；会话未就绪（主菜单/已断开）返回 null */
+    /** 当前服务器内的 worldId；不适用返回 null；{@code ""} 是明确的「无 id/未推送」答案 */
     @Nullable String currentWorldId();
 }
 ```
 
-- world 标识用于三件事：**配置隔离**（不同服务器/存档互不干扰）、**缓存命名空间**、**仓库可达性判断**
-- 引擎每 tick 缓存当前 worldId；**worldId 发生变化视为会话切换**：MEMORY 缓存清空、DISK 缓存卸载、运行中的搬运终止并报告
+- 内置 `ServerIdentifier`：`SingleplayerServerIdentifier`（存档目录名，经 `getWorldPath(LevelResource.ROOT)` 取归一化后的目录名）、`MultiplayerServerIdentifier`（`ServerData.ip`，无端口补 25565）
+- 内置 `WorldIdentifier`：`ServerPushedWorldIdentifier`（读网络推送 holder，单人与多人均生效——单人由集成服推送）；SPI 全部不适用时缺省 `""`
+- worldId 变更的兼容映射：**换游戏复用**时 worldId 变化（如"只搬 region 到新存档"），`/wh world bind` 换绑一行即可让全部仓库继续工作
 
-### 4.2 内置实现
+### 4.2 服务端推送（world_id payload）与随机 id 文件（v0.5）
 
-| 实现                        | 标识格式                    | 来源                    |
-| --------------------------- | --------------------------- | ----------------------- |
-| SingleplayerWorldIdentifier | `singleplayer:<存档目录名>` | 当前 Level 的存档目录名 |
-| MultiplayerWorldIdentifier  | `mp:<host>:<port>`          | ServerData 连接地址     |
+- **存档级随机 id 文件 `yuanluworldid.txt`**（Xaero `xaeromap.txt` 同款粒度，格式单行 `id:<int>`）：位于存档根（`getWorldPath(LevelResource.ROOT)`），服务端首次读取时生成并写回，此后**存档目录改名/复制 id 不变**。粒度 = 存档级（所有维度共享同一 worldId，维度由 dimId 区分，与三层模型一致）。**只防目录改名，不防"只搬 region 到新存档"**——新存档生成新 id，由玩家手动换绑（`/wh world bind`）恢复
+- 单人与专用服统一：`ServerWorldIdSync` 挂 main entrypoint，单人的集成服与装本 mod 的专用服都走同一逻辑；原版服务端无推送，worldId 缺省 `""`
+- S2C `yuanlu-warehouse:world_id` v2，载荷 `{protocol:int, worldId:string, levelName:string, levels:[string]}`：`levelName` = 服务端存档名（worldName 默认名建议，避免数字 id 作默认名），`levels` = 服务端全部维度（`/wh world list` 展示用）。**v2 codec 与 v1 mod 版本错配解码失败断连——两端须同版本 mod**（universal jar 策略下天然满足）；原版客户端不声明 channel 永不收到，零兼容性风险
+- 服务端：`ServerPlayConnectionEvents.JOIN` 推送 + 服务端 tick 检测变化重发 + **每 5s 周期性重发**（自愈客户端 JOIN 清空与推送到达的顺序竞态）；发送前必须 `ServerPlayNetworking.canSend(player, type)`
+- id 文件按 server 实例缓存（tick 每帧调用不可每帧 IO），`SERVER_STOPPED` 清理；只读文件系统等 IO 失败时回退 `""`（log warn）
 
-两者默认同时注册，运行时按连接类型自动选择。插件可注册额外实现（如经代理区分同一服务器的多个分区）。
+### 4.3 worldName 映射（world-map.json）
 
-### 4.3 维度与 WorldDim
+```json
+{
+  "schemaVersion": 1,
+  "servers": {
+    "singleplayer:caoyuan-26_1": { "新的世界": "-1979958895" },
+    "mp:mc.example.com:25565":   { "lobby": "88213", "survival": "88213" }
+  }
+}
+```
 
-dim 即 MC 维度 id（如 `minecraft:overworld`）。`(worldId, dimId)` 二元组下称 **WorldDim**，是 anchor、容器坐标、寻路目标的完整限定；仅 dim 不构成唯一性（不同服务器/存档的同名维度是不同的世界）。
+- 会话激活时经 `WorldNameMapper.resolveActive(serverId, worldId)` 解析激活 worldName；无映射则**自动创建默认条目并持久化**：默认名优先取服务端推送的 `levelName`（payload v2，单人场景推送未到达前本地读 level.dat 的 LevelName），否则回退 worldId 本身；默认名冲突追加 `#2` 后缀
+- 同一 worldId 允许多别名，激活名取插入序第一个；`/wh world list` 查看、`/wh world rename <from> <to>` 改名、`/wh world bind <名称> [worldId]` 手动绑定/换绑（worldId 缺省 = 当前会话 worldId，是"只搬 region/复制存档"场景的恢复入口）
+- **`""` 绑定迁移（v0.5 升级，幂等）**：v0.4 条目 worldId 恒 `""`；客户端拿到新文件 id 后，`resolveActive` 自动把该 serverId 下所有绑 `""` 的条目重绑为新 id——旧 worldName 与锚点无缝衔接，无版本标记（无 `""` 条目即 no-op）
+- worldName 为任意 JSON 字符串（anchors 三层嵌套避免分隔符转义问题）
+
+### 4.4 会话切换
+
+引擎每 tick 解析 `(serverId, worldId, worldName)` 组成 `WorldSession` 快照；**serverId、worldId 或 worldName 任一变化视为会话切换**：MEMORY 缓存清空、DISK 缓存卸载、运行中的搬运终止并报告。
+
+### 4.5 维度与 WorldDim
+
+dim 即 MC 维度 id（如 `minecraft:overworld`）。`(serverId, worldName, dimId)` 三元组下称 **WorldDim**，是 anchor、容器坐标、寻路目标的完整限定；仅 dim 不构成唯一性。
+
+**解析流程（会话相对）**：会话 = (serverId, worldId) → world-map.json 得激活 worldName → 仓库 anchors `serverId → worldName → dimId` 下按当前会话解析。仓库因此天然跨游戏复用：当前服务器无对应 anchor 即视为不可达，无需绑定单一服务器。
 
 ## 5. 传输引擎 (Transport Engine)
 
@@ -986,7 +1020,7 @@ public interface SelectorCodec<T> {
 | 数量选择器 | `QuantitySelector` (+codec) | 新的数量控制方式                                      |
 | 槽位分配器 | `SlotAllocator`             | 槽位落位策略                                          |
 | 寻路器     | `Navigator`                 | 新的寻路算法                                          |
-| 世界标识器 | `WorldIdentifier`           | 特殊的 world 划分方式                                 |
+| 世界标识器 | `WorldIdentifier`           | 服务器内 world 划分的识别手段（服务端推送为内置实现） |
 | 仓库规划器 | `AgentPlanner`              | AI/规则引擎自动规划仓库配置                           |
 | 事件订阅   | `WarehouseEvents.*`         | 监听引擎状态/数据变化（§5.9）                         |
 
@@ -1072,6 +1106,10 @@ TEMP 容器同时参与取出和放入两个阶段，其行为取决于当前阶
 | `/wh select set-type/set-rule/set-cache`                              | 批量设置                                                                                      | ✅     |
 | `/wh select plan`                                                     | 交由 Agent 自动配置（一阶段为 stub：AgentPlanner 属 §14 裁剪范围）                            | ✅     |
 | `/wh transfer <src> <dst> start/status/stop`                          | 跨仓库搬运                                                                                    | ✅     |
+| `/wh world list`                                                      | 列出当前服务器的 worldName → worldId 映射（`*` 标激活名）+ 服务端报告的维度列表（§4.3）      | ✅     |
+| `/wh world info`                                                      | 当前会话总览：serverId / worldId / 激活 worldName / 当前维度                                  | ✅     |
+| `/wh world bind <名称> [worldId]`                                     | 手动绑定/换绑（worldId 缺省 = 当前会话 worldId；"只搬 region/复制存档"的恢复入口，§4.3）     | ✅     |
+| `/wh world rename <from> <to>`                                        | 重命名世界（anchors/pos.world 引用的名字随之更新）                                            | ✅     |
 | `/wh reload`                                                          | 重载配置文件                                                                                  | ✅     |
 | `/wh config show`                                                     | 显示当前配置                                                                                  | ✅     |
 | `/wh config set <key> <value>`                                        | 设置配置项                                                                                    | ✅     |
@@ -1116,6 +1154,8 @@ config/yuanlu-warehouse/
 └── cache/<worldId>/      # DISK 磁盘缓存，按 world 隔离；自动生成
 ```
 
+另：`world-map.json`（§4.3）与 `config.json` 同目录；服务端存档根的 `yuanluworldid.txt`（§4.2）由服务端自动生成，不属于本目录。
+
 ### 11.2 序列化格式与健壮性
 
 使用 Gson 进行 JSON 序列化/反序列化。`ItemSelector` 和 `QuantitySelector` 是接口，TypeAdapter 按 **Registry 中注册的 codec 表**分发（内置实现同样经 codec 注册——插件因此获得同等的持久化能力）：
@@ -1135,11 +1175,13 @@ config/yuanlu-warehouse/
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "main",
   "anchors": {
-    "singleplayer:New World": {
-      "minecraft:overworld": { "x": 0, "y": 64, "z": 0 }
+    "singleplayer:caoyuan-26_1": {
+      "新的世界": {
+        "minecraft:overworld": { "x": 0, "y": 64, "z": 0 }
+      }
     }
   },
   "containers": [
@@ -1171,8 +1213,10 @@ config/yuanlu-warehouse/
 坐标说明：
 
 - `pos` 条目为**相对坐标**：x/z 相对同 `(world, dim)` 的 anchor，y 为相对 anchor.y 的偏移
-- pos 条目的 `world` 可省略：省略时取 anchors 键中唯一的 worldId；仓库锚定多个 world 时必须显式写明
-- `anchors` 为 `worldId → dimId → Pos` 两级嵌套，避免分隔符转义问题
+- pos 条目的 `world` 是 **worldName**（§4.3 映射的键，玩家可控），缺省世界写 `""`；可省略：省略时取 anchors 展平后唯一的 worldName，多世界歧义则报错
+- `anchors` 为 `serverId → worldName → dimId → Pos` 三层嵌套（v2），避免分隔符转义问题；serverId 为会话相对解析（§4.5）
+
+**v1→v2 迁移**（无损、自动）：anchors 每键插入 worldName 层 `""`；旧 `pos.world` 值（serverId 格式）若等于某 anchor 键 → `""`，含 `#` → 取后缀，其余置 `""`。
 
 **规则 id 冲突**：仓库内嵌 `rules` 与全局 `rules/` 目录出现同名 id → 加载报错并列出冲突，拒绝载入该仓库（要求改名），不做静默覆盖。
 
@@ -1180,7 +1224,7 @@ config/yuanlu-warehouse/
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "debug": false,
   "defaultInteractionSpeed": 2,
   "interactionJitterPercent": 0,
@@ -1190,8 +1234,8 @@ config/yuanlu-warehouse/
   "exploreFailMax": 2,
   "navRetryMax": 3,
   "timeouts": { "openTicks": 20, "confirmTicks": 10, "settleTicks": 2 },
-  "worlds": {
-    "singleplayer:New World": {
+  "servers": {
+    "singleplayer:caoyuan-26_1": {
       "dimensions": {
         "minecraft:overworld": { "interactionSpeed": 2, "pathfinder": "noop" }
       }
@@ -1205,7 +1249,7 @@ config/yuanlu-warehouse/
 }
 ```
 
-全局配置分为 `ModConfig`（模组级）和 `WorldConfig`（世界级）两部分。**v0.2**：WorldConfig 采用 `worldId → dimId` 两级结构（吸收旧项目 sp/mp 双通道按服务器地址分层的经验），查找顺序：`worlds[world].dimensions[dim]` → `worlds[world]` 级默认 → 全局默认。
+全局配置分为 `ModConfig`（模组级）和 `ServerEntry`（服务器级）两部分。**v0.2**：按服务器地址分层；**v0.4**：键 `worlds` 改名 `servers`（键值即 serverId，§4.1——world 一词让位给服务器内的 world 概念），查找顺序：`servers[server].dimensions[dim]` → `servers[server]` 级默认 → 全局默认。worldName→worldId 映射独立存于 world-map.json（§4.3），不在此文件。
 
 | 配置项                                   | 类型    | 默认值    | 说明                                                  |
 | ---------------------------------------- | ------- | --------- | ----------------------------------------------------- |
@@ -1237,7 +1281,7 @@ src/client/java/bid/yuanlu/mc/warehouse/     # ★ 全部业务代码
 │   ├── navigation/             # Navigator, Goal, PathStatus
 │   ├── interaction/            # ContainerInteraction, ContainerHandle
 │   ├── plugin/                 # WarehousePlugin, WarehouseRegistry, SelectorCodec, AgentPlanner
-│   └── world/                  # WorldIdentifier, WorldDim
+│   └── world/                  # ServerIdentifier, WorldIdentifier, WorldDim, WorldDimPos
 ├── core/                       # 核心实现
 │   ├── registry/               # WarehouseRegistry 实现 + 内置注册
 │   ├── warehouse/              # WarehouseManagerImpl
@@ -1255,14 +1299,15 @@ src/client/java/bid/yuanlu/mc/warehouse/     # ★ 全部业务代码
 │   ├── allocator/              # FirstFitAllocator
 │   ├── container/              # 原版箱子/熔炉/潜影盒等检测器 + VanillaGuiInteraction
 │   ├── navigation/             # NoOpNavigator
-│   └── world/                  # Singleplayer/MultiplayerWorldIdentifier
+│   └── world/                  # Singleplayer/MultiplayerServerIdentifier, ServerPushedWorldIdentifier
 ├── command/                    # /wh 命令实现（Brigadier 子命令类）
 ├── mixin/                      # client mixins（注册于 yuanlu-warehouse.client.mixins.json）
 ├── util/                       # CoordinateUtils, Constants
 └── YuanluWarehouseClient.java  # ClientModInitializer：入口 + 内置实现注册 + 事件桥接
 
 src/main/java/bid/yuanlu/mc/warehouse/
-└── YuanluWarehouse.java        # ModInitializer 空壳（未来网络层/服务端增强预留）
+├── YuanluWarehouse.java        # ModInitializer：服务端增强装配
+└── net/                        # 服务端→客户端推送（WhWorldIdPayload, ServerWorldIdSync）
 
 src/client/resources/
 └── yuanlu-warehouse.client.mixins.json
@@ -1399,6 +1444,8 @@ per-slot 进出签名把「算多少」（选择器职责）与「放哪格」�
 
 | 版本 | 变更                                                                                                                                                                                                                                                                                                                               |
 | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| v0.5 | worldId 落地为存档级随机 id 文件（§4.2）：服务端读/建 `<存档根>/yuanluworldid.txt`（单人集成服与专用服统一），存档改名/复制 id 稳定；world_id payload 升 v2（+levelName 默认名建议、+levels 维度列表；与 v1 mod 错配断连，两端须同版本）；单人也走推送（ServerPushedWorldIdentifier 去多人限定）；"" 绑定自动迁移（§4.3，锚点无缝升级）；服务端 tick 每 5s 周期性重发自愈竞态；新增 `/wh world info`、`/wh world bind`，list 增强（激活标记 + 服务端维度列表） |
+| v0.4 | 世界标识三层化（§4）：serverId / worldId / worldName 概念分离；ServerIdentifier 新增、WorldIdentifier SPI 语义收窄（worldId 由服务端 world_id payload 推送，缺省 ""）；world-map.json 玩家可控映射（自动建映射、/wh world list/rename）；anchors 三层化 + pos.world 语义改为 worldName（schema v2，v1 自动迁移）；config.json worlds→servers；WorldDim 三元组；会话切换改为三元组任一变化触发 |
 | v0.3 | 吸收 Wurst7 MVP 实战经验：精确数量搬运算法定稿并进一阶段（六原语+双向算法+QUICK_CRAFT 分发）；ContainerInteraction 增点击原语层与能力协商；新增标记模式（右键注册容器+自动内容采集）；计划生成补滚动模拟与聚合容量预检；selector×IOType 合法性校验；PROGRESS 两级粒度；cacheTtlSeconds；§15.12 MVP 对照记录（吸收清单+反模式红线） |
 | v0.2 | 吸收旧项目实现期教训：新增 §4 世界与服务器标识、§6 运行时交互协议、§8.2 槽位能力模型、§8.3 交互方式 SPI、§13 测试映射；QuantitySelector 重构（总量 + SlotAllocator）；事件系统改 Fabric Event<T> + RunReport；业务代码定于 src/client；补防振荡双机制、缓存键世界化+自愈、服务端对账、异常扩充、i18n 化、Registry/codec 本体定义   |
 | v0.1 | 初稿                                                                                                                                                                                                                                                                                                                               |

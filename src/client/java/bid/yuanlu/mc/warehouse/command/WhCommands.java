@@ -44,6 +44,10 @@ import bid.yuanlu.mc.warehouse.core.mark.MarkMode;
 import bid.yuanlu.mc.warehouse.core.registry.SelectorCodecs;
 import bid.yuanlu.mc.warehouse.core.registry.WarehouseRegistryImpl;
 import bid.yuanlu.mc.warehouse.core.warehouse.WarehouseManagerImpl;
+import bid.yuanlu.mc.warehouse.core.world.ServerWorldIdHolder;
+import bid.yuanlu.mc.warehouse.core.world.WorldNameMapper;
+import bid.yuanlu.mc.warehouse.core.world.WorldSession;
+import bid.yuanlu.mc.warehouse.core.world.WorldSessionTracker;
 
 /**
  * {@code /wh} 命令树（PDD §10.1 一阶段全量；{@code /warehouse} 别名经 redirect）。
@@ -78,6 +82,7 @@ public final class WhCommands {
 		ContainerGroup.register(root);
 		SelectGroup.register(root);
 		TransferGroup.register(root);
+		WorldGroup.register(root);
 		ConfigGroup.register(root);
 		return root;
 	}
@@ -312,7 +317,7 @@ public final class WhCommands {
 			return;
 		}
 		WorldDim dim = CommandSupport.currentDim(src);
-		if (dim.worldId() == null || dim.dimId() == null) {
+		if (dim == null) {
 			CommandSupport.err(src, "commands.wh.error.not_in_world");
 			return;
 		}
@@ -345,7 +350,7 @@ public final class WhCommands {
 		to.exploreFailMax = from.exploreFailMax;
 		to.navRetryMax = from.navRetryMax;
 		to.timeouts = from.timeouts;
-		to.worlds = from.worlds;
+		to.servers = from.servers;
 	}
 
 	// ============ 引擎控制组 ============
@@ -1212,13 +1217,13 @@ public final class WhCommands {
 		}
 
 		static int setCorner1(WorldDim dim, BlockPos abs) {
-			SelectionState.get().set1(new WorldDimPos(dim.worldId(), dim.dimId(),
+			SelectionState.get().set1(new WorldDimPos(dim.worldName(), dim.dimId(),
 					abs.getX(), abs.getY(), abs.getZ()));
 			return 1;
 		}
 
 		static int setCorner2(WorldDim dim, BlockPos abs) {
-			SelectionState.get().set2(new WorldDimPos(dim.worldId(), dim.dimId(),
+			SelectionState.get().set2(new WorldDimPos(dim.worldName(), dim.dimId(),
 					abs.getX(), abs.getY(), abs.getZ()));
 			return 1;
 		}
@@ -1226,7 +1231,7 @@ public final class WhCommands {
 		private static int save(java.util.function.BiFunction<WorldDim, BlockPos, Integer> setter,
 				FabricClientCommandSource src, BlockPos p) {
 			WorldDim dim = CommandSupport.currentDim(src);
-			if (dim.worldId() == null || dim.dimId() == null) {
+			if (dim == null) {
 				CommandSupport.err(src, "commands.wh.error.not_in_world");
 				return 0;
 			}
@@ -1370,11 +1375,19 @@ public final class WhCommands {
 
 		static boolean inBox(SelectionState sel, ContainerInfo c) {
 			if (sel.hasBox() && c.pos.isEmpty()) return false;
+			String serverId;
+			try {
+				serverId = WorldSessionTracker.get().currentServerId();
+			} catch (IllegalStateException e) {
+				return false;
+			}
+			if (serverId == null) return false;
 			for (WorldDimPos p : c.pos) {
 				// 绝对化：canonical 相对坐标 → 世界绝对坐标对比选区
+				if (!p.hasWorld()) continue;
 				Warehouse wh = manager().active();
 				if (wh == null) return false;
-				WorldDim dim = new WorldDim(p.world(), p.dim());
+				WorldDim dim = new WorldDim(serverId, p.world(), p.dim());
 				BlockPos anchor = wh.anchorOf(dim);
 				if (anchor == null) continue;
 				BlockPos abs = p.plus(anchor).toBlockPos();
@@ -1471,10 +1484,150 @@ public final class WhCommands {
 
 	// ============ 配置组 ============
 
-	static final class ConfigGroup {
+	// ============ 世界映射组 ============
+
+	static final class WorldGroup {
 
 		static void register(LiteralArgumentBuilder<FabricClientCommandSource> root) {
-			var g = lit("config");
+			var g = lit("world");
+			g.then(lit("list").executes(WorldGroup::list));
+			g.then(lit("info").executes(WorldGroup::info));
+			g.then(lit("bind").then(strArg("name")
+					.executes(ctx -> WorldGroup.bind(ctx, null))
+					.then(strArg("worldId").executes(ctx -> WorldGroup.bind(ctx,
+							StringArgumentType.getString(ctx, "worldId"))))));
+			g.then(lit("rename").then(word("from").suggests(worldNames())
+					.then(strArg("to").executes(WorldGroup::rename))));
+			root.then(g);
+		}
+
+		private static SuggestionProvider<FabricClientCommandSource> worldNames() {
+			return (ctx, b) -> {
+				String serverId = currentServerId();
+				if (serverId == null) return b.buildFuture();
+				for (var e : WorldNameMapper.get().worlds(serverId)) b.suggest(e.getKey());
+				return b.buildFuture();
+			};
+		}
+
+		static int list(CommandContext<FabricClientCommandSource> ctx) {
+			var src = ctx.getSource();
+			String serverId = currentServerId();
+			if (serverId == null) {
+				CommandSupport.err(src, "commands.wh.error.not_in_world");
+				return 0;
+			}
+			var worlds = WorldNameMapper.get().worlds(serverId);
+			String active = WorldSessionTracker.get().currentWorldName();
+			src.sendFeedback(Component.translatable("commands.wh.world.header", serverId)
+					.withStyle(ChatFormatting.YELLOW));
+			for (var e : worlds) {
+				src.sendFeedback(Component.translatable(
+						e.getKey().equals(active) ? "commands.wh.world.entry_active" : "commands.wh.world.entry",
+						e.getKey(), e.getValue()));
+			}
+			var levels = ServerWorldIdHolder.getLevels();
+			if (!levels.isEmpty()) {
+				src.sendFeedback(Component.translatable("commands.wh.world.levels_header")
+						.withStyle(ChatFormatting.YELLOW));
+				for (String level : levels) {
+					src.sendFeedback(Component.translatable("commands.wh.world.levels_entry", level));
+				}
+			}
+			return worlds.size();
+		}
+
+		/** 当前会话身份总览：serverId / worldId / 激活 worldName / 当前维度 */
+		static int info(CommandContext<FabricClientCommandSource> ctx) {
+			var src = ctx.getSource();
+			WorldSession session;
+			try {
+				session = WorldSessionTracker.get().currentSession();
+			} catch (IllegalStateException e) {
+				session = null;
+			}
+			if (session == null) {
+				CommandSupport.err(src, "commands.wh.error.not_in_world");
+				return 0;
+			}
+			src.sendFeedback(Component.translatable("commands.wh.world.info_server", session.serverId())
+					.withStyle(ChatFormatting.YELLOW));
+			src.sendFeedback(Component.translatable("commands.wh.world.info_world", session.worldId()));
+			src.sendFeedback(Component.translatable("commands.wh.world.info_active", session.worldName()));
+			if (src.getLevel() != null) {
+				src.sendFeedback(Component.translatable("commands.wh.world.info_dim",
+						src.getLevel().dimension().identifier().toString()));
+			}
+			return 1;
+		}
+
+		/**
+		 * 手动绑定/换绑（PDD §4.4）：worldId 缺省 = 当前会话 worldId（复制的存档
+		 * 手动换绑入口）。绑定后 tracker 下个 tick 重新解析，必要时触发会话切换。
+		 */
+		static int bind(CommandContext<FabricClientCommandSource> ctx, @org.jetbrains.annotations.Nullable String worldId) {
+			var src = ctx.getSource();
+			String serverId = currentServerId();
+			if (serverId == null) {
+				CommandSupport.err(src, "commands.wh.error.not_in_world");
+				return 0;
+			}
+			String name = StringArgumentType.getString(ctx, "name");
+			if (worldId == null) {
+				WorldSession session = WorldSessionTracker.get().currentSession();
+				worldId = session != null ? session.worldId() : "";
+			}
+			if (worldId.isEmpty()) {
+				CommandSupport.err(src, "commands.wh.world.bind_no_worldid");
+				return 0;
+			}
+			try {
+				WorldNameMapper.get().bind(serverId, name, worldId);
+			} catch (IllegalArgumentException e) {
+				CommandSupport.err(src, "commands.wh.error.generic", e.getMessage());
+				return 0;
+			}
+			src.sendFeedback(Component.translatable("commands.wh.world.bound",
+					name, worldId).withStyle(ChatFormatting.GREEN));
+			return 1;
+		}
+
+		static int rename(CommandContext<FabricClientCommandSource> ctx) {
+			var src = ctx.getSource();
+			String serverId = currentServerId();
+			if (serverId == null) {
+				CommandSupport.err(src, "commands.wh.error.not_in_world");
+				return 0;
+			}
+			String from = StringArgumentType.getString(ctx, "from");
+			String to = StringArgumentType.getString(ctx, "to");
+			try {
+				WorldNameMapper.get().rename(serverId, from, to);
+			} catch (IllegalArgumentException e) {
+				CommandSupport.err(src, "commands.wh.error.generic", e.getMessage());
+				return 0;
+			}
+			src.sendFeedback(Component.translatable("commands.wh.world.renamed",
+					from, to).withStyle(ChatFormatting.GREEN));
+			return 1;
+		}
+
+		@org.jetbrains.annotations.Nullable
+		private static String currentServerId() {
+			try {
+				return WorldSessionTracker.get().currentServerId();
+			} catch (IllegalStateException e) {
+				return null;
+			}
+		}
+
+		private WorldGroup() {
+		}
+	}
+
+	static final class ConfigGroup {
+
+		static void register(LiteralArgumentBuilder<FabricClientCommandSource> root) {			var g = lit("config");
 			g.then(lit("show").executes(ConfigGroup::showCfg));
 			g.then(lit("set").then(word("key").suggests(iofs(CONFIG_KEYS))
 					.then(strArg("value").executes(ConfigGroup::setCfg))));
@@ -1634,7 +1787,7 @@ public final class WhCommands {
 			return null;
 		}
 		WorldDim dim = CommandSupport.currentDim(src);
-		if (dim.worldId() == null || dim.dimId() == null) {
+		if (dim == null) {
 			CommandSupport.err(src, "commands.wh.error.not_in_world");
 			return null;
 		}

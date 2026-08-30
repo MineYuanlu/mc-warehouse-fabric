@@ -17,9 +17,8 @@ public class YuanluWarehouse implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
-		// This code runs as soon as Minecraft is in a mod-load-ready state.
-		// However, some things (like resources) may still be uninitialized.
-		// Proceed with mild caution.
+		// 服务端增强：world 身份推送（PDD §4.2）。客户端同样执行注册（两侧同源 universal jar）。
+		new bid.yuanlu.mc.warehouse.net.ServerWorldIdSync();
 
 		LOGGER.info("Hello Fabric world!");
 	}

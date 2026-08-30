@@ -33,13 +33,13 @@ public final class ScreenScanner {
 	/** 对打开的 Screen 做身份校验 + 扫描；无匹配 Detector 返回 null */
 	@Nullable
 	public static ScanResult scan(AbstractContainerScreen<?> screen, BlockInWorld block) {
-		String worldId = WorldSessionTracker.get() == null ? null : WorldSessionTracker.get().currentWorldId();
+		String worldName = WorldSessionTracker.get() == null ? null : WorldSessionTracker.get().currentWorldName();
 		String dimId = Minecraft.getInstance().level == null ? null
 				: Minecraft.getInstance().level.dimension().identifier().toString();
 		LOG.debug("scanning: menu={}, blockEntity={}, title={}",
 				screen.getMenu().getType(), block.getEntity(), screen.getTitle().getString());
 		ContainerOpenContext ctx = new ContainerOpenContext(
-				new WorldDimPos(worldId, dimId, block.getPos().getX(), block.getPos().getY(), block.getPos().getZ()),
+				new WorldDimPos(worldName, dimId, block.getPos().getX(), block.getPos().getY(), block.getPos().getZ()),
 				block);
 		for (ContainerDetector d : WarehouseRegistryImpl.detectors()) {
 			try {

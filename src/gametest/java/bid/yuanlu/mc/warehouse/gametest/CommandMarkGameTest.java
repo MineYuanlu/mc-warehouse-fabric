@@ -70,6 +70,8 @@ import bid.yuanlu.mc.warehouse.core.event.WarehouseEvents;
 import bid.yuanlu.mc.warehouse.core.mark.MarkMode;
 import bid.yuanlu.mc.warehouse.core.registry.WarehouseRegistryImpl;
 import bid.yuanlu.mc.warehouse.core.warehouse.WarehouseManagerImpl;
+import bid.yuanlu.mc.warehouse.core.world.ServerWorldIdHolder;
+import bid.yuanlu.mc.warehouse.core.world.WorldNameMapper;
 import bid.yuanlu.mc.warehouse.core.world.WorldSessionTracker;
 import bid.yuanlu.mc.warehouse.util.McScreens;
 
@@ -105,6 +107,7 @@ public class CommandMarkGameTest implements FabricClientGameTest {
 			markModeE2E(context, sp);
 			playerOpenRefreshE2E(context, sp);
 			skipUselessOutputE2E(context, sp);
+			worldIdPushE2E(context);
 
 			LOGGER.info("yuanlu-warehouse L11 command/mark gametest passed");
 
@@ -121,9 +124,9 @@ public class CommandMarkGameTest implements FabricClientGameTest {
 		WarehouseRegistryImpl.freeze();
 		try {
 			ModConfig config = new ConfigIO(CFG_DIR).loadModConfig();
-			WorldSessionTracker trk = new WorldSessionTracker(List.of(
-					new bid.yuanlu.mc.warehouse.impl.world.SingleplayerWorldIdentifier(),
-					new bid.yuanlu.mc.warehouse.impl.world.MultiplayerWorldIdentifier()));
+			WorldNameMapper.setInstance(new WorldNameMapper(CFG_DIR.resolve("world-map.json"),
+					(serverId, worldId) -> worldId));
+			WorldSessionTracker trk = new WorldSessionTracker();
 			trk.tick();
 			WorldSessionTracker.setInstance(trk);
 			ContainerMemoryStore store = new ContainerMemoryStore(config, trk);
@@ -427,6 +430,22 @@ public class CommandMarkGameTest implements FabricClientGameTest {
 	 * F3 E2E：OUTPUT 无规则（WHITELIST 默认空 → 放不进任何物品）时，引擎
 	 * 不应去开 OUTPUT——INPUT 有物但搬不动，直接 input_empty 结束。
 	 */
+	/**
+	 * worldId 推送（v0.5 §4.2）：集成服推送存档级 id 文件值（yuanluworldid.txt），
+	 * worldId 不再缺省 {@code ""}。等待覆盖周期性重发窗口，验证推送自愈。
+	 */
+	private static void worldIdPushE2E(ClientGameTestContext context) {
+		boolean got = awaitTrue(context, 300,
+				() -> ServerWorldIdHolder.get() != null && !ServerWorldIdHolder.get().isEmpty());
+		check(got, "集成服应推送存档级 worldId（yuanluworldid.txt）");
+		String id = context.computeOnClient(mc -> ServerWorldIdHolder.get());
+		check(id != null && !id.isEmpty(), "worldId 应为存档 id 文件值");
+		check(ServerWorldIdHolder.getLevels().contains("minecraft:overworld"),
+				"推送应包含服务端维度列表");
+		LOGGER.info("yuanlu-warehouse world id pushed: \"{}\" levels={}",
+				id, ServerWorldIdHolder.getLevels().size());
+	}
+
 	private static void skipUselessOutputE2E(ClientGameTestContext context, TestSingleplayerContext sp) {
 		BlockPos input3 = new BlockPos(2, -60, 10);
 		BlockPos output3 = new BlockPos(4, -60, 10);
@@ -586,7 +605,8 @@ public class CommandMarkGameTest implements FabricClientGameTest {
 	}
 
 	private static WorldDim dim() {
-		return new WorldDim(WorldSessionTracker.get().currentWorldId(),
+		return new WorldDim(WorldSessionTracker.get().currentServerId(),
+				WorldSessionTracker.get().currentWorldName(),
 				Level.OVERWORLD.identifier().toString());
 	}
 

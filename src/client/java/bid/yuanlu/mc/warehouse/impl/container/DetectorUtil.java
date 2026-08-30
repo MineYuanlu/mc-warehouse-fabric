@@ -13,17 +13,17 @@ import bid.yuanlu.mc.warehouse.core.world.WorldSessionTracker;
  */
 final class DetectorUtil {
 
-	/** 当前 (worldId, dimId) 下的绝对坐标；会话未就绪时 world 置 null */
+	/** 当前 (worldName, dimId) 下的绝对坐标；会话未就绪时 world 置 null */
 	static WorldDimPos dimPos(BlockPos pos) {
-		String worldId = null;
+		String worldName = null;
 		try {
-			worldId = WorldSessionTracker.get().currentWorldId();
+			worldName = WorldSessionTracker.get().currentWorldName();
 		} catch (IllegalStateException ignored) {
 			// 未初始化（测试/极早期），world 留空
 		}
 		var level = Minecraft.getInstance().level;
 		String dimId = level != null ? level.dimension().identifier().toString() : "minecraft:overworld";
-		return new WorldDimPos(worldId, dimId, pos.getX(), pos.getY(), pos.getZ());
+		return new WorldDimPos(worldName, dimId, pos.getX(), pos.getY(), pos.getZ());
 	}
 
 	private DetectorUtil() {

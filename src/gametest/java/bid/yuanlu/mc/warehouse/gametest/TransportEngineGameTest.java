@@ -41,6 +41,7 @@ import bid.yuanlu.mc.warehouse.core.registry.WarehouseRegistryImpl;
 import bid.yuanlu.mc.warehouse.core.warehouse.WarehouseManagerImpl;
 import bid.yuanlu.mc.warehouse.api.item.ContainerRule;
 import bid.yuanlu.mc.warehouse.api.item.ItemRule;
+import bid.yuanlu.mc.warehouse.core.world.WorldNameMapper;
 import bid.yuanlu.mc.warehouse.core.world.WorldSessionTracker;
 import bid.yuanlu.mc.warehouse.impl.selector.IdSelector;
 
@@ -252,9 +253,9 @@ public class TransportEngineGameTest implements FabricClientGameTest {
 					// 内置 codec 注册（L11 前的临时内联，等价 TestCodecs.install()）
 					registerBuiltins();
 					ModConfig config = new ConfigIO(Path.of("/tmp/opencode/wh-gt2")).loadModConfig();
-					WorldSessionTracker trk = new WorldSessionTracker(java.util.List.of(
-							new bid.yuanlu.mc.warehouse.impl.world.SingleplayerWorldIdentifier(),
-							new bid.yuanlu.mc.warehouse.impl.world.MultiplayerWorldIdentifier()));
+					WorldNameMapper.setInstance(new WorldNameMapper(Path.of("/tmp/opencode/wh-gt2/world-map.json"),
+							(serverId, worldId) -> worldId));
+					WorldSessionTracker trk = new WorldSessionTracker();
 					trk.tick();
 					WorldSessionTracker.setInstance(trk);
 					ContainerMemoryStore store = new ContainerMemoryStore(config, trk);
@@ -317,7 +318,8 @@ public class TransportEngineGameTest implements FabricClientGameTest {
 			String id = brokenAir == null ? "gt2-a" : "gt2-b";
 			context.runOnClient(mc -> {
 				assert mc.level != null && mc.player != null;
-				WorldDim dimId = new WorldDim(WorldSessionTracker.get().currentWorldId(),
+				WorldDim dimId = new WorldDim(WorldSessionTracker.get().currentServerId(),
+						WorldSessionTracker.get().currentWorldName(),
 						mc.level.dimension().identifier().toString());
 
 				WarehouseManagerImpl mgr = WarehouseManagerImpl.get();

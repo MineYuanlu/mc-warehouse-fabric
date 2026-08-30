@@ -48,7 +48,7 @@ public class WarehouseManagerTest extends McBootstrap {
 		assertEquals(1, m.list().size());
 
 		var created = m.get("a");
-		created.setAnchor(new bid.yuanlu.mc.warehouse.api.world.WorldDim("sp:w", "minecraft:overworld"),
+		created.setAnchor(new bid.yuanlu.mc.warehouse.api.world.WorldDim("sp:w", "", "minecraft:overworld"),
 				net.minecraft.core.BlockPos.ZERO);
 		var container = new ContainerInfo(bid.yuanlu.mc.warehouse.api.container.IOType.TEMP);
 		container.pos.add(new bid.yuanlu.mc.warehouse.api.world.WorldDimPos("sp:w", "minecraft:overworld", 1, 0, 1));
