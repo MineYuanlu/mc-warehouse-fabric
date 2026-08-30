@@ -1,6 +1,7 @@
-# Yuanlu Warehouse — UI 层设计文档 v0.1
+# Yuanlu Warehouse — UI 层设计文档 v0.2
 
 > 本文档是 `doc/PDD.md` 的 UI 层专篇。主 PDD §2 中「UI 层暂不实现」的预留位由此文档接管。
+> v0.2：布局引擎 flex 化（grow 权重 / ScrollElement / 全屏脚手架）+ HUD 设置屏 z 序与拖拽语义实装（§3.4/§5.1/§6.2/D5）。
 > 设计依据：`doc/ui-research.md`（对 11 个参考源的调研结论）。
 > 基线：**MC 26.1**（编译目标 = universal jar 编译线），26.2 适配后续按同一 SPI 追加。
 
@@ -158,15 +159,17 @@ Value<T> derived(Function<T2,T> f, Value<T2>... srcs);   // 派生值
 
 ### 3.4 布局器
 
-不引入 Flexbox/Taffy（D5）。L1 提供四个够用的布局器 + "变更时重排"：
+不引入 Flexbox/Taffy（D5），但吸收其核心语义做轻量自研。L1 提供布局器 + "变更时重排"：
 
 ```java
-interface Layout { Size measure(Constraints c); void arrange(UiElement container); }
-Row(.gap, .align)  Column(.gap, .align)  Grid(cols)  Anchor(top|bottom|left|right|center 偏移)
+interface Layout { void arrange(container); int measureWidth(container); int measureHeight(container); }
+Row(.gap)  Column(.gap)  Grid(cols, cell, gap)  Anchor(偏移)  [ScrollElement 内置视口版 Column]
 ```
 
+- **grow 权重（轻量 flex-grow，v0.2 增补）**：`UiElement.grow(float)` 只作用于直接子级的主轴——容器主轴尺寸为定值时，先累计固定尺寸子级与 gap，剩余空间按权重瓜分（截断分配不超发）；显式 `size()` 在有权重时作为**最小尺寸**。容器主轴尺寸不定（AUTO）时权重子级只贡献声明最小值（退化为普通流式）。`UiRoot` 根级对 `grow>0` 的直接子级 = 全屏满铺（`ScreenScaffold` 语义）；无权重页面维持 SCREEN_MARGIN 左上锚定（malilib 式）。
+- **ScrollElement（overflow-y: auto，v0.2 增补）**：内置视口布局器（子级像 Column 堆叠、AUTO 宽拉伸到视口宽），滚轮 2 行步进 + 滚动钳制 + 2px 滚动条指示；`clipContent` 强制开启且**裁剪矩形参与命中测试**（滚出视口的内容不可见亦不可点）。
 - 布局在**挂载时**与**元素显式 `invalidateLayout()` 后**的下一帧提取前重排（脏标记，不做每帧求解）。窗口 resize = 全量重建（见 D4），天然正确。
-- HUD 元素用 `Anchor` 定角；Screen 内容用 `Column/Grid` + `FrameLayout.center` 语义（Anchor.center）。
+- HUD 元素用 `HudLayout` 定角（读 `HudConfig` 组偏移）；Screen 内容用 `ScreenScaffold`（全屏脚手架，§5.1）。
 - 度量单位：GUI 缩放像素（与 vanilla 一致），引擎不做 DPI 换算。
 
 ### 3.5 主题 token（用户决策：主题形式，首发 Create 式深色）
@@ -179,6 +182,7 @@ public record Theme(String id,
     int accent, int accentHover,            // 主色/悬浮
     int success, int warning, int danger,   // 语义色（对齐 PDD §5.8 高亮色系）
     int overlayScrim,                       // 屏外遮罩
+    int bgScreen,                           // 全屏脚手架底色（半透明黑，§5.1）
     int radius, int padding, int gap, int lineWidth)
 ```
 
@@ -211,7 +215,7 @@ public record Theme(String id,
 **本引擎策略：全部坐标在"构建时"针对当前根尺寸一次性求解，运行期零布局重算**：
 
 1. 引擎只感知 GUI 缩放坐标，不感知物理分辨率/DPI（缩放由 vanilla 完成）。GUI Scale 不同 = 可视区域尺寸不同，同一套布局逻辑天然适应。
-2. **Screen**：根元素在 `ScreenHost.init()` 构建，构建时 `UiDraw.screenWidth/Height` 即当前值；resize → vanilla `rebuildWidgets` → 全量重建（D4）。宽高比变化不影响——布局器是流式的（Column/Grid 换行/居中）。**业务面板禁止写死绝对屏幕坐标**（评审 checklist 项），列表高度用 `min(配置上限, 屏高 - 上下边距)` 派生。
+2. **Screen**：根元素在 `ScreenHost.init()` 构建，构建时 `UiDraw.screenWidth/Height` 即当前值；resize → vanilla `rebuildWidgets` → 全量重建（D4）。宽高比变化不影响——布局器是流式的。**业务面板禁止写死绝对屏幕坐标**（评审 checklist 项）；v0.2 后列表/详情等自适应区域一律用 `grow(1)` 撑满 + `ScrollElement` 滚动（§3.4），不再手工 `min(上限, 屏高-边距)` 派生。
 3. **HUD**：`HudRoot` 用 Anchor 定角 + 配置偏移，区块纵向排布；`HudHost` 每帧比对缓存尺寸，变化则下一帧重建（LDLib2 模式，重建成本 = 十几个文本元素，可忽略）。
 4. **极端小可视区**（高 GUI Scale）：面板超出时靠列表元素自带的滚动消化，**不做 DPI 式 UI 缩放**（Create/EMI/MaLiLib 通例，mod 生态没有动态缩放 UI 的先例与需求）。
 5. 百分比仅以"派生 token"形式存在（如 `Theme.panelWidth = min(360, screen*0.6)`，构建时求值），不引入通用百分比布局语法——LDLib2 的 PERCENT 是其 Taffy 体系的伴生品，我们没有布局引擎。
@@ -282,7 +286,7 @@ public interface WorldHighlighter {
 
 ### 5.1 仓库管理主屏 `WarehouseManagerScreen`
 
-单 Screen 两页签（`TabView` 语义，元素树内实现）：
+单 Screen 两页签（`TabView` 语义，元素树内实现）。**布局（v0.2，flex 化后）**：全部主屏走 `ScreenScaffold` 全屏脚手架——根唯一子级 `grow(1)` 满铺整个屏幕（无固定外框），铺 `Theme.bgScreen` 半透明黑底（普通屏叠加在 MC 模糊背景之上）；内容 = padding(10) Column：页头（固定）→ body（`grow(1)` 撑满）→ 底部操作行（固定）。列表/详情侧栏 `grow(1)` 瓜分剩余宽度（声明宽为最小值）并内嵌 `ScrollElement`（条目超出即滚轮滚动，§3.4）。
 
 **页签 A：仓库列表**
 
@@ -339,14 +343,15 @@ public interface WorldHighlighter {
 
 **渲染纪律**（AppleSkin 模式）：无数据区块直接跳过；区块内容按 tick 缓存（`tickCounter` 键）；文字行数裁剪上限（配置，默认 8 行）；文字渲染带背景 token（半透明底 + 文字，MaLiLib `renderText` 对齐语义）。
 
-### 6.2 HUD 设置屏（编辑模式）
+### 6.2 HUD 设置屏（编辑模式，v0.2 实装语义）
 
-HUD 本体永不接收输入；对其位置与内容的调整经一个普通 Screen 进行（同 MaLiLib/Wurst 的 HUD 编辑思路，但实现是 Screen 而非悬浮层）：
+HUD 本体永不接收输入；对其位置与内容的调整经一个 passthrough Screen 进行（MaLiLib/Wurst 的 HUD 编辑思路）：
 
-- 入口：仓库管理主屏"HUD 设置"按钮（或快捷键）。
-- 画布：背景显示**实时 HUD 预览**——同一个 `HudRoot` 元素挂到设置屏的画布容器上渲染（L1 元素树天然支持同树多挂载演示点）；HUD 预览不响应输入。
-- 编辑交互：每个区块显示虚线边框 + hover 高亮；**拖拽**改对齐角落与偏移（吸附四角/边缘，拖拽中显示目标位置幽灵预览）；区块列表支持开关（checkbox 列）、排序（上移/下移）、行数上限调节。
-- 持久化：写入主配置 JSON 的 `hud` 节（主 PDD §11 体系承载）：`{ blocks: { "<id>": { enabled, corner, offsetX, offsetY, order, maxLines } }, scale 预留 }`。
+- 入口：仓库管理主屏"HUD 设置"按钮（或快捷键）→ `openScreenKeepHud`（`hudPassthrough=true`：跳过 MC 模糊/菜单背景，世界透出）。
+- **z 序（v0.2）**：HUD 层在 `extractGui` 更早 stratum，必被 Screen 盖住——passthrough 屏打开期间 `Mc261HudHost` 不在 HUD 层渲染，改由 `Mc261ScreenHost` 在自身内容提取后**代渲染 HUD**：设置中的 HUD 永远显示在面板之上，被面板遮住也能先拖走。
+- 编辑交互：屏幕中央面板逐区块开关（checkbox）、行拖拽排序（捕获阶段，越行高换位）、-/+ 调文字缩放（0.1 步进）；**按住 HUD 本体拖拽 = 平移该角组**——按 `HudLayout` 布局期记录的每角真实 bounds（±2px 余量）抓取（捕获阶段抢占，面板行不干扰），附近空白退回象限猜测；方向键 1px 微调。
+- 跟手性：拖拽增量在 double 累加器中保留小数残量（GUI Scale≥2 时单帧位移不足 1px，直接取整会整体卡顿），逐像素跟手；offset 钳在 `[0, 屏-8px]`，组永远留在屏内可再抓取。
+- 持久化：`config/yuanlu-warehouse-hud.json`：`{ blocks: { "<id>": { enabled, corner, offsetX, offsetY, order, maxLines, scale } } }`，拖拽中仅写内存、START/END 落盘。
 - 实现要点：拖拽命中/移动全部是 Screen 内常规输入事件，走 L1 事件系统（DRAG_*），无跨版本风险。
 
 ---
@@ -513,7 +518,7 @@ LDLib2 的 XML/LSS 服务于"给外部用户写 UI"的产品需求；本 mod 无
 vanilla 约定（`rebuildWidgets`）+ Create/LDLib2 共同验证；本 mod 屏幕规模小（个位数），全量重建成本可忽略；增量布局（Taffy 脏驱动）是为 LDLib2 级别的 UI 规模服务的，属于过度设计（调研 §3.3 评价）。
 
 ### D5 为什么不用 Flexbox/Taffy/Yoga？
-同 D4。L1 的 Row/Column/Grid/Anchor 覆盖本 mod 全部布局形态（列表/表单/网格/HUD 角落），~300 行纯 Java 可 JUnit。若未来出现复杂自适应需求，再评估引入——接口上布局器是可替换的 `Layout` 策略。
+同 D4。L1 的 Row/Column/Grid/Anchor 覆盖本 mod 全部布局形态（列表/表单/网格/HUD 角落），纯 Java 可 JUnit；布局器是可替换的 `Layout` 策略。**v0.2 增补**：实机反馈（固定宽度内容折断、列表无法利用大窗口）催生了轻量 flex 语义——`grow` 主轴权重 + `ScrollElement` 滚动视口（§3.4），仍为零依赖自研（约百行）；完整 Flexbox（shrink/wrap/justify/交叉轴对齐）与 Taffy 级约束求解依然不做。
 
 ### D6 为什么样式只做主题 token，不做级联/选择器？
 StyleBag 级联（LDLib2）解决的是"四大样式来源冲突"，本 mod 样式来源只有"主题"一个；token 直连 + 元素 classes/id 保留查询能力。若二期做主题切换或插件自定义皮肤，再评估加"来源优先级"薄层。
