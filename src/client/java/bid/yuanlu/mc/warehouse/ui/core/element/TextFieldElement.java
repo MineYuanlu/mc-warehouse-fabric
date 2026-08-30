@@ -150,6 +150,7 @@ public class TextFieldElement extends UiElement<TextFieldElement> {
 
 	public void setText(String s) {
 		buffer.setText(s);
+		textChanged();
 		markLayoutDirty();
 	}
 

@@ -52,8 +52,9 @@ public class NumberFieldElement extends TextFieldElement {
 		return super.insertText(c);
 	}
 
-	/** 数值变化（含相对值；无有效值时为钳制兜底值）；注册即回调一次。 */
-	public NumberFieldElement onChange(IntConsumer r) {
+	/** 数值变化（含相对值；无有效值时为钳制兜底值）；注册即回调一次。
+	 *  命名区别于父类 {@code onChange(Runnable)}，避免 lambda 重载歧义。 */
+	public NumberFieldElement onValue(IntConsumer r) {
 		onChange = r;
 		onChange.accept(value);
 		return this;

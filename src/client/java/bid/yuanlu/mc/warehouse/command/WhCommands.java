@@ -15,6 +15,8 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
+import org.jetbrains.annotations.Nullable;
+
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -1742,6 +1744,37 @@ public final class WhCommands {
 		ContainerRule rule = wh.rules.get(ruleId);
 		if (rule == null) return Component.translatable("commands.wh.rule.missing", ruleId);
 		return RuleGroup.addEntryCore(wh, rule, tail);
+	}
+
+	/**
+	 * UI 层等价 /wh rule add 的结构化形态（UI-PDD §5.3）：直接以 {@link ItemRule} 入列，
+	 * 与命令同一 D2 校验与落盘路径。index1based 为 null = 追加；否则替换该位条目（编辑）。
+	 * 成功返回 null，否则返回错误组件（条目不落盘）。
+	 */
+	public static Component upsertRuleEntryDirect(String ruleId, @Nullable Integer index1based, ItemRule entry) {
+		Warehouse wh = manager().active();
+		if (wh == null) return Component.translatable("commands.wh.rule.none");
+		ContainerRule rule = wh.rules.get(ruleId);
+		if (rule == null) return Component.translatable("commands.wh.rule.missing", ruleId);
+		if (index1based != null && (index1based < 1 || index1based > rule.itemRules.size())) {
+			return Component.translatable("commands.wh.rule.bad_index", index1based);
+		}
+		ItemRule previous = index1based == null ? null : rule.itemRules.set(index1based - 1, entry);
+		String d2err;
+		try {
+			d2err = ConfigValidator.validateRuleOnContainers(wh, rule);
+		} catch (Throwable t) {
+			if (previous != null) rule.itemRules.set(index1based - 1, previous);
+			else rule.itemRules.remove(entry);
+			return Component.translatable("commands.wh.error.generic", String.valueOf(t));
+		}
+		if (d2err != null) {
+			if (previous != null) rule.itemRules.set(index1based - 1, previous);
+			else rule.itemRules.remove(entry);
+			return Component.translatable("commands.wh.error.generic", d2err);
+		}
+		manager().save(wh);
+		return null;
 	}
 
 	/**
