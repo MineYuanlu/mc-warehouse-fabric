@@ -21,6 +21,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 
+import bid.yuanlu.mc.warehouse.core.selection.SelectionOps;
 import bid.yuanlu.mc.warehouse.api.container.CacheType;
 import bid.yuanlu.mc.warehouse.api.container.ContainerInfo;
 import bid.yuanlu.mc.warehouse.api.container.IOType;
@@ -1376,26 +1377,9 @@ public final class WhCommands {
 		}
 
 		static boolean inBox(SelectionState sel, ContainerInfo c) {
-			if (sel.hasBox() && c.pos.isEmpty()) return false;
-			String serverId;
-			try {
-				serverId = WorldSessionTracker.get().currentServerId();
-			} catch (IllegalStateException e) {
-				return false;
-			}
-			if (serverId == null) return false;
-			for (WorldDimPos p : c.pos) {
-				// 绝对化：canonical 相对坐标 → 世界绝对坐标对比选区
-				if (!p.hasWorld()) continue;
-				Warehouse wh = manager().active();
-				if (wh == null) return false;
-				WorldDim dim = new WorldDim(serverId, p.world(), p.dim());
-				BlockPos anchor = wh.anchorOf(dim);
-				if (anchor == null) continue;
-				BlockPos abs = p.plus(anchor).toBlockPos();
-				if (sel.contains(abs.getX(), abs.getY(), abs.getZ())) return true;
-			}
-			return false;
+			// 共享实现（UI-PDD D9 延伸）：与 SelectionPanelScreens 同一 inBox（core/selection/SelectionOps）
+			Warehouse wh = manager().active();
+			return wh != null && SelectionOps.inBox(sel, wh, c);
 		}
 
 		static int planNotImplemented(CommandContext<FabricClientCommandSource> ctx) {

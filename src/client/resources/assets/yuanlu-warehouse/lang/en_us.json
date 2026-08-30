@@ -269,5 +269,18 @@
   "ui.wh.hud.ghost.shulker": "Shulker box",
   "ui.wh.hud.ghost.dispenser": "Dispenser",
   "ui.wh.hud.ghost.furnace": "Furnace",
-  "ui.wh.hud.ghost.inventory": "Player inventory"
+  "ui.wh.hud.ghost.inventory": "Player inventory",
+  "ui.wh.select.corner1": "Corner 1",
+  "ui.wh.select.corner2": "Corner 2",
+  "ui.wh.select.unset": "not set",
+  "ui.wh.select.feet": "Feet",
+  "ui.wh.select.look": "Crosshair",
+  "ui.wh.select.set": "Set coords",
+  "ui.wh.select.expand": "Expand",
+  "ui.wh.select.world": "World %s · dim %s",
+  "ui.wh.select.in_box": "Containers in box: %s",
+  "ui.wh.select.incomplete": "Set both corners to form a box",
+  "ui.wh.select.need_world": "Must be in a world",
+  "ui.wh.select.bad_coords": "Invalid coordinates",
+  "ui.wh.select.no_corners": "No corner set yet"
 }

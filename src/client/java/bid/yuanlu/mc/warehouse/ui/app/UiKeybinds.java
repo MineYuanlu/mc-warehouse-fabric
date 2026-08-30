@@ -24,7 +24,8 @@ import bid.yuanlu.mc.warehouse.ui.mc.UiPlatform;
 /**
  * UI 快捷键（UI-PDD §8）：vanilla KeyMapping + client tick 轮询（声明式表）。
  * 除打开主 UI 外默认未绑定，避免与玩家键位冲突。
- * 注意：expand（按住+滚轮 grab 语义）需滚轮拦截，留 M2/M3。
+ * expand（UI-PDD §8 v0.3 修订）：按压 = 角 2 沿视线主轴扩展 1 格，潜行 = 反向收缩；
+ * 精确多格扩展在选区面板完成（零新 mixin）。
  */
 public final class UiKeybinds {
 
@@ -36,6 +37,7 @@ public final class UiKeybinds {
 	private static KeyMapping open;
 	private static KeyMapping pos1;
 	private static KeyMapping pos2;
+	private static KeyMapping expand;
 	private static KeyMapping showSelection;
 	private static KeyMapping clearSelection;
 	private static KeyMapping markToggle;
@@ -48,6 +50,7 @@ public final class UiKeybinds {
 		open = bind("open", InputConstants.KEY_K);
 		pos1 = bind("select.pos1", -1);
 		pos2 = bind("select.pos2", -1);
+		expand = bind("select.expand", -1);
 		showSelection = bind("select.show", -1);
 		clearSelection = bind("select.clear", -1);
 		markToggle = bind("mark.toggle", -1);
@@ -69,6 +72,9 @@ public final class UiKeybinds {
 		}
 		while (pos2.consumeClick()) {
 			setCorner(mc, false);
+		}
+		while (expand.consumeClick()) {
+			expandSelection(mc);
 		}
 		while (showSelection.consumeClick()) {
 			bid.yuanlu.mc.warehouse.ui.app.highlight.HighlightRenderer.get().toggleSelectionVisible();
@@ -109,21 +115,20 @@ public final class UiKeybinds {
 		}
 	}
 
-	/** 当前 (serverId, worldName, dimId)；会话未就绪/无维度返回 null（对齐 CommandSupport.currentDim）。 */
+	/** 当前 (serverId, worldName, dimId)；会话未就绪/无维度返回 null（与命令/UI 共用 util）。 */
 	private static @Nullable WorldDim currentDim(Minecraft mc) {
-		WorldSessionTracker trk;
-		try {
-			trk = WorldSessionTracker.get();
-		} catch (IllegalStateException e) {
-			return null;
+		return bid.yuanlu.mc.warehouse.util.ClientSession.currentDim(mc);
+	}
+
+	/** expand 快捷键：按压 = 角 2 沿视线主轴扩展 1 格，潜行 = 反向收缩 1 格（等价 /wh select expand）。 */
+	private static void expandSelection(Minecraft mc) {
+		if (mc.player == null) {
+			return;
 		}
-		String serverId = trk.currentServerId();
-		String worldName = trk.currentWorldName();
-		String dimId = mc.level == null ? null : mc.level.dimension().identifier().toString();
-		if (serverId == null || worldName == null || dimId == null) {
-			return null;
-		}
-		return new WorldDim(serverId, worldName, dimId);
+		var look = mc.player.getLookAngle();
+		int count = mc.options.keyShift.isDown() ? -1 : 1;
+		bid.yuanlu.mc.warehouse.core.selection.SelectionOps.expand(SelectionState.get(),
+				bid.yuanlu.mc.warehouse.core.selection.SelectionOps.dominantAxis(look.x, look.y, look.z), count);
 	}
 
 	private static void toggleMark() {

@@ -269,5 +269,18 @@
   "ui.wh.hud.ghost.shulker": "潜影盒",
   "ui.wh.hud.ghost.dispenser": "投掷器",
   "ui.wh.hud.ghost.furnace": "熔炉",
-  "ui.wh.hud.ghost.inventory": "玩家背包"
+  "ui.wh.hud.ghost.inventory": "玩家背包",
+  "ui.wh.select.corner1": "角 1",
+  "ui.wh.select.corner2": "角 2",
+  "ui.wh.select.unset": "未设定",
+  "ui.wh.select.feet": "脚下",
+  "ui.wh.select.look": "准星",
+  "ui.wh.select.set": "按坐标设定",
+  "ui.wh.select.expand": "扩展",
+  "ui.wh.select.world": "世界 %s · 维度 %s",
+  "ui.wh.select.in_box": "选区内容器：%s",
+  "ui.wh.select.incomplete": "两个角点齐全才构成选区",
+  "ui.wh.select.need_world": "需要处于世界中",
+  "ui.wh.select.bad_coords": "坐标无效",
+  "ui.wh.select.no_corners": "尚未设定任何角点"
 }
