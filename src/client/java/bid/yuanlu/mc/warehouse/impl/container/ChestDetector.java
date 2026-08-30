@@ -36,9 +36,9 @@ public final class ChestDetector extends BlockEntityDetector {
 		return containerSlots > 0 && containerSlots % 9 == 0;
 	}
 
-	private static String safeWorldId() {
+	private static String safeWorldName() {
 		try {
-			return java.util.Objects.requireNonNullElse(WorldSessionTracker.get().currentWorldId(), "");
+			return java.util.Objects.requireNonNullElse(WorldSessionTracker.get().currentWorldName(), "");
 		} catch (IllegalStateException e) {
 			return "";
 		}
@@ -64,10 +64,10 @@ public final class ChestDetector extends BlockEntityDetector {
 		}
 
 		ContainerInfo info = new ContainerInfo(IOType.INPUT);
-		String worldId = safeWorldId();
+		String worldName = safeWorldName();
 		String dimId = level.dimension().identifier().toString();
 		for (BlockPos p : merged.stream().sorted().toList()) {
-			info.pos.add(new WorldDimPos(worldId.isEmpty() ? null : worldId, dimId, p.getX(), p.getY(), p.getZ()));
+			info.pos.add(new WorldDimPos(worldName, dimId, p.getX(), p.getY(), p.getZ()));
 		}
 		return info;
 	}

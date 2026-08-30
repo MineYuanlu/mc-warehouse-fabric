@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import bid.yuanlu.mc.warehouse.api.container.CacheType;
 import bid.yuanlu.mc.warehouse.api.container.ContainerSnapshot;
 import bid.yuanlu.mc.warehouse.core.config.ModConfig;
+import bid.yuanlu.mc.warehouse.core.world.WorldSession;
 import bid.yuanlu.mc.warehouse.core.world.WorldSessionTracker;
 
 /**
@@ -88,11 +89,11 @@ public final class ContainerMemoryStore {
 		});
 	}
 
-	private void onSessionChanged(@Nullable String oldWorldId, @Nullable String newWorldId) {
-		if (java.util.Objects.equals(oldWorldId, newWorldId)) return;
+	private void onSessionChanged(@Nullable WorldSession oldSession, @Nullable WorldSession newSession) {
+		if (java.util.Objects.equals(oldSession, newSession)) return;
 		int size = memories.size();
 		memories.clear();
-		LOGGER.info("session switch {} → {}, unloaded {} cache entries", oldWorldId, newWorldId, size);
+		LOGGER.info("session switch {} → {}, unloaded {} cache entries", oldSession, newSession, size);
 	}
 
 	// ---- 访问 ----

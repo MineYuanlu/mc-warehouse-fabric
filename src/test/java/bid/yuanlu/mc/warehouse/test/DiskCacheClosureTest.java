@@ -20,6 +20,7 @@ import bid.yuanlu.mc.warehouse.core.cache.CacheKey;
 import bid.yuanlu.mc.warehouse.core.cache.ContainerMemoryStore;
 import bid.yuanlu.mc.warehouse.core.cache.DiskCacheStore;
 import bid.yuanlu.mc.warehouse.core.config.ModConfig;
+import bid.yuanlu.mc.warehouse.core.world.WorldSession;
 import bid.yuanlu.mc.warehouse.core.world.WorldSessionTracker;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -110,7 +111,7 @@ public class DiskCacheClosureTest extends McBootstrap {
 
 		store.remember(k, CacheType.DISK, snapshot(9));
 		sessions.update(null);
-		sessions.update("other");
+		sessions.update(new WorldSession("other", "", "other"));
 		assertEquals(0, store.size(), "会话切换清内存（§5.4）");
 
 		var fresh = new ContainerMemoryStore(new ModConfig(), new WorldSessionTracker(List.of()), disk);

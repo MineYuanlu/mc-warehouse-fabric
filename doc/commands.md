@@ -16,6 +16,7 @@
 - [规则组与选择器语法](#规则组与选择器语法)
 - [选区组](#选区组)
 - [跨仓库搬运组](#跨仓库搬运组)
+- [世界映射组](#世界映射组)
 - [配置组](#配置组)
 - [核心概念](#核心概念)
 - [常见问题（FAQ）](#常见问题faq)
@@ -96,6 +97,10 @@
 | | `/wh select plan` | （一阶段 stub，暂不可用） |
 | 跨仓库 | `/wh transfer <src> <dst> start` | 开始跨仓库搬运 |
 | | `/wh transfer status` / `stop` | 状态 / 停止 |
+| 世界 | `/wh world list` | 世界映射列表（`*`=当前）+ 服务端报告的维度 |
+| | `/wh world info` | 当前服务器 / 世界 / 世界名 / 维度总览 |
+| | `/wh world bind <名称> [worldId]` | 手动绑定/换绑世界名 |
+| | `/wh world rename <from> <to>` | 重命名世界 |
 | 配置 | `/wh config show` | 查看全部配置项 |
 | | `/wh config set <key> <value>` | 修改并持久化配置项 |
 
@@ -346,6 +351,44 @@ IOType 批量变更同样触发规则重校验，失败则整批拒绝。
 
 ---
 
+## 世界映射组
+
+配置里的世界标识分三层（设计详见 `doc/PDD.md` §4）：
+
+| 层 | 内容 | 说明 |
+|----|------|------|
+| **serverId** | 单人 `singleplayer:<存档目录名>`；服务器 `mp:<host>:<port>` | 配置隔离根：锚点（anchors）就挂在这层下面 |
+| **worldId** | 存档的物理身份 | 装了本模组的服务端（含单人的集成服）会自动在存档根生成 `yuanluworldid.txt`（随机 id）并推送；存档**改名/复制后 id 不变**。未装模组的服务器缺省 `""` |
+| **worldName** | 你起的名字 | 仓库锚点定位、`pos.world` 实际引用的名字 |
+
+进入一个世界时会自动把 worldName 映射到 worldId（默认名取存档名，如「新的世界」），一般无需手动干预。
+
+### `/wh world list`
+
+列出当前服务器的全部映射条目，`*` 标记当前激活的世界名；装了模组的服务端还会附上它报告的维度列表（仅展示，便于确认服务端上有哪些世界/维度）。
+
+### `/wh world info`
+
+当前会话总览：serverId、worldId、激活 worldName、当前维度。排查「配置怎么没生效」时先看这里。
+
+### `/wh world bind <名称> [worldId]`
+
+手动把 `<名称>` 绑定到 `[worldId]`（缺省 = 当前世界的 worldId）；名称已存在则为换绑。
+
+典型场景：**把服务器的世界下载到本地**。服务端世界与本地存档的 worldId 相同（同一条 `yuanluworldid.txt` 随存档走），在新 serverId 下执行：
+
+```
+/wh world bind 原世界名
+```
+
+即恢复「世界名 → worldId」映射；锚点挂在 serverId 下，还需把 `warehouses/*.json` 中旧的 `mp:<host>:<port>` 键更名为新 serverId（单人为 `singleplayer:<新目录名>`）。
+
+### `/wh world rename <from> <to>`
+
+重命名世界。anchors 与 `pos.world` 引用的名字随之更新，无需改 JSON。
+
+---
+
 ## 配置组
 
 ```
@@ -375,7 +418,7 @@ IOType 批量变更同样触发规则重校验，失败则整批拒绝。
 
 ### 坐标系：锚点 + 相对坐标
 
-容器存储的是相对基准点（anchor）的偏移。`worldId` 标识世界（单机 `singleplayer:<存档目录名>`，服务器 `mp:<host>:<port>`），`dim` 标识维度（如 `minecraft:overworld`）。切换世界/维度后引擎按 worldId 匹配配置；仓库布局可整体复用到同尺寸的其它地点（重新 `anchor set` 即可）。
+容器存储的是相对基准点（anchor）的偏移。世界标识分三层（§世界映射组）：`serverId`（单人 `singleplayer:<存档目录名>` / 服务器 `mp:<host>:<port>`）→ `worldName`（你起的名字）→ `dim`（维度，如 `minecraft:overworld`）。切换世界/维度后引擎按当前会话解析对应锚点；仓库布局可整体复用到同尺寸的其它地点（重新 `anchor set` 即可）。
 
 ### 缓存（§3.8/§5.4）
 
@@ -420,3 +463,10 @@ Brigadier 树较深，Tab 补全逐级往下打；带空格/冒号的参数（�
 
 **Q：命令是客户端的还是服务端的？**
 纯客户端。在服务器上无需管理员权限，服务端不装也能用（服务端可选装以获得增强）。
+
+**Q：存档改名/复制后，容器和锚点全「不见」了？**
+锚点挂在 serverId 下，存档目录改名（或换台机器目录名不同）会得到新 serverId，旧数据仍在配置里，只是对不上号：
+
+- **存档改名**：worldId（`yuanluworldid.txt`）不变，世界名映射自动衔接；把 `warehouses/*.json` 里旧的 `singleplayer:<旧目录名>` 键改成新目录名即可恢复锚点；
+- **服务器世界下载到本地 / 复制存档**：先 `/wh world bind 原世界名` 恢复映射，再按上法迁移锚点键；
+- 改之前可先 `/wh world info` 确认当前 serverId。

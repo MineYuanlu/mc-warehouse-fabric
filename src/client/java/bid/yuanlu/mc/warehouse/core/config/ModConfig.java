@@ -6,13 +6,15 @@ import java.util.Map;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * 全局配置（PDD §11.4）：模组级参数 + 世界级覆盖（worlds 两级结构）。
+ * 全局配置（PDD §11.4）：模组级参数 + 服务器级覆盖（servers 两级结构）。
  * <p>
- * 世界相关查找顺序：{@code worlds[world].dimensions[dim]} → {@code worlds[world]} 级默认 → 全局默认。
+ * 服务器相关查找顺序：{@code servers[server].dimensions[dim]} → {@code servers[server]} 级默认 → 全局默认。
+ * 键为 serverId（单人存档目录名 / 多人连接地址，PDD §4.2）；
+ * worldName→worldId 映射在独立 world-map.json（WorldMapIO），不在此处。
  */
 public class ModConfig {
 
-	public static final int SCHEMA_VERSION = 1;
+	public static final int SCHEMA_VERSION = 2;
 
 	public boolean debug = false;
 
@@ -39,8 +41,8 @@ public class ModConfig {
 
 	public Timeouts timeouts = new Timeouts();
 
-	/** worldId → 世界条目（两级结构，v0.2 决策） */
-	public Map<String, WorldEntry> worlds = new LinkedHashMap<>();
+	/** serverId → 服务器条目（两级结构，v0.2 决策；v2 由 worlds 改名，键即 serverId） */
+	public Map<String, WorldEntry> servers = new LinkedHashMap<>();
 
 	// ---- 时间参数（§6.5）----
 
@@ -79,13 +81,13 @@ public class ModConfig {
 	// ---- 有效值解析 ----
 
 	@Nullable
-	private WorldEntry world(@Nullable String worldId) {
-		return worldId != null ? worlds.get(worldId) : null;
+	private WorldEntry server(@Nullable String serverId) {
+		return serverId != null ? servers.get(serverId) : null;
 	}
 
-	/** 生效交互速度：dim 覆盖 → world 默认 → 全局 */
-	public int interactionSpeed(@Nullable String worldId, @Nullable String dimId) {
-		WorldEntry w = world(worldId);
+	/** 生效交互速度：dim 覆盖 → server 默认 → 全局 */
+	public int interactionSpeed(@Nullable String serverId, @Nullable String dimId) {
+		WorldEntry w = server(serverId);
 		if (w != null && dimId != null) {
 			DimOverride d = w.dimensions.get(dimId);
 			if (d != null && d.interactionSpeed != null) return d.interactionSpeed;
@@ -94,9 +96,9 @@ public class ModConfig {
 		return defaultInteractionSpeed;
 	}
 
-	/** 生效寻路器：dim 覆盖 → world 默认 → "noop" */
-	public String pathfinder(@Nullable String worldId, @Nullable String dimId) {
-		WorldEntry w = world(worldId);
+	/** 生效寻路器：dim 覆盖 → server 默认 → "noop" */
+	public String pathfinder(@Nullable String serverId, @Nullable String dimId) {
+		WorldEntry w = server(serverId);
 		if (w != null && dimId != null) {
 			DimOverride d = w.dimensions.get(dimId);
 			if (d != null && d.pathfinder != null) return d.pathfinder;

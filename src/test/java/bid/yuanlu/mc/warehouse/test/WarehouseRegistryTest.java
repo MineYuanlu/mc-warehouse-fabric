@@ -15,8 +15,7 @@ import bid.yuanlu.mc.warehouse.impl.allocator.FirstFitAllocator;
 import bid.yuanlu.mc.warehouse.impl.quantity.CountSelector;
 import bid.yuanlu.mc.warehouse.impl.selector.IdSelector;
 import bid.yuanlu.mc.warehouse.impl.selector.TagSelector;
-import bid.yuanlu.mc.warehouse.impl.world.MultiplayerWorldIdentifier;
-import bid.yuanlu.mc.warehouse.impl.world.SingleplayerWorldIdentifier;
+import bid.yuanlu.mc.warehouse.impl.world.ServerPushedWorldIdentifier;
 
 /**
  * 注册表语义（PDD §9.2）：重复 id 快速失败、冻结后拒绝注册、内置 codec 走同一入口。
@@ -76,15 +75,14 @@ public class WarehouseRegistryTest {
 	@Test
 	void builtinsRegisterViaSameEntrance() {
 		var registry = WarehouseRegistryImpl.get();
-		registry.registerWorldIdentifier(new SingleplayerWorldIdentifier());
-		registry.registerWorldIdentifier(new MultiplayerWorldIdentifier());
+		registry.registerWorldIdentifier(new ServerPushedWorldIdentifier());
 		registry.registerSlotAllocator(new FirstFitAllocator());
 		registry.registerItemSelectorCodec(IdSelector.codec());
 
 		assertFalse(WarehouseRegistryImpl.worldIdentifiers().isEmpty());
 		assertTrue(WarehouseRegistryImpl.slotAllocator("first_fit") instanceof FirstFitAllocator);
 		assertEquals(1, WarehouseRegistryImpl.worldIdentifiers().stream()
-				.filter(w -> w.id().equals("singleplayer")).count());
+				.filter(w -> w.id().equals("server_pushed")).count());
 	}
 
 	@Test

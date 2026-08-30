@@ -53,12 +53,20 @@ final class CommandSupport {
 		return WarehouseManagerImpl.get();
 	}
 
+	/** 当前 (serverId, worldName, dimId)；会话未就绪/无维度时返回 null */
+	@Nullable
 	static WorldDim currentDim(FabricClientCommandSource src) {
-		WorldSessionTracker trk = WorldSessionTracker.get();
-		String worldId = trk == null ? null : trk.currentWorldId();
+		WorldSessionTracker trk;
+		try {
+			trk = WorldSessionTracker.get();
+		} catch (IllegalStateException e) {
+			return null;
+		}
+		if (trk.currentWorldName() == null) return null;
 		String dimId = src.getLevel() == null ? null
 				: src.getLevel().dimension().identifier().toString();
-		return new WorldDim(worldId, dimId);
+		if (dimId == null) return null;
+		return new WorldDim(trk.currentServerId(), trk.currentWorldName(), dimId);
 	}
 
 	// ---- 坐标 ----
@@ -119,7 +127,7 @@ final class CommandSupport {
 		if (wh == null) return null;
 		BlockPos anchor = wh.anchorOf(dim);
 		if (anchor == null) return null;
-		return new WorldDimPos(dim.worldId(), dim.dimId(),
+		return new WorldDimPos(dim.worldName(), dim.dimId(),
 				abs.getX() - anchor.getX(), abs.getY() - anchor.getY(), abs.getZ() - anchor.getZ());
 	}
 

@@ -2,7 +2,7 @@ package bid.yuanlu.mc.warehouse.impl.world;
 
 import org.jetbrains.annotations.Nullable;
 
-import bid.yuanlu.mc.warehouse.api.world.WorldIdentifier;
+import bid.yuanlu.mc.warehouse.api.world.ServerIdentifier;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ServerData;
 
@@ -14,22 +14,17 @@ import net.minecraft.client.multiplayer.ServerData;
  * <b>破坏性变更</b>：旧格式 {@code multiplayer:*} 的配置键/缓存目录不再命中
  * （pre-release 阶段无迁移，2026-08-28 与作者确认）。
  */
-public final class MultiplayerWorldIdentifier implements WorldIdentifier {
+public final class MultiplayerServerIdentifier implements ServerIdentifier {
 
 	public static final String ID = "multiplayer";
-	/** worldId 前缀（PDD §4.2） */
+	/** serverId 前缀（PDD §4.2） */
 	public static final String PREFIX = "mp";
 	/** ServerData 未显式携带端口时的原版默认端口 */
 	public static final int DEFAULT_PORT = 25565;
 
 	@Override
-	public String id() {
-		return ID;
-	}
-
-	@Override
 	@Nullable
-	public String currentWorldId() {
+	public String currentServerId() {
 		ServerData data = Minecraft.getInstance().getCurrentServer();
 		if (data == null || data.ip == null || data.ip.isEmpty()) return null;
 		String host = data.ip;

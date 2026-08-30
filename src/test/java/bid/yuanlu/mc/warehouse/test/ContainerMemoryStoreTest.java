@@ -18,6 +18,7 @@ import bid.yuanlu.mc.warehouse.core.cache.CacheKey;
 import bid.yuanlu.mc.warehouse.core.cache.ContainerMemory;
 import bid.yuanlu.mc.warehouse.core.cache.ContainerMemoryStore;
 import bid.yuanlu.mc.warehouse.core.config.ModConfig;
+import bid.yuanlu.mc.warehouse.core.world.WorldSession;
 import bid.yuanlu.mc.warehouse.core.world.WorldSessionTracker;
 
 /**
@@ -83,7 +84,7 @@ public class ContainerMemoryStoreTest {
 		assertNotNull(store.getValid(k), "MEMORY 不随轮次清除");
 
 		sessions.update(null); // 会话切换（进入世界）
-		sessions.update("singleplayer:abc");
+		sessions.update(new WorldSession("singleplayer:abc", "", "abc"));
 		assertNull(store.getValid(k), "worldId 变化清空全部缓存");
 		assertEquals(0, store.size());
 	}

@@ -82,13 +82,17 @@ public final class ConfigIO {
 
 	// ---- 全局配置 ----
 
-	/** 读 mod.json；缺失/损坏回退默认值并告警（不静默） */
+	/** 读 mod.json；缺失/损坏回退默认值并告警（不静默）；v1（worlds 键）自动迁移到 v2（servers） */
 	public ModConfig loadModConfig() {
 		Path file = root.resolve("config.json");
 		if (!Files.isRegularFile(file)) return new ModConfig();
 		try {
 			JsonObject rootObj = readJsonObject(file);
 			int version = optSchemaVersion(rootObj, file.toString());
+			if (version == 1) {
+				migrateConfigV1ToV2(rootObj);
+				version = SCHEMA_VERSION;
+			}
 			if (version != SCHEMA_VERSION) {
 				LOGGER.warn("{}: unsupported schemaVersion {} (expected {}), falling back to defaults", file, version, SCHEMA_VERSION);
 				return new ModConfig();
@@ -98,6 +102,14 @@ public final class ConfigIO {
 		} catch (Exception e) {
 			LOGGER.warn("Failed to load {}, using defaults: {}", file, e.toString());
 			return new ModConfig();
+		}
+	}
+
+	/** v1→v2：{@code worlds} 键改名 {@code servers}（键值即 serverId，结构不变） */
+	private static void migrateConfigV1ToV2(JsonObject root) {
+		if (root.has("worlds")) {
+			if (!root.has("servers")) root.add("servers", root.get("worlds"));
+			root.remove("worlds");
 		}
 	}
 
@@ -254,6 +266,11 @@ public final class ConfigIO {
 	private Warehouse readWarehouse(Path file) throws IOException {
 		JsonObject rootObj = readJsonObject(file);
 		int version = optSchemaVersion(rootObj, file.toString());
+		if (version == 1) {
+			// v1→v2：anchors 插入 worldName 层（缺省 ""），pos.world 旧值（serverId 格式）→ ""
+			migrateWarehouseV1ToV2(rootObj);
+			version = SCHEMA_VERSION;
+		}
 		if (version != SCHEMA_VERSION) {
 			// §11.2 不静默：版本不符计入拒载错误（B9 修订，旧实现静默 continue）
 			throw new IOException("unsupported schemaVersion " + version + " (expected " + SCHEMA_VERSION + ")");
@@ -264,17 +281,57 @@ public final class ConfigIO {
 		return w;
 	}
 
-	/** §11.3：pos 条目的 world 可省略——anchors 键中唯一的 worldId 自动补全；多世界歧义则报错 */
+	/**
+	 * v1→v2：anchors 由 {@code worldId → dim → pos} 升为三层 {@code serverId → worldName → dim → pos}，
+	 * 旧 worldId 键即 serverId 格式（singleplayer: 前缀或 mp: 前缀），插入 worldName 层 {@code ""}（缺省世界）；
+	 * pos.world 旧值若等于某 anchor 键 → {@code ""}，含 {@code #} → 取后缀，其余置 {@code ""}。
+	 */
+	private static void migrateWarehouseV1ToV2(JsonObject root) {
+		if (root.has("anchors") && root.get("anchors").isJsonObject()) {
+			JsonObject anchors = root.getAsJsonObject("anchors");
+			JsonObject migrated = new JsonObject();
+			java.util.Set<String> oldKeys = new java.util.LinkedHashSet<>();
+			for (Map.Entry<String, JsonElement> e : anchors.entrySet()) {
+				oldKeys.add(e.getKey());
+				JsonObject worlds = new JsonObject();
+				worlds.add("", e.getValue());
+				migrated.add(e.getKey(), worlds);
+			}
+			root.add("anchors", migrated);
+			if (root.has("containers") && root.get("containers").isJsonArray()) {
+				for (JsonElement c : root.getAsJsonArray("containers")) {
+					if (!c.isJsonObject() || !c.getAsJsonObject().has("pos")) continue;
+					for (JsonElement pe : c.getAsJsonObject().getAsJsonArray("pos")) {
+						if (!pe.isJsonObject()) continue;
+						JsonObject pos = pe.getAsJsonObject();
+						if (!pos.has("world") || pos.get("world").isJsonNull()) continue;
+						String old = pos.get("world").getAsString();
+						String worldName;
+						if (oldKeys.contains(old)) {
+							worldName = "";
+						} else if (old.indexOf('#') >= 0) {
+							worldName = old.substring(old.indexOf('#') + 1);
+						} else {
+							worldName = "";
+						}
+						pos.addProperty("world", worldName);
+					}
+				}
+			}
+		}
+	}
+
+	/** §11.3：pos 条目的 world 可省略——anchors 展平后唯一 worldName 自动补全；多世界歧义则报错 */
 	private static void fillOmittedWorlds(Warehouse w) throws IOException {
-		Set<String> anchorWorlds = w.anchors.keySet();
+		Set<String> worldNames = w.worldNames();
 		for (ContainerInfo c : w.containers) {
 			for (int pi = 0; pi < c.pos.size(); pi++) {
 				var pos = c.pos.get(pi);
 				if (pos.hasWorld()) continue;
-				if (anchorWorlds.size() != 1) {
+				if (worldNames.size() != 1) {
 					throw new IOException("pos without world in multi-world warehouse: " + pos);
 				}
-				c.pos.set(pi, pos.withWorld(anchorWorlds.iterator().next()));
+				c.pos.set(pi, pos.withWorld(worldNames.iterator().next()));
 			}
 		}
 	}

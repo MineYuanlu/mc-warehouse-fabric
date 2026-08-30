@@ -151,7 +151,7 @@ public final class PlayerOpenRefresher {
 		if (MarkMode.get().isActive()) return; // 标记模式自行处理注册/移除
 		WorldDim dim = currentDim();
 		if (dim == null) return;
-		WorldDimPos abs = new WorldDimPos(dim.worldId(), dim.dimId(),
+		WorldDimPos abs = new WorldDimPos(dim.worldName(), dim.dimId(),
 				pos.getX(), pos.getY(), pos.getZ());
 		synchronized (this) {
 			if (findContainer(abs) == null) return; // 只关心激活仓库内容器
@@ -275,8 +275,11 @@ public final class PlayerOpenRefresher {
 	private static ContainerInfo findContainer(WorldDimPos abs) {
 		WarehouseManagerImpl mgr = WarehouseManagerImpl.get();
 		if (mgr == null || mgr.active() == null) return null;
+		if (!abs.hasWorld()) return null;
+		String serverId = sessionServerId();
+		if (serverId == null) return null;
 		var wh = mgr.active();
-		WorldDim dim = new WorldDim(abs.world(), abs.dim());
+		WorldDim dim = new WorldDim(serverId, abs.world(), abs.dim());
 		WorldDimPos rel = wh.toRelative(dim, abs.toBlockPos());
 		if (rel == null) return null;
 		return wh.containerAt(dim, rel.toBlockPos());
@@ -286,15 +289,27 @@ public final class PlayerOpenRefresher {
 	private static String currentWorldKey() {
 		WorldDim dim = currentDim();
 		if (dim == null) return null;
-		return dim.worldId() + "|" + dim.dimId();
+		return dim.serverId() + "|" + dim.worldName() + "|" + dim.dimId();
+	}
+
+	@Nullable
+	private static String sessionServerId() {
+		try {
+			WorldSessionTracker trk = WorldSessionTracker.get();
+			return trk != null ? trk.currentServerId() : null;
+		} catch (IllegalStateException e) {
+			return null;
+		}
 	}
 
 	@Nullable
 	private static WorldDim currentDim() {
 		Minecraft mc = Minecraft.getInstance();
-		String worldId = WorldSessionTracker.get() == null ? null : WorldSessionTracker.get().currentWorldId();
+		String serverId = sessionServerId();
+		String worldName = serverId == null ? null
+				: (WorldSessionTracker.get() == null ? null : WorldSessionTracker.get().currentWorldName());
 		String dimId = mc.level == null ? null : mc.level.dimension().identifier().toString();
-		if (worldId == null || dimId == null) return null;
-		return new WorldDim(worldId, dimId);
+		if (serverId == null || worldName == null || dimId == null) return null;
+		return new WorldDim(serverId, worldName, dimId);
 	}
 }
