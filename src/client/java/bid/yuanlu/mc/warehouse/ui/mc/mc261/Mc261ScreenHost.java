@@ -82,6 +82,10 @@ public final class Mc261ScreenHost extends Screen {
 		var draw = new Mc261Draw(graphics, a);
 		root.update(draw, width, height, mouseX, mouseY);
 		root.extract(draw);
+		// HUD 设置屏：HUD 由本屏代渲染在内容之上（HUD 层在更早 stratum，必然被盖住）
+		if (hudPassthrough) {
+			Mc261HudHost.extractOverlay(graphics, a);
+		}
 	}
 
 	// ---- 输入翻译 ----

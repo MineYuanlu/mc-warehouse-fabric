@@ -23,8 +23,17 @@ final class Mc261HudHost implements UiPlatform.HudRegistrar, UiPlatform.Resettab
 
 	private static final String NAMESPACE = "yuanlu-warehouse";
 
+	@Nullable
+	private static Mc261HudHost instance;
+
 	private final Map<String, Supplier<UiRoot>> factories = new HashMap<>();
 	private final Map<String, @Nullable UiRoot> roots = new HashMap<>();
+
+	Mc261HudHost() {
+		if (instance == null) {
+			instance = this;
+		}
+	}
 
 	@Override
 	public void register(String id, Supplier<UiRoot> factory) {
@@ -43,11 +52,26 @@ final class Mc261HudHost implements UiPlatform.HudRegistrar, UiPlatform.Resettab
 		if (mc.player == null || mc.options.hideGui) {
 			return;
 		}
-		// HUD 设置屏（passthrough）期间保持渲染，供实时预览/拖拽定位
-		if (mc.screen instanceof Mc261ScreenHost h && !h.hudPassthrough()) {
+		// 宿主屏打开期间不在 HUD 层渲染：非 passthrough 屏隐藏 HUD（现状语义），
+		// passthrough 屏（HUD 设置）改由 screen 在自身内容之上代渲染——否则 HUD
+		// 永远在更早 stratum，被设置屏面板盖住（GameRenderer.extractGui 顺序）
+		if (mc.screen instanceof Mc261ScreenHost) {
 			return;
 		}
-		var draw = new Mc261Draw(graphics, delta.getGameTimeDeltaPartialTick(true));
+		extractRoots(graphics, delta.getGameTimeDeltaPartialTick(true));
+	}
+
+	/** passthrough 屏在自身内容提取后调用：HUD 绘制在屏幕面板之上，设置期间永远可见可抓。 */
+	static void extractOverlay(GuiGraphicsExtractor graphics, float partialTick) {
+		var mc = Minecraft.getInstance();
+		if (instance == null || mc.player == null || mc.options.hideGui) {
+			return;
+		}
+		instance.extractRoots(graphics, partialTick);
+	}
+
+	private void extractRoots(GuiGraphicsExtractor graphics, float partialTick) {
+		var draw = new Mc261Draw(graphics, partialTick);
 		int w = draw.screenWidth();
 		int h = draw.screenHeight();
 		for (var e : roots.entrySet()) {

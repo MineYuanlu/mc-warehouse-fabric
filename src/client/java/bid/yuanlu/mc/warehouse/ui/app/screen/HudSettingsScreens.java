@@ -7,6 +7,7 @@ import java.util.List;
 import net.minecraft.network.chat.Component;
 
 import bid.yuanlu.mc.warehouse.ui.app.hud.HudConfig;
+import bid.yuanlu.mc.warehouse.ui.app.hud.HudLayout;
 import bid.yuanlu.mc.warehouse.ui.core.element.ButtonElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.CheckboxElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.LabelElement;
@@ -24,8 +25,10 @@ import org.lwjgl.glfw.GLFW;
 /**
  * HUD 设置屏（UI-PDD §6.2，按用户规格重设计）：
  * <ul>
- *   <li>本屏打开期间 HUD 按工作状态真实显示（passthrough），设置即所见；</li>
- *   <li>拖拽屏幕空白处 = 平移对应角的 HUD 组，方向键微调 1px；</li>
+ *   <li>本屏打开期间 HUD 按工作状态真实显示且渲染在本屏内容之上（passthrough + 代渲染），
+ *       设置即所见，被面板遮住也能先拖走；</li>
+ *   <li>按住 HUD 本体（按布局 bounds 命中）拖拽 = 平移该角 HUD 组，附近空白退回象限
+ *       猜测；方向键微调 1px；offset 钳在屏内防失联；</li>
  *   <li>屏幕中央列表逐块：开关 checkbox、拖拽排序、-/+ 调整该块文字缩放；</li>
  *   <li>外框尺寸由内容（行数/字数/字号）自动决定，无独立尺寸控制；文字行
  *       只能开关/排序，逐行排列，不可单独设位置。</li>
@@ -113,19 +116,22 @@ public final class HudSettingsScreens {
 		return row;
 	}
 
-	/** 行拖拽排序：捕获阶段监听（行内任意子级被按住皆可拖），累计位移越过行高即换位。 */
+	/** 行拖拽排序：捕获阶段监听（行内任意子级被按住皆可拖），累计位移越过行高即换位；
+	 *  排序期间消费事件——行拖拽不得同时平移 HUD 组。 */
 	private static void attachReorder(PanelElement list, PanelElement row, HudConfig.Block block) {
 		int[] fromIndex = { -1 };
 		double[] accDy = { 0 };
 		row.on(UiEvent.Type.DRAG_START, e -> {
 			fromIndex[0] = orderedBlocks().indexOf(block);
 			accDy[0] = 0;
+			e.consume();
 		}, true);
 		row.on(UiEvent.Type.DRAG, e -> {
 			int from = fromIndex[0];
 			if (from < 0) {
 				return;
 			}
+			e.consume();
 			accDy[0] += e.dy;
 			int to = Math.max(0, Math.min(orderedBlocks().size() - 1,
 					from + (int) Math.round(accDy[0] / ROW_HEIGHT)));
@@ -164,11 +170,18 @@ public final class HudSettingsScreens {
 
 	private static final class OverlayLayer extends PanelElement {
 
+		/** 组矩形命中余量（GUI px）。 */
+		private static final int GRAB_MARGIN = 2;
+		/** 拖出屏幕时组至少保留的可见像素（防失联，配合 bounds 抓取任何位置都能再拖走）。 */
+		private static final int MIN_VISIBLE = 8;
+
 		private final UiRoot root;
 		private double lastMouseX = -1;
 		private double lastMouseY = -1;
 		@Nullable
 		private HudConfig.Corner dragCorner;
+		/** 每帧增量的小数残量：GUI scale≥2 时单帧位移不足 1px，直接取整会全部丢掉（慢拖卡顿根因）。 */
+		private double accX, accY;
 
 		OverlayLayer(UiRoot root) {
 			this.root = root;
@@ -177,19 +190,38 @@ public final class HudSettingsScreens {
 				lastMouseX = e.x;
 				lastMouseY = e.y;
 			});
+			// 组拖拽走捕获阶段：OverlayLayer 是中央面板的祖先，先于面板行处理器——
+			// 按住 HUD 本体（bounds 命中）即抢占整条拖拽链并消费，行排序/按钮不再干扰
 			on(UiEvent.Type.DRAG_START, e -> {
-				dragCorner = cornerAt(e.x, e.y);
-				HudConfig.save(HudConfig.get());
-			});
-			on(UiEvent.Type.DRAG, e -> {
-				if (dragCorner != null && (e.dx != 0 || e.dy != 0)) {
-					shiftGroup(dragCorner, (int) e.dx, (int) e.dy);
+				dragCorner = groupAt(e.x, e.y);
+				accX = 0;
+				accY = 0;
+				if (dragCorner != null) {
+					e.consume();
+					HudConfig.save(HudConfig.get());
 				}
-			});
+			}, true);
+			on(UiEvent.Type.DRAG, e -> {
+				if (dragCorner == null) {
+					return;
+				}
+				e.consume();
+				accX += e.dx;
+				accY += e.dy;
+				int sx = (int) accX; // 向零截断，小数残量留回累加器——任意速度逐像素跟手
+				int sy = (int) accY;
+				if (sx != 0 || sy != 0) {
+					accX -= sx;
+					accY -= sy;
+					shiftGroup(dragCorner, sx, sy);
+				}
+			}, true);
 			on(UiEvent.Type.DRAG_END, e -> {
-				dragCorner = null;
-				HudConfig.save(HudConfig.get());
-			});
+				if (dragCorner != null) {
+					dragCorner = null;
+					HudConfig.save(HudConfig.get());
+				}
+			}, true);
 			root.on(UiEvent.Type.KEY_DOWN, e -> {
 				int dx = 0;
 				int dy = 0;
@@ -203,8 +235,11 @@ public final class HudSettingsScreens {
 					}
 				}
 				e.consume();
-				shiftGroup(cornerAt(lastMouseX, lastMouseY), dx, dy);
-				HudConfig.save(HudConfig.get());
+				var corner = groupAt(lastMouseX, lastMouseY);
+				if (corner != null) {
+					shiftGroup(corner, dx, dy);
+					HudConfig.save(HudConfig.get());
+				}
 			});
 		}
 
@@ -226,25 +261,48 @@ public final class HudSettingsScreens {
 			// 全透明：仅交互层
 		}
 
-		private @Nullable HudConfig.Corner cornerAt(double x, double y) {
+		/** 按真实 HUD 组 bounds 抓取（±余量）；未命中时退回象限猜测，但该角无启用块则为 null。 */
+		private @Nullable HudConfig.Corner groupAt(double x, double y) {
+			for (HudConfig.Corner corner : HudConfig.Corner.values()) {
+				int[] b = HudLayout.groupBounds(corner);
+				if (b == null) {
+					continue;
+				}
+				if (x >= b[0] - GRAB_MARGIN && x < b[0] + b[2] + GRAB_MARGIN
+						&& y >= b[1] - GRAB_MARGIN && y < b[1] + b[3] + GRAB_MARGIN) {
+					return corner;
+				}
+			}
 			if (x < 0 || y < 0) {
-				return HudConfig.Corner.TOP_LEFT;
+				return hasBlocks(HudConfig.Corner.TOP_LEFT) ? HudConfig.Corner.TOP_LEFT : null;
 			}
 			boolean right = x >= root.width() / 2.0;
 			boolean bottom = y >= root.height() / 2.0;
-			if (!right) {
-				return bottom ? HudConfig.Corner.BOTTOM_LEFT : HudConfig.Corner.TOP_LEFT;
-			}
-			return bottom ? HudConfig.Corner.BOTTOM_RIGHT : HudConfig.Corner.TOP_RIGHT;
+			var corner = !right ? (bottom ? HudConfig.Corner.BOTTOM_LEFT : HudConfig.Corner.TOP_LEFT)
+					: (bottom ? HudConfig.Corner.BOTTOM_RIGHT : HudConfig.Corner.TOP_RIGHT);
+			return hasBlocks(corner) ? corner : null;
 		}
 
-		/** 平移指定角落全部启用块的 offset（组移动，UI-PDD §6.2）。 */
-		private void shiftGroup(HudConfig.Corner corner, int dx, int dy) {
+		private static boolean hasBlocks(HudConfig.Corner corner) {
 			for (HudConfig.Block b : HudConfig.Block.values()) {
 				var bc = HudConfig.get().get(b);
 				if (bc.enabled && bc.corner() == corner) {
-					bc.offsetX = Math.max(0, bc.offsetX + dx);
-					bc.offsetY = Math.max(0, bc.offsetY + dy);
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/** 平移指定角落全部启用块的 offset（组移动，UI-PDD §6.2）；offset 钳在
+		 *  [0, 屏幕尺寸-MIN_VISIBLE]，组永远留在屏内可再抓取。 */
+		private void shiftGroup(HudConfig.Corner corner, int dx, int dy) {
+			int maxX = Math.max(0, root.width() - MIN_VISIBLE);
+			int maxY = Math.max(0, root.height() - MIN_VISIBLE);
+			for (HudConfig.Block b : HudConfig.Block.values()) {
+				var bc = HudConfig.get().get(b);
+				if (bc.enabled && bc.corner() == corner) {
+					bc.offsetX = Math.max(0, Math.min(maxX, bc.offsetX + dx));
+					bc.offsetY = Math.max(0, Math.min(maxY, bc.offsetY + dy));
 				}
 			}
 			UiPlatform.resetHud("hud");
