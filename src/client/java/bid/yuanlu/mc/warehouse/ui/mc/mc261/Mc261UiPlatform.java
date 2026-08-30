@@ -5,6 +5,7 @@ import java.util.function.Supplier;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 
+import bid.yuanlu.mc.warehouse.ui.core.draw.ClipboardPort;
 import bid.yuanlu.mc.warehouse.ui.core.element.UiRoot;
 import bid.yuanlu.mc.warehouse.ui.core.world.WorldHighlighter;
 import bid.yuanlu.mc.warehouse.ui.mc.UiPlatform;
@@ -24,6 +25,17 @@ public final class Mc261UiPlatform {
 	/** 由 UiPlatform 门面在探测成功后调用。 */
 	public static void install() {
 		ClientTickEvents.END_CLIENT_TICK.register(client -> tickCounter++);
+		ClipboardPort.install(new ClipboardPort.Provider() {
+			@Override
+			public String get() {
+				return Minecraft.getInstance().keyboardHandler.getClipboard();
+			}
+
+			@Override
+			public void set(String value) {
+				Minecraft.getInstance().keyboardHandler.setClipboard(value);
+			}
+		});
 		UiPlatform.install(
 				new UiPlatform.ScreenOpener() {
 					@Override

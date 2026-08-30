@@ -300,7 +300,8 @@ public abstract class UiElement<S extends UiElement<S>> {
 		return layout;
 	}
 
-	UiElement<?> root() {
+	/** 根元素（未入树时为自身）；供跨包元素在事件期解析根（如浮层挂载）。 */
+	public UiElement<?> root() {
 		UiElement<?> e = this;
 		while (e.parent != null) {
 			e = e.parent;
