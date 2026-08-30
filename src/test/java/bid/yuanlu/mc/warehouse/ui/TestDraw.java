@@ -31,6 +31,11 @@ public final class TestDraw implements UiDraw {
 	}
 
 	@Override
+	public void blit(String texturePath, int x, int y, int u, int v, int width, int height,
+			int textureWidth, int textureHeight) {
+	}
+
+	@Override
 	public void text(String s, int x, int y, int argb, boolean shadow, TextAnchor anchor) {
 	}
 

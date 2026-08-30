@@ -8,12 +8,15 @@ import net.minecraft.network.chat.Component;
 
 import bid.yuanlu.mc.warehouse.ui.app.hud.HudConfig;
 import bid.yuanlu.mc.warehouse.ui.app.hud.HudLayout;
+import bid.yuanlu.mc.warehouse.ui.app.widget.ContainerGhostElement;
+import bid.yuanlu.mc.warehouse.ui.app.widget.CycleSelector;
 import bid.yuanlu.mc.warehouse.ui.core.bind.Value;
 import bid.yuanlu.mc.warehouse.ui.core.element.ButtonElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.CheckboxElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.LabelElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.PanelElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.SliderElement;
+import bid.yuanlu.mc.warehouse.ui.core.element.UiElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.UiRoot;
 import bid.yuanlu.mc.warehouse.ui.core.draw.UiDraw;
 import bid.yuanlu.mc.warehouse.ui.core.event.UiEvent;
@@ -45,6 +48,10 @@ public final class HudSettingsScreens {
 	private static final float SCALE_MIN = 0.5f;
 	private static final float SCALE_MAX = 2f;
 
+	/** 模拟容器状态（会话级，不落盘）：HUD 设置模式的贴靠参照物。 */
+	private static boolean ghostEnabled = false;
+	private static ContainerGhostElement.Preset ghostPreset = ContainerGhostElement.Preset.CHEST_27;
+
 	private HudSettingsScreens() {
 	}
 
@@ -60,7 +67,37 @@ public final class HudSettingsScreens {
 		var overlay = new OverlayLayer(root);
 		overlay.add(centerList());
 		root.add(overlay);
+		if (ghostEnabled) {
+			attachGhost(root);
+		}
 		return root;
+	}
+
+	// ---- 模拟容器（贴靠参照，UI-PDD §6.2 v0.3）----
+
+	private static void attachGhost(UiRoot root) {
+		detachGhost(root);
+		var ghost = new ContainerGhostElement(ghostPreset);
+		ghost.id("container-ghost").zIndex(-1); // 画在交互层之下、命中永不达（参照物不拦输入）
+		root.add(ghost);
+	}
+
+	private static void detachGhost(UiRoot root) {
+		var old = root.<UiElement<?>>findId("container-ghost");
+		if (old != null) {
+			old.removeFromParent();
+		}
+	}
+
+	private static Component presetLabel(ContainerGhostElement.Preset p) {
+		return switch (p) {
+			case CHEST_27 -> Component.translatable("ui.wh.hud.ghost.chest27");
+			case CHEST_54 -> Component.translatable("ui.wh.hud.ghost.chest54");
+			case SHULKER_BOX -> Component.translatable("ui.wh.hud.ghost.shulker");
+			case DISPENSER -> Component.translatable("ui.wh.hud.ghost.dispenser");
+			case FURNACE -> Component.translatable("ui.wh.hud.ghost.furnace");
+			case PLAYER_INVENTORY -> Component.translatable("ui.wh.hud.ghost.inventory");
+		};
 	}
 
 	// ---- 中央面板：标题 + 提示 + 区块行 + 完成 ----
@@ -81,10 +118,41 @@ public final class HudSettingsScreens {
 		for (HudConfig.Block block : blocks) {
 			list.add(blockRow(list, block));
 		}
+		list.add(new LabelElement(Component.translatable("ui.wh.hud.settings.ghost")).padding(2));
+		list.add(ghostRow(list));
 		var actions = PanelElement.plain().padding(2).layout(new Row(4));
 		actions.add(new ButtonElement(Component.translatable("ui.wh.hud.settings.done"))
 				.onClick(ScreenHeader::backToMain));
 		list.add(actions);
+	}
+
+	/** 模拟容器行（会话级）：启用 checkbox + 预设循环选择；启用即在根上挂参照物。 */
+	private static PanelElement ghostRow(PanelElement list) {
+		var row = PanelElement.plain().padding(2).layout(new Row(4)).size(300, ROW_HEIGHT - 4);
+		var enabledValue = Value.of(ghostEnabled);
+		row.add(new CheckboxElement(Component.translatable("ui.wh.hud.settings.ghost.toggle"), ghostEnabled)
+				.bind(enabledValue));
+		enabledValue.listen(enabled -> {
+			ghostEnabled = enabled;
+			if (list.root() instanceof UiRoot r) {
+				if (enabled) {
+					attachGhost(r);
+				} else {
+					detachGhost(r);
+				}
+			}
+		});
+		var presets = List.of(ContainerGhostElement.Preset.values());
+		row.add(new CycleSelector<>(presets, HudSettingsScreens::presetLabel, presets.indexOf(ghostPreset),
+				p -> {
+					ghostPreset = p;
+					if (ghostEnabled && list.root() instanceof UiRoot r) {
+						attachGhost(r);
+					}
+				}));
+		row.add(new LabelElement(Component.translatable("ui.wh.hud.settings.ghost.tip"))
+				.color(Theme.active().textMuted()));
+		return row;
 	}
 
 	private static List<HudConfig.Block> orderedBlocks() {
@@ -188,6 +256,9 @@ public final class HudSettingsScreens {
 		private HudConfig.Corner dragCorner;
 		/** 每帧增量的小数残量：GUI scale≥2 时单帧位移不足 1px，直接取整会全部丢掉（慢拖卡顿根因）。 */
 		private double accX, accY;
+		// 贴靠引导线（拖拽期间有效）：吸附成功时沿容器被对齐的边画 1px accent 线
+		private int guideX = -1, guideY = -1;
+		private int guideSpanY0, guideSpanY1, guideSpanX0, guideSpanX1;
 
 		OverlayLayer(UiRoot root) {
 			this.root = root;
@@ -206,6 +277,8 @@ public final class HudSettingsScreens {
 				dragCorner = groupAt(e.x, e.y);
 				accX = 0;
 				accY = 0;
+				guideX = -1;
+				guideY = -1;
 				if (dragCorner != null) {
 					e.consume();
 					HudConfig.save(HudConfig.get());
@@ -220,15 +293,43 @@ public final class HudSettingsScreens {
 				accY += e.dy;
 				int sx = (int) accX; // 向零截断，小数残量留回累加器——任意速度逐像素跟手
 				int sy = (int) accY;
-				if (sx != 0 || sy != 0) {
-					accX -= sx;
-					accY -= sy;
-					shiftGroup(dragCorner, sx, sy);
+				if (sx == 0 && sy == 0) {
+					return;
 				}
+				accX -= sx;
+				accY -= sy;
+				// 贴靠模拟容器（UI-PDD §6.2 v0.3）：组平移后边缘与容器边缘四向最小修正
+				guideX = -1;
+				guideY = -1;
+				int cx = 0;
+				int cy = 0;
+				int[] gb = HudLayout.groupBounds(dragCorner);
+				int[] gr = ghostRect();
+				if (gb != null && gr != null) {
+					int nx = gb[0] + sx;
+					int ny = gb[1] + sy;
+					cx = HudLayout.snapDelta(nx, gb[2], gr[0], gr[2], HudLayout.SNAP_THRESHOLD);
+					cy = HudLayout.snapDelta(ny, gb[3], gr[1], gr[3], HudLayout.SNAP_THRESHOLD);
+					if (cx != 0) {
+						int ax = nx + cx; // 对齐后组左/右缘必与容器左/右缘之一重合
+						guideX = (ax == gr[0] || ax + gb[2] == gr[0]) ? gr[0] : gr[0] + gr[2];
+						guideSpanY0 = gr[1];
+						guideSpanY1 = gr[1] + gr[3];
+					}
+					if (cy != 0) {
+						int ay = ny + cy;
+						guideY = (ay == gr[1] || ay + gb[3] == gr[1]) ? gr[1] : gr[1] + gr[3];
+						guideSpanX0 = gr[0];
+						guideSpanX1 = gr[0] + gr[2];
+					}
+				}
+				shiftGroup(dragCorner, sx + cx, sy + cy);
 			}, true);
 			on(UiEvent.Type.DRAG_END, e -> {
 				if (dragCorner != null) {
 					dragCorner = null;
+					guideX = -1;
+					guideY = -1;
 					HudConfig.save(HudConfig.get());
 				}
 			}, true);
@@ -255,7 +356,20 @@ public final class HudSettingsScreens {
 
 		@Override
 		protected void drawElement(UiDraw g) {
-			// 全透明：仅交互层
+			// 全透明交互层；仅绘制贴靠引导线（吸附成功时沿容器被对齐的边）
+			int accent = Theme.active().accent();
+			if (guideX >= 0) {
+				g.fill(guideX, guideSpanY0, guideX + 1, guideSpanY1, accent);
+			}
+			if (guideY >= 0) {
+				g.fill(guideSpanX0, guideY, guideSpanX1, guideY + 1, accent);
+			}
+		}
+
+		/** 模拟容器参照物当前屏幕矩形 {x,y,w,h}；未启用为 null。 */
+		private int @Nullable [] ghostRect() {
+			var g = root.findId("container-ghost");
+			return g == null ? null : new int[] { g.absX(), g.absY(), g.width(), g.height() };
 		}
 
 		/** 按真实 HUD 组 bounds 抓取（±余量）；未命中时退回象限猜测，但该角无启用块则为 null。 */

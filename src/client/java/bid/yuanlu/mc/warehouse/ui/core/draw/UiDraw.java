@@ -25,6 +25,13 @@ public interface UiDraw {
 	 */
 	void sprite(String id, int x, int y, int width, int height, int argb);
 
+	/**
+	 * 原版 GUI 纹理区域 blit（完整纹理路径 + UV 子区域，256 网格），如
+	 * {@code "minecraft:textures/gui/container/generic_54.png"}——模拟容器等需要
+	 * 原版贴图片段的场景（sprite atlas 之外的原生纹理）。
+	 */
+	void blit(String texturePath, int x, int y, int u, int v, int width, int height, int textureWidth, int textureHeight);
+
 	void text(String s, int x, int y, int argb, boolean shadow, TextAnchor anchor);
 
 	void textComponent(Component c, int x, int y, int argb, boolean shadow, TextAnchor anchor);

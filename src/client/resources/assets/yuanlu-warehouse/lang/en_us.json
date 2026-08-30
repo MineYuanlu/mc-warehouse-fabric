@@ -260,5 +260,14 @@
   "ui.wh.rule.qty.count": "Fixed count",
   "ui.wh.rule.qty.group": "Per group",
   "ui.wh.rule.qty.fill_slots": "Fill slots",
-  "ui.wh.rule.qty.percent": "Percent"
+  "ui.wh.rule.qty.percent": "Percent",
+  "ui.wh.hud.settings.ghost": "Container reference (session-only)",
+  "ui.wh.hud.settings.ghost.toggle": "Show container",
+  "ui.wh.hud.settings.ghost.tip": "Drag HUD near the container edge to snap",
+  "ui.wh.hud.ghost.chest27": "Chest (27)",
+  "ui.wh.hud.ghost.chest54": "Double chest (54)",
+  "ui.wh.hud.ghost.shulker": "Shulker box",
+  "ui.wh.hud.ghost.dispenser": "Dispenser",
+  "ui.wh.hud.ghost.furnace": "Furnace",
+  "ui.wh.hud.ghost.inventory": "Player inventory"
 }

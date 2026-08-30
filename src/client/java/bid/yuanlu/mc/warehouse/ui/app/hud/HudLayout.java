@@ -20,6 +20,25 @@ public final class HudLayout implements Layout {
 	/** 每角 wrapper 最近一次 arrange 的屏幕矩形 {x,y,w,h}（设置屏按真实 bounds 抓取拖拽用）。 */
 	private static final Map<HudConfig.Corner, int[]> LAST_BOUNDS = new EnumMap<>(HudConfig.Corner.class);
 
+	/** 贴靠触发阈值（GUI px）：组边缘距目标边缘不超过此值即吸附（HUD 设置屏模拟容器贴靠）。 */
+	public static final int SNAP_THRESHOLD = 6;
+
+	/**
+	 * 轴向贴靠修正量（纯函数，可 JVM 单测）：宽 size 的组平移到 pos 后，与目标矩形
+	 * [target, target+targetSize] 四种边缘对齐（组左↔目标左/右、组右↔目标左/右）中
+	 * |d| 最小者；超过 threshold 返回 0（不吸附）。返回值加到 pos 上即对齐。
+	 */
+	public static int snapDelta(int pos, int size, int target, int targetSize, int threshold) {
+		int best = Integer.MAX_VALUE;
+		for (int d : new int[] { target - pos, target + targetSize - size - pos,
+				target + targetSize - pos, target - size - pos }) {
+			if (Math.abs(d) < Math.abs(best)) {
+				best = d;
+			}
+		}
+		return Math.abs(best) <= threshold ? best : 0;
+	}
+
 	@Override
 	public void arrange(UiElement<?> container, UiDraw g) {
 		for (var wrapper : container.children()) {

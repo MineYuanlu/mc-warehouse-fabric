@@ -58,6 +58,14 @@ public final class Mc261Draw implements UiDraw {
 	}
 
 	@Override
+	public void blit(String texturePath, int x, int y, int u, int v, int width, int height,
+			int textureWidth, int textureHeight) {
+		g.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED,
+				net.minecraft.resources.Identifier.parse(texturePath), x, y, u, v, width, height,
+				textureWidth, textureHeight);
+	}
+
+	@Override
 	public void text(String s, int x, int y, int argb, boolean shadow, TextAnchor anchor) {
 		g.text(font, s, anchoredX(x, font.width(s), anchor), y, argb, shadow);
 	}

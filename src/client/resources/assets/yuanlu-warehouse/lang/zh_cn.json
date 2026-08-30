@@ -260,5 +260,14 @@
   "ui.wh.rule.qty.count": "固定数量",
   "ui.wh.rule.qty.group": "每组数量",
   "ui.wh.rule.qty.fill_slots": "填充槽位",
-  "ui.wh.rule.qty.percent": "百分比"
+  "ui.wh.rule.qty.percent": "百分比",
+  "ui.wh.hud.settings.ghost": "模拟容器参照（仅本次会话）",
+  "ui.wh.hud.settings.ghost.toggle": "显示容器",
+  "ui.wh.hud.settings.ghost.tip": "拖拽 HUD 至容器边缘自动吸附",
+  "ui.wh.hud.ghost.chest27": "单箱 (27)",
+  "ui.wh.hud.ghost.chest54": "双箱 (54)",
+  "ui.wh.hud.ghost.shulker": "潜影盒",
+  "ui.wh.hud.ghost.dispenser": "投掷器",
+  "ui.wh.hud.ghost.furnace": "熔炉",
+  "ui.wh.hud.ghost.inventory": "玩家背包"
 }
