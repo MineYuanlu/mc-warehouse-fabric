@@ -16,7 +16,7 @@ import bid.yuanlu.mc.warehouse.ui.mc.UiPlatform;
 public final class ScreenHeader {
 
 	public enum Page {
-		WAREHOUSE, ENGINE, RULES, SELECTION, HUD_SETTINGS
+		WAREHOUSE, ENGINE, RULES, SELECTION, WORLD, CONFIG, HUD_SETTINGS
 	}
 
 	private ScreenHeader() {
@@ -29,6 +29,8 @@ public final class ScreenHeader {
 		row.add(navButton(current, Page.ENGINE, "ui.wh.main.tab.engine"));
 		row.add(navButton(current, Page.RULES, "ui.wh.main.tab.rules"));
 		row.add(navButton(current, Page.SELECTION, "ui.wh.main.tab.select"));
+		row.add(navButton(current, Page.WORLD, "ui.wh.main.tab.world"));
+		row.add(navButton(current, Page.CONFIG, "ui.wh.main.tab.config"));
 		row.add(navButton(current, Page.HUD_SETTINGS, "ui.wh.main.tab.hudsettings"));
 		return row;
 	}
@@ -51,6 +53,8 @@ public final class ScreenHeader {
 			case ENGINE -> WarehouseScreens.open(1);
 			case RULES -> RuleScreens.open();
 			case SELECTION -> SelectionPanelScreens.open();
+			case WORLD -> WorldScreens.open();
+			case CONFIG -> ConfigScreens.open();
 			case HUD_SETTINGS -> HudSettingsScreens.open();
 		}
 	}
