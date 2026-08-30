@@ -132,8 +132,12 @@ public final class UiKeybinds {
 	}
 
 	private static void toggleMark() {
-		// 无参标记模式：IOType INPUT + 无规则（完整交互在 M3 主屏/选区面板）
-		MarkMode.get().toggle(bid.yuanlu.mc.warehouse.api.container.IOType.INPUT, null, null);
+		// 使用最近一次配置的标记参数（UI 标记 Modal 配置后沿用）；缺省 INPUT + 无规则
+		var last = bid.yuanlu.mc.warehouse.core.mark.MarkMode.get().lastConfigured();
+		bid.yuanlu.mc.warehouse.core.mark.MarkMode.get().toggle(
+				last != null ? last.type() : bid.yuanlu.mc.warehouse.api.container.IOType.INPUT,
+				last != null ? last.ruleId() : null,
+				last != null ? last.templateId() : null);
 	}
 
 	private static void toggleEngine() {

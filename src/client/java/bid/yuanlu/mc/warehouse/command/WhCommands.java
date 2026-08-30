@@ -1788,6 +1788,35 @@ public final class WhCommands {
 		return e;
 	}
 
+	/**
+	 * UI 层等价 /wh container add（UI-PDD §5.3）：绝对坐标 → 相对注册，与命令同一
+	 * 重复检测/D2 校验/落盘路径。成功返回 null，否则返回错误组件（不落盘）。
+	 */
+	public static Component addContainerDirect(WorldDim dim, BlockPos abs, IOType type, @Nullable String ruleRef) {
+		Warehouse wh = manager().active();
+		if (wh == null) return Component.translatable("commands.wh.status.none");
+		WorldDimPos rel = CommandSupport.relativePos(manager(), dim, abs);
+		if (rel == null) return Component.translatable("commands.wh.mark.no_anchor");
+		if (wh.containerAt(dim, rel.toBlockPos()) != null) {
+			return Component.translatable("commands.wh.container.already_registered");
+		}
+		if (ruleRef != null && !wh.rules.containsKey(ruleRef)) {
+			return Component.translatable("commands.wh.mark.rule_missing", ruleRef);
+		}
+		ContainerInfo info = new ContainerInfo(type);
+		info.pos.add(rel);
+		if (ruleRef != null) {
+			info.rules.add(ruleRef);
+		}
+		String d2err = ContainerGroup.validateContainer(wh, info);
+		if (d2err != null) {
+			return Component.translatable("commands.wh.error.generic", d2err);
+		}
+		wh.containers.add(info);
+		manager().save(wh);
+		return null;
+	}
+
 	static Warehouse requireActive(FabricClientCommandSource src) {
 		Warehouse wh = manager().active();
 		if (wh == null) {

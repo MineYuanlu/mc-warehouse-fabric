@@ -63,6 +63,9 @@ public final class MarkMode {
 	private volatile Session session;
 
 	@Nullable
+	private volatile Session lastConfigured;
+
+	@Nullable
 	private volatile Target lastLookedAt;
 
 	@Nullable
@@ -82,6 +85,7 @@ public final class MarkMode {
 	 */
 	@Nullable
 	public Session toggle(IOType type, @Nullable String ruleId, @Nullable String templateId) {
+		lastConfigured = new Session(type, ruleId, templateId); // 记忆最近一次配置（快捷键 mark.toggle 沿用）
 		if (session != null) {
 			exit();
 			return null;
@@ -93,6 +97,12 @@ public final class MarkMode {
 		lastOpenContainerId = -1;
 		OpenScreenCapture.register(OPEN_LISTENER);
 		return s;
+	}
+
+	/** 最近一次 toggle 的参数（UI 配置后快捷键 mark.toggle 复用；null = 尚未配置过）。 */
+	@Nullable
+	public Session lastConfigured() {
+		return lastConfigured;
 	}
 
 	public void exit() {

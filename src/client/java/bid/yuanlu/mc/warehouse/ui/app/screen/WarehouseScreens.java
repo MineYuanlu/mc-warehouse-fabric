@@ -6,6 +6,7 @@ import java.util.UUID;
 import org.jetbrains.annotations.Nullable;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 
 import bid.yuanlu.mc.warehouse.api.container.CacheType;
@@ -21,10 +22,12 @@ import bid.yuanlu.mc.warehouse.core.transfer.TransferOverlay;
 import bid.yuanlu.mc.warehouse.core.warehouse.WarehouseManagerImpl;
 import bid.yuanlu.mc.warehouse.ui.app.presenter.HudPresenter;
 import bid.yuanlu.mc.warehouse.ui.app.widget.CycleSelector;
+import bid.yuanlu.mc.warehouse.ui.app.widget.DropdownElement;
 import bid.yuanlu.mc.warehouse.ui.app.widget.Modal;
 import bid.yuanlu.mc.warehouse.ui.app.widget.ScreenScaffold;
 import bid.yuanlu.mc.warehouse.ui.core.element.ButtonElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.LabelElement;
+import bid.yuanlu.mc.warehouse.ui.core.element.NumberFieldElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.PanelElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.ScrollElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.TextFieldElement;
@@ -209,11 +212,19 @@ public final class WarehouseScreens {
 								refresh(root);
 							})));
 			scroll.add(ops);
-			scroll.add(new ButtonElement(Component.translatable("ui.wh.main.reload"))
+			ops.add(new ButtonElement(Component.translatable("ui.wh.main.reload"))
 					.onClick(() -> {
 						mgr.reload();
 						refresh(root);
 					}));
+			ops.add(new ButtonElement(Component.translatable("ui.wh.main.mark"))
+					.onClick(() -> markModal(root, wh)));
+			ops.add(new ButtonElement(Component.translatable("ui.wh.main.container.add"))
+					.onClick(() -> addContainerModal(root, mgr, wh)));
+			scroll.add(ops);
+
+			// 锚点行（等价 /wh anchor set：显示 + 脚下/准星/坐标 Modal）
+			scroll.add(anchorRow(root, mgr, wh));
 
 			// 容器明细行（点击 → 编辑浮层）
 			for (ContainerInfo c : wh.containers) {
@@ -225,6 +236,109 @@ public final class WarehouseScreens {
 				scroll.add(line);
 			}
 			return detail;
+		}
+
+		/** 锚点显示与设定（等价 /wh anchor set [x y z]；~ 相对语法经坐标 Modal）。 */
+		private PanelElement anchorRow(UiRoot root, WarehouseManagerImpl mgr, Warehouse wh) {
+			var theme = Theme.active();
+			var row = PanelElement.plain().padding(2).layout(new Row(4));
+			row.add(new LabelElement(Component.translatable("ui.wh.main.anchor")).padding(1));
+			var dim = bid.yuanlu.mc.warehouse.util.ClientSession.currentDim(Minecraft.getInstance());
+			BlockPos anchor = dim != null ? wh.anchorOf(dim) : null;
+			row.add(new LabelElement(anchor != null
+					? Component.literal(anchor.getX() + " " + anchor.getY() + " " + anchor.getZ())
+					: Component.translatable("ui.wh.main.anchor.unset"))
+					.color(anchor != null ? theme.textPrimary() : theme.textMuted()).grow(1));
+			if (dim != null) {
+				row.add(new ButtonElement(Component.translatable("ui.wh.main.anchor.set.feet"))
+						.onClick(() -> {
+							wh.setAnchor(dim, feetOrLook(false));
+							mgr.save(wh);
+							refresh(root);
+						}));
+				row.add(new ButtonElement(Component.translatable("ui.wh.main.anchor.set.look"))
+						.onClick(() -> {
+							wh.setAnchor(dim, feetOrLook(true));
+							mgr.save(wh);
+							refresh(root);
+						}));
+				row.add(new ButtonElement(Component.translatable("ui.wh.main.anchor.modal"))
+						.onClick(() -> anchorModal(root, mgr, wh, dim)));
+			}
+			return row;
+		}
+
+		private static BlockPos feetOrLook(boolean look) {
+			Minecraft mc = Minecraft.getInstance();
+			if (mc.player == null) {
+				return BlockPos.ZERO;
+			}
+			if (look && mc.hitResult instanceof net.minecraft.world.phys.BlockHitResult hit
+					&& hit.getBlockPos() != null) {
+				return hit.getBlockPos();
+			}
+			return mc.player.blockPosition();
+		}
+
+		/** 按坐标设锚点（~ 相对语法按玩家位置解析，等价 /wh anchor set ~ ~ ~）。 */
+		private void anchorModal(UiRoot root, WarehouseManagerImpl mgr, Warehouse wh,
+				bid.yuanlu.mc.warehouse.api.world.WorldDim dim) {
+			var overlay = Modal.overlay(root);
+			var dialog = Modal.centeredDialog(root);
+			dialog.padding(10).layout(new Column(6)).id("anchor-modal");
+			dialog.add(new LabelElement(Component.translatable("ui.wh.main.anchor.modal")));
+			var fx = new NumberFieldElement(-30_000_000, 30_000_000, 0, true);
+			var fy = new NumberFieldElement(-30_000_000, 30_000_000, 0, true);
+			var fz = new NumberFieldElement(-30_000_000, 30_000_000, 0, true);
+			fx.size(64, -1);
+			fy.size(64, -1);
+			fz.size(64, -1);
+			var coords = PanelElement.plain().padding(2).layout(new Row(4));
+			coords.add(fx);
+			coords.add(fy);
+			coords.add(fz);
+			coords.add(new ButtonElement(Component.translatable("ui.wh.select.look"))
+					.onClick(() -> {
+						var p = feetOrLook(true);
+						fx.setIntValue(p.getX());
+						fy.setIntValue(p.getY());
+						fz.setIntValue(p.getZ());
+					}));
+			dialog.add(coords);
+			var err = new LabelElement(Component.empty()).color(Theme.active().danger()).padding(1);
+			dialog.add(err);
+			var actions = PanelElement.plain().padding(2).layout(new Row(4));
+			actions.add(new ButtonElement(Component.translatable("ui.wh.modal.confirm"))
+					.semantic(ButtonElement.Semantic.SUCCESS)
+					.onClick(() -> {
+						BlockPos abs;
+						try {
+							abs = parseRelCoords(fx, fy, fz);
+						} catch (NumberFormatException e) {
+							err.text(Component.translatable("ui.wh.select.bad_coords"));
+							return;
+						}
+						wh.setAnchor(dim, abs);
+						mgr.save(wh);
+						closeModal(root);
+						refresh(root);
+					}));
+			actions.add(new ButtonElement(Component.translatable("ui.wh.modal.cancel"))
+					.onClick(() -> closeModal(root)));
+			dialog.add(actions);
+			overlay.add(dialog);
+			registerModalClose(() -> root.remove(overlay));
+		}
+
+		/** 三个相对坐标字段 → 绝对 BlockPos（~ 按玩家位置，与命令 coord 语义一致）。 */
+		private static BlockPos parseRelCoords(NumberFieldElement fx, NumberFieldElement fy,
+				NumberFieldElement fz) {
+			Minecraft mc = Minecraft.getInstance();
+			var origin = mc.player != null ? mc.player.position() : net.minecraft.world.phys.Vec3.ZERO;
+			return new BlockPos(
+					bid.yuanlu.mc.warehouse.util.RelativeCoords.parse(fx.text(), origin.x),
+					bid.yuanlu.mc.warehouse.util.RelativeCoords.parse(fy.text(), origin.y),
+					bid.yuanlu.mc.warehouse.util.RelativeCoords.parse(fz.text(), origin.z));
 		}
 
 		// ---- 容器编辑浮层（等价 container type/mode/rules/memory）----
@@ -283,9 +397,36 @@ public final class WarehouseScreens {
 			}
 			dialog.add(ruleRow);
 
+			// 缓存状态（等价 /wh container memory 查询）
+			var store = WarehouseServices.cacheStore();
+			var player = Minecraft.getInstance().player;
+			UUID uuid = player != null ? player.getUUID() : null;
+			var mem = store != null && uuid != null
+					? store.getValid(bid.yuanlu.mc.warehouse.core.cache.CacheKey.of(c.canonicalPos(), uuid))
+					: null;
+			int items = mem != null && mem.snapshot() != null
+					? mem.snapshot().slots().values().stream().mapToInt(s -> s.getCount()).sum()
+					: 0;
+			dialog.add(new LabelElement(Component.translatable("ui.wh.main.container.memory",
+					mem != null && mem.explored() ? "✓" : "✗",
+					mem != null ? mem.cacheType().name() : "-",
+					items)).color(theme.textMuted()));
+
 			var actions = PanelElement.plain().padding(2).layout(new Row(4));
 			actions.add(new ButtonElement(Component.translatable("ui.wh.main.container.memory.clear"))
 					.onClick(() -> clearMemory(c.canonicalPos())));
+			actions.add(new ButtonElement(Component.translatable("ui.wh.main.container.remove"))
+					.semantic(ButtonElement.Semantic.DANGER)
+					.onClick(() -> Modal.confirm(root,
+							Component.translatable("ui.wh.main.container.remove"),
+							Component.translatable("ui.wh.main.container.remove.confirm",
+									formatPos(c.canonicalPos())),
+							() -> {
+								wh.containers.remove(c);
+								mgr.save(wh);
+								closeModal(root);
+								refresh(root);
+							})));
 			actions.add(new ButtonElement(Component.translatable("ui.wh.modal.done"))
 					.semantic(ButtonElement.Semantic.SUCCESS)
 					.onClick(() -> {
@@ -305,7 +446,147 @@ public final class WarehouseScreens {
 			registerModalClose(() -> root.remove(overlay));
 		}
 
-		// ---- 页签 B：引擎 ----
+		// ---- 添加容器浮层（等价 /wh container add [x y z] --type --rule）----
+
+		private void addContainerModal(UiRoot root, WarehouseManagerImpl mgr, Warehouse wh) {
+			var theme = Theme.active();
+			var overlay = Modal.overlay(root);
+			var dialog = Modal.centeredDialog(root);
+			dialog.padding(10).layout(new Column(6)).size(340, -1).id("container-add");
+			dialog.add(new LabelElement(Component.translatable("ui.wh.main.container.add"))
+					.color(theme.textAccent()));
+
+			// 目标坐标（~ 相对语法，与命令一致）；[准星] 拾取填充
+			var fx = new NumberFieldElement(-30_000_000, 30_000_000, 0, true);
+			var fy = new NumberFieldElement(-30_000_000, 30_000_000, 0, true);
+			var fz = new NumberFieldElement(-30_000_000, 30_000_000, 0, true);
+			fx.size(64, -1);
+			fy.size(64, -1);
+			fz.size(64, -1);
+			var coords = PanelElement.plain().padding(2).layout(new Row(4));
+			coords.add(fx);
+			coords.add(fy);
+			coords.add(fz);
+			coords.add(new ButtonElement(Component.translatable("ui.wh.select.look"))
+					.onClick(() -> {
+						var p = feetOrLook(true);
+						fx.setIntValue(p.getX());
+						fy.setIntValue(p.getY());
+						fz.setIntValue(p.getZ());
+					}));
+			dialog.add(coords);
+
+			List<IOType> types = List.of(IOType.values());
+			var typeSel = new CycleSelector<>(types,
+					t -> Component.translatable("ui.wh.main.container.type", t.name()), 0, t -> {
+					});
+			dialog.add(typeSel);
+
+			// 规则（可空下拉）
+			var ruleOptions = new ArrayList<DropdownElement.Option>();
+			ruleOptions.add(new DropdownElement.Option("", Component.translatable("ui.wh.main.container.rule.none")));
+			for (String rid : wh.rules.keySet()) {
+				ruleOptions.add(new DropdownElement.Option(rid, Component.literal(rid)));
+			}
+			var ruleSel = new DropdownElement(ruleOptions, 0, i -> {
+			});
+			ruleSel.size(170, -1);
+			var ruleRow = PanelElement.plain().padding(2).layout(new Row(4));
+			ruleRow.add(new LabelElement(Component.translatable("ui.wh.main.container.rule2")).padding(1));
+			ruleRow.add(ruleSel);
+			dialog.add(ruleRow);
+
+			var err = new LabelElement(Component.empty()).color(theme.danger()).padding(1);
+			dialog.add(err);
+
+			var actions = PanelElement.plain().padding(2).layout(new Row(4));
+			actions.add(new ButtonElement(Component.translatable("ui.wh.main.container.add"))
+					.semantic(ButtonElement.Semantic.SUCCESS)
+					.onClick(() -> {
+						var dim = bid.yuanlu.mc.warehouse.util.ClientSession.currentDim(Minecraft.getInstance());
+						if (dim == null) {
+							err.text(Component.translatable("ui.wh.select.need_world"));
+							return;
+						}
+						BlockPos abs;
+						try {
+							abs = parseRelCoords(fx, fy, fz);
+						} catch (NumberFormatException e) {
+							err.text(Component.translatable("ui.wh.select.bad_coords"));
+							return;
+						}
+						String ruleRef = ruleSel.selectedId().isEmpty() ? null : ruleSel.selectedId();
+						Component e = bid.yuanlu.mc.warehouse.command.WhCommands.addContainerDirect(
+								dim, abs, typeSel.current(), ruleRef);
+						if (e == null) {
+							closeModal(root);
+							refresh(root);
+						} else {
+							err.text(e);
+						}
+					}));
+			actions.add(new ButtonElement(Component.translatable("ui.wh.modal.cancel"))
+					.onClick(() -> closeModal(root)));
+			dialog.add(actions);
+			overlay.add(dialog);
+			registerModalClose(() -> root.remove(overlay));
+		}
+
+		// ---- 标记模式浮层（等价 /wh container mark <type> [--rule]）----
+
+		private void markModal(UiRoot root, Warehouse wh) {
+			var theme = Theme.active();
+			var overlay = Modal.overlay(root);
+			var dialog = Modal.centeredDialog(root);
+			dialog.padding(10).layout(new Column(6)).id("mark-modal");
+			dialog.add(new LabelElement(Component.translatable("ui.wh.main.mark")).color(theme.textAccent()));
+			var session = bid.yuanlu.mc.warehouse.core.mark.MarkMode.get().sessionOrNull();
+			if (session != null) {
+				dialog.add(new LabelElement(Component.translatable("ui.wh.main.mark.active",
+						session.type().name(), session.ruleId() == null ? "-" : session.ruleId()))
+						.color(theme.textAccent()));
+				dialog.add(new ButtonElement(Component.translatable("ui.wh.main.mark.exit"))
+						.semantic(ButtonElement.Semantic.DANGER)
+						.onClick(() -> {
+							bid.yuanlu.mc.warehouse.core.mark.MarkMode.get().exit();
+							closeModal(root);
+							refresh(root);
+						}));
+			} else {
+				List<IOType> types = List.of(IOType.values());
+				var typeSel = new CycleSelector<>(types,
+						t -> Component.translatable("ui.wh.main.container.type", t.name()), 0, t -> {
+						});
+				dialog.add(typeSel);
+				var ruleOptions = new ArrayList<DropdownElement.Option>();
+				ruleOptions.add(new DropdownElement.Option("",
+						Component.translatable("ui.wh.main.container.rule.none")));
+				for (String rid : wh.rules.keySet()) {
+					ruleOptions.add(new DropdownElement.Option(rid, Component.literal(rid)));
+				}
+				var ruleSel = new DropdownElement(ruleOptions, 0, i -> {
+				});
+				ruleSel.size(170, -1);
+				dialog.add(ruleSel);
+				var tip = new LabelElement(Component.translatable("ui.wh.main.mark.tip"))
+						.color(theme.textMuted());
+				dialog.add(tip);
+				dialog.add(new ButtonElement(Component.translatable("ui.wh.main.mark.start"))
+						.semantic(ButtonElement.Semantic.SUCCESS)
+						.onClick(() -> {
+							// 参数经 lastConfigured 记忆：快捷键 mark.toggle 沿用
+							String ruleId = ruleSel.selectedId().isEmpty() ? null : ruleSel.selectedId();
+							bid.yuanlu.mc.warehouse.core.mark.MarkMode.get().toggle(
+									typeSel.current(), ruleId, null);
+							closeModal(root);
+							refresh(root);
+						}));
+			}
+			dialog.add(new ButtonElement(Component.translatable("ui.wh.modal.cancel"))
+					.onClick(() -> closeModal(root)));
+			overlay.add(dialog);
+			registerModalClose(() -> root.remove(overlay));
+		}
 
 		private PanelElement engineTab(UiRoot root) {
 			var body = PanelElement.plain().padding(2).layout(new Column(6));
@@ -316,14 +597,51 @@ public final class WarehouseScreens {
 			status.add(new LabelElement(Component.empty()).bindComponent(compValue(presenter, 0)));
 			status.add(new LabelElement(Component.empty()).bindComponent(compValue(presenter, 1)));
 			status.add(new LabelElement(Component.empty()).bindComponent(compValue(presenter, 2)));
+
+			// 概览（等价 /wh status）：容器计数 + 规则数 + 最近一次运行报告
+			var engine = WarehouseServices.transportEngine();
+			var active = WarehouseManagerImpl.get().active();
+			if (active != null) {
+				long in = active.containers.stream().filter(c -> c.ioType == IOType.INPUT).count();
+				long out = active.containers.stream().filter(c -> c.ioType == IOType.OUTPUT).count();
+				long temp = active.containers.stream().filter(c -> c.ioType == IOType.TEMP).count();
+				status.add(new LabelElement(Component.translatable("ui.wh.engine.containers", in, out, temp)));
+				status.add(new LabelElement(Component.translatable("ui.wh.engine.rules", active.rules.size())));
+			}
+			var report = engine != null ? engine.lastReport() : null;
+			if (report != null) {
+				status.add(new LabelElement(Component.translatable("ui.wh.engine.report",
+						Component.translatable("wh.grade." + report.grade().name()),
+						report.itemsMoved(), report.rounds(), report.durationMs())));
+			} else {
+				status.add(new LabelElement(Component.translatable("ui.wh.engine.report.none"))
+						.color(Theme.active().textMuted()));
+			}
 			body.add(status);
 
 			// 控制按钮组（按状态机合法迁移禁用）
-			var engine = WarehouseServices.transportEngine();
 			boolean running = engine != null && engine.isRunning();
 			boolean suspended = engine != null && engine.state() == bid.yuanlu.mc.warehouse.api.transport.TransportState.SUSPENDED;
+
+			// 寻路器选择（等价 start --pathfinder <id>；"默认" = 不指定）
+			var navOptions = new ArrayList<DropdownElement.Option>();
+			navOptions.add(new DropdownElement.Option("", Component.translatable("ui.wh.engine.pathfinder.default")));
+			for (var n : bid.yuanlu.mc.warehouse.core.registry.WarehouseRegistryImpl.navigators()) {
+				navOptions.add(new DropdownElement.Option(n.id(), Component.literal(n.id())));
+			}
+			var navRow = PanelElement.plain().padding(2).layout(new Row(4));
+			navRow.add(new LabelElement(Component.translatable("ui.wh.engine.pathfinder")).padding(1));
+			var navSel = new DropdownElement(navOptions, 0, i -> {
+			});
+			navSel.size(150, -1);
+			navRow.add(navSel);
+			body.add(navRow);
+
 			var controls = PanelElement.plain().padding(2).layout(new Row(4));
-			controls.add(engineButton("ui.wh.engine.start", !running, () -> engine.start()));
+			controls.add(engineButton("ui.wh.engine.start", !running, () -> {
+				String id = navSel.selectedId();
+				engine.start(id.isEmpty() ? null : id);
+			}));
 			controls.add(engineButton("ui.wh.engine.stop", running, () -> engine.stop()));
 			controls.add(engineButton("ui.wh.engine.continue", suspended, () -> engine.continueRun()));
 			controls.add(engineButton("ui.wh.engine.restart", running || suspended, () -> engine.restart()));
@@ -333,6 +651,12 @@ public final class WarehouseScreens {
 			// 跨仓库搬运
 			var transfer = PanelElement.plain().padding(4).layout(new Column(4));
 			transfer.add(new LabelElement(Component.translatable("ui.wh.engine.transfer")));
+			// 状态（等价 /wh transfer status）
+			var overlay = WarehouseManagerImpl.get().getTransferOverlay();
+			if (overlay != null) {
+				transfer.add(new LabelElement(Component.translatable("ui.wh.engine.transfer.status", overlay.id))
+						.color(Theme.active().success()));
+			}
 			var picks = PanelElement.plain().padding(2).layout(new Row(4));
 			List<Warehouse> warehouses = WarehouseManagerImpl.get().list();
 			if (warehouses.size() >= 2) {
