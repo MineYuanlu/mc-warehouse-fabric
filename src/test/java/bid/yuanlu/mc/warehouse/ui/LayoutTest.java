@@ -118,4 +118,43 @@ class LayoutTest {
 		assertEquals((12 + 4) * 2, label.width());
 		assertEquals((9 + 4) * 2, label.height());
 	}
+
+	@Test
+	void columnGrowSplitsFreeSpaceByWeight() {
+		// 容器高 100：固定 30 + grow1 + grow3 → 剩余 70 按 1:3 分（截断不超发）
+		var panel = new PanelElement().padding(0).layout(new Column(0)).size(100, 100);
+		var fixed = new LabelElement("f").padding(0).size(30, 30);
+		var a = new LabelElement("a").padding(0).grow(1);
+		var b = new LabelElement("b").padding(0).grow(3);
+		panel.add(fixed);
+		panel.add(a);
+		panel.add(b);
+		rootOf(panel);
+		assertEquals(30, fixed.height());
+		assertEquals(17, a.height());
+		assertEquals(52, b.height());
+		assertEquals(30, a.y());
+		assertEquals(47, b.y());
+	}
+
+	@Test
+	void growChildDeclaredSizeActsAsMinimum() {
+		// 容器高 50 < 声明最小高 80 → 权重子级取声明值
+		var panel = new PanelElement().padding(0).layout(new Column(0)).size(100, 50);
+		var a = new LabelElement("a").padding(0).size(-1, 80).grow(1);
+		panel.add(a);
+		rootOf(panel);
+		assertEquals(80, a.height());
+	}
+
+	@Test
+	void rootGrowChildFillsScreen() {
+		// 根级权重 = 全屏满铺（ScreenScaffold 语义），无视 SCREEN_MARGIN
+		var scaffold = new PanelElement().padding(0).grow(1);
+		rootOf(scaffold);
+		assertEquals(0, scaffold.absX());
+		assertEquals(0, scaffold.absY());
+		assertEquals(400, scaffold.width());
+		assertEquals(300, scaffold.height());
+	}
 }

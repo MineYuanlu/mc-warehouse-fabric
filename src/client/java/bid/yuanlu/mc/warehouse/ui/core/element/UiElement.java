@@ -51,6 +51,8 @@ public abstract class UiElement<S extends UiElement<S>> {
 	private final Set<String> classes = new LinkedHashSet<>();
 	private int padding;
 	private boolean clipContent;
+	/** 主轴权重（轻量 flex-grow）：0 = 固定/内容尺寸。 */
+	private float grow;
 
 	@Nullable
 	private Layout layout;
@@ -178,6 +180,31 @@ public abstract class UiElement<S extends UiElement<S>> {
 	public S clipContent(boolean clip) {
 		clipContent = clip;
 		return self();
+	}
+
+	/**
+	 * 主轴权重（UI-PDD §3.4 轻量 flex）：容器主轴尺寸为定值时，按权重瓜分扣除固定
+	 * 尺寸兄弟与 gap 后的剩余空间；显式 {@link #size(int, int)} 此时作为最小尺寸。
+	 * 权重只在直接子级上生效（不递归），容器主轴尺寸不定（AUTO）时退化为普通流式。
+	 */
+	public S grow(float g) {
+		grow = g;
+		markLayoutDirty();
+		return self();
+	}
+
+	public float grow() {
+		return grow;
+	}
+
+	/** 使用者显式声明的宽度（AUTO = 未声明）；布局器写入的生效尺寸不在此列。 */
+	public int declaredWidth() {
+		return declaredWidth;
+	}
+
+	/** 使用者显式声明的高度（AUTO = 未声明）；布局器写入的生效尺寸不在此列。 */
+	public int declaredHeight() {
+		return declaredHeight;
 	}
 
 	// ---- 状态 ----
@@ -348,7 +375,16 @@ public abstract class UiElement<S extends UiElement<S>> {
 
 	/** 命中测试：与绘制顺序一致（zIndex 升序绘制、逆序命中取最上层）。 */
 	public @Nullable UiElement<?> hit(int px, int py) {
-		if (!visible || !containsAbs(px, py)) {
+		if (!visible) {
+			return null;
+		}
+		if (clipContent) {
+			// 裁剪区外的内容（如滚出视口的行）虽在元素矩形内，也不可命中
+			if (px < absX + padding || px >= absX + width - padding
+					|| py < absY + padding || py >= absY + height - padding) {
+				return null;
+			}
+		} else if (!containsAbs(px, py)) {
 			return null;
 		}
 		var sorted = new ArrayList<>(children);

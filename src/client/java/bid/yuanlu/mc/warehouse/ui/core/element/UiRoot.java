@@ -125,6 +125,12 @@ public final class UiRoot extends UiElement<UiRoot> {
 		}
 		for (var c : children()) {
 			c.measurePass(g);
+			if (c.grow() > 0) {
+				// 根级权重：全屏满铺（ScreenScaffold 等全屏层），无视 SCREEN_MARGIN
+				c.applySize(width, height);
+				c.arrangePass(g, 0, 0);
+				continue;
+			}
 			int cw = c.width() == AUTO ? c.prefWidth() : c.width();
 			cw = Math.max(0, Math.min(cw, width - SCREEN_MARGIN * 2));
 			int ch = c.height() == AUTO ? c.prefHeight() : c.height();
