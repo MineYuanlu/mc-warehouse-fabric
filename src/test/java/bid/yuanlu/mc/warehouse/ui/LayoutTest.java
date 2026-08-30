@@ -9,6 +9,7 @@ import bid.yuanlu.mc.warehouse.ui.core.element.LabelElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.PanelElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.UiElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.UiRoot;
+import bid.yuanlu.mc.warehouse.ui.core.layout.Center;
 import bid.yuanlu.mc.warehouse.ui.core.layout.Column;
 import bid.yuanlu.mc.warehouse.ui.core.layout.Grid;
 import bid.yuanlu.mc.warehouse.ui.core.layout.Row;
@@ -156,5 +157,26 @@ class LayoutTest {
 		assertEquals(0, scaffold.absY());
 		assertEquals(400, scaffold.width());
 		assertEquals(300, scaffold.height());
+	}
+
+	@Test
+	void centerLayoutCentersChildOfFullScreenContainer() {
+		var overlay = new PanelElement().padding(0).grow(1).layout(new Center(8));
+		var list = new PanelElement().padding(0).size(50, 30);
+		overlay.add(list);
+		rootOf(overlay);
+		assertEquals(0, overlay.absX());
+		assertEquals((400 - 50) / 2, list.absX());
+		assertEquals((300 - 30) / 2, list.absY());
+	}
+
+	@Test
+	void centerLayoutClampsOversizedChild() {
+		// 子级大于容器：钳到 margin 角，不出现负坐标
+		var overlay = new PanelElement().padding(0).grow(1).layout(new Center(8));
+		overlay.add(new PanelElement().padding(0).size(500, 400));
+		rootOf(overlay);
+		assertEquals(8, overlay.children().get(0).absX());
+		assertEquals(8, overlay.children().get(0).absY());
 	}
 }
