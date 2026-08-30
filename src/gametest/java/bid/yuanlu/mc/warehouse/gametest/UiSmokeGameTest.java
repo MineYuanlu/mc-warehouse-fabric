@@ -8,7 +8,6 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.network.chat.Component;
 
 import bid.yuanlu.mc.warehouse.ui.app.screen.WarehouseScreens;
-import bid.yuanlu.mc.warehouse.ui.core.element.PanelElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.UiRoot;
 import bid.yuanlu.mc.warehouse.ui.mc.mc261.Mc261ScreenHost;
 
@@ -36,13 +35,15 @@ public class UiSmokeGameTest implements FabricClientGameTest {
 			UiRoot root = host.root();
 			assert root != null : "根元素应已构建";
 
-			// 布局已展开：面板有正尺寸、水平居中
-			assert root.children().size() == 1 : "根应只有一个内容面板";
+			// 布局已展开：脚手架经根级 grow 权重全屏满铺（flex 布局）
+			assert root.children().size() == 1 : "根应只有一个脚手架";
 			assert !root.children().get(0).children().isEmpty() : "主屏应有页签内容";
-			PanelElement panel = (PanelElement) root.children().get(0);
-			assert panel.width() > 0 && panel.height() > 0 : "面板应完成 measure/arrange";
-			int centeredX = (mc.getWindow().getGuiScaledWidth() - panel.width()) / 2;
-			assert Math.abs(panel.absX() - centeredX) <= 1 : "面板应水平居中: " + panel.absX() + " vs " + centeredX;
+			var scaffold = root.children().get(0);
+			assert scaffold.absX() == 0 && scaffold.absY() == 0 : "脚手架应满铺原点: "
+					+ scaffold.absX() + "," + scaffold.absY();
+			assert scaffold.width() == root.width() && scaffold.height() == root.height()
+					: "脚手架应为全屏尺寸: " + scaffold.width() + "x" + scaffold.height()
+					+ " vs " + root.width() + "x" + root.height();
 		});
 
 		context.takeScreenshot("yuanlu-warehouse-ui-demo");

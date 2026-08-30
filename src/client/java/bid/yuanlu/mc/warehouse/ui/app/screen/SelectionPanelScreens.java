@@ -17,9 +17,11 @@ import bid.yuanlu.mc.warehouse.core.selection.SelectionState;
 import bid.yuanlu.mc.warehouse.core.warehouse.WarehouseManagerImpl;
 import bid.yuanlu.mc.warehouse.ui.app.presenter.HudPresenter;
 import bid.yuanlu.mc.warehouse.ui.app.widget.CycleSelector;
+import bid.yuanlu.mc.warehouse.ui.app.widget.ScreenScaffold;
 import bid.yuanlu.mc.warehouse.ui.core.element.ButtonElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.LabelElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.PanelElement;
+import bid.yuanlu.mc.warehouse.ui.core.element.ScrollElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.UiRoot;
 import bid.yuanlu.mc.warehouse.ui.core.layout.Column;
 import bid.yuanlu.mc.warehouse.ui.core.layout.Row;
@@ -42,13 +44,17 @@ public final class SelectionPanelScreens {
 
 	public static UiRoot create() {
 		var root = new UiRoot();
-		var panel = new PanelElement().padding(10).layout(new Column(6)).size(400, -1);
-		panel.add(ScreenHeader.create(ScreenHeader.Page.SELECTION));
-		panel.add(new LabelElement(Component.translatable("ui.wh.select.title")));
+		var scaffold = new ScreenScaffold();
+		scaffold.add(ScreenHeader.create(ScreenHeader.Page.SELECTION));
+		scaffold.add(new LabelElement(Component.translatable("ui.wh.select.title")));
 
 		SelectionState sel = SelectionState.get();
 		WorldDimPos p1 = sel.pos1();
 		WorldDimPos p2 = sel.pos2();
+
+		// 内容区撑满剩余高度（信息 + 批量操作，超出即滚动）
+		var scroll = new ScrollElement(6).grow(1);
+		scaffold.add(scroll);
 
 		// 选区信息
 		var info = PanelElement.plain().padding(4).layout(new Column(2));
@@ -66,12 +72,12 @@ public final class SelectionPanelScreens {
 			info.add(new LabelElement(Component.translatable("ui.wh.hud.selection.corner",
 					p.x(), p.y(), p.z())));
 		}
-		panel.add(info);
+		scroll.add(info);
 
 		// 批量操作（激活仓库存在且有选区时可用）
 		Warehouse wh = activeWarehouse();
 		boolean ready = wh != null && sel.hasBox();
-		panel.add(batchRows(root, wh, sel, ready));
+		scroll.add(batchRows(root, wh, sel, ready));
 
 		var actions = PanelElement.plain().padding(2).layout(new Row(4));
 		actions.add(new ButtonElement(Component.translatable("ui.wh.select.clear"))
@@ -81,8 +87,8 @@ public final class SelectionPanelScreens {
 				}));
 		actions.add(new ButtonElement(Component.translatable("ui.wh.modal.back"))
 				.onClick(ScreenHeader::backToMain));
-		panel.add(actions);
-		root.add(panel);
+		scaffold.add(actions);
+		root.add(scaffold);
 		return root;
 	}
 

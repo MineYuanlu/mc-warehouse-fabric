@@ -10,9 +10,11 @@ import bid.yuanlu.mc.warehouse.api.item.ContainerRule;
 import bid.yuanlu.mc.warehouse.api.warehouse.Warehouse;
 import bid.yuanlu.mc.warehouse.command.WhCommands;
 import bid.yuanlu.mc.warehouse.core.warehouse.WarehouseManagerImpl;
+import bid.yuanlu.mc.warehouse.ui.app.widget.ScreenScaffold;
 import bid.yuanlu.mc.warehouse.ui.core.element.ButtonElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.LabelElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.PanelElement;
+import bid.yuanlu.mc.warehouse.ui.core.element.ScrollElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.TextFieldElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.UiRoot;
 import bid.yuanlu.mc.warehouse.ui.core.layout.Column;
@@ -36,15 +38,18 @@ public final class RuleScreens {
 
 	public static UiRoot create() {
 		var root = new UiRoot();
-		var panel = new PanelElement().padding(10).layout(new Column(6)).size(400, -1);
-		panel.add(ScreenHeader.create(ScreenHeader.Page.RULES));
-		panel.add(new LabelElement(Component.translatable("ui.wh.rule.title")));
-		panel.add(body(root));
+		var scaffold = new ScreenScaffold();
+		scaffold.add(ScreenHeader.create(ScreenHeader.Page.RULES));
+		scaffold.add(new LabelElement(Component.translatable("ui.wh.rule.title")));
+		// 规则列表撑满剩余高度，规则多时滚动
+		var scroll = new ScrollElement(4).grow(1);
+		scroll.add(body(root));
+		scaffold.add(scroll);
 		var actions = PanelElement.plain().padding(2).layout(new Row(4));
 		actions.add(new ButtonElement(Component.translatable("ui.wh.modal.back"))
 				.onClick(ScreenHeader::backToMain));
-		panel.add(actions);
-		root.add(panel);
+		scaffold.add(actions);
+		root.add(scaffold);
 		return root;
 	}
 

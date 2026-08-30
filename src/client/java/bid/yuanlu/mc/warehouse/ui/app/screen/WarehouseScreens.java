@@ -22,9 +22,11 @@ import bid.yuanlu.mc.warehouse.core.warehouse.WarehouseManagerImpl;
 import bid.yuanlu.mc.warehouse.ui.app.presenter.HudPresenter;
 import bid.yuanlu.mc.warehouse.ui.app.widget.CycleSelector;
 import bid.yuanlu.mc.warehouse.ui.app.widget.Modal;
+import bid.yuanlu.mc.warehouse.ui.app.widget.ScreenScaffold;
 import bid.yuanlu.mc.warehouse.ui.core.element.ButtonElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.LabelElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.PanelElement;
+import bid.yuanlu.mc.warehouse.ui.core.element.ScrollElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.TextFieldElement;
 import bid.yuanlu.mc.warehouse.ui.core.element.UiRoot;
 import bid.yuanlu.mc.warehouse.ui.core.layout.Column;
@@ -71,10 +73,7 @@ public final class WarehouseScreens {
 
 		UiRoot build() {
 			var root = new UiRoot();
-			var panel = new PanelElement().padding(10).layout(new Column(6)).size(400, -1);
-			panel.add(header());
-			panel.add(tab == 0 ? warehousesTab(root) : engineTab(root));
-			root.add(panel);
+			root.add(page(root));
 			return root;
 		}
 
@@ -84,28 +83,33 @@ public final class WarehouseScreens {
 			return ScreenHeader.create(tab == 0 ? ScreenHeader.Page.WAREHOUSE : ScreenHeader.Page.ENGINE);
 		}
 
+		/** 全屏脚手架：页头固定 + 页签内容 grow 撑满（flex 布局，UI-PDD §5.1）。 */
+		private PanelElement page(UiRoot root) {
+			var scaffold = new ScreenScaffold();
+			scaffold.add(header());
+			scaffold.add(tab == 0 ? warehousesTab(root) : engineTab(root));
+			return scaffold;
+		}
+
 		private void refresh(UiRoot root) {
 			Modal.close();
 			root.clearChildren();
-			var panel = new PanelElement().padding(10).layout(new Column(6)).size(400, -1);
-			panel.add(header());
-			panel.add(tab == 0 ? warehousesTab(root) : engineTab(root));
-			root.add(panel);
+			root.add(page(root));
 		}
 
 		// ---- 页签 A：仓库 ----
 
 		private PanelElement warehousesTab(UiRoot root) {
 			var mgr = WarehouseManagerImpl.get();
-			var body = PanelElement.plain().padding(2).layout(new Column(6));
+			var body = PanelElement.plain().padding(2).layout(new Column(6)).grow(1);
 
-			// 仓库列表 + 详情侧栏
-			var columns = PanelElement.plain().padding(2).layout(new Row(6));
+			// 仓库列表 + 详情侧栏（各占一半剩余宽度，纵向撑满，内容超出即滚动）
+			var columns = PanelElement.plain().padding(2).layout(new Row(6)).grow(1);
 			columns.add(warehouseList(root, mgr));
 			columns.add(detailPanel(root, mgr));
 			body.add(columns);
 
-			// 新建行
+			// 新建行（固定在底部）
 			var createRow = PanelElement.plain().padding(2).layout(new Row(4));
 			var nameField = new TextFieldElement("").maxLength(24);
 			nameField.size(160, -1);
@@ -131,8 +135,11 @@ public final class WarehouseScreens {
 		}
 
 		private PanelElement warehouseList(UiRoot root, WarehouseManagerImpl mgr) {
-			var list = new PanelElement().padding(4).id("wh-list").clipContent(true).size(170, 180);
-			list.layout(new Column(2));
+			// 权重撑满剩余宽度（声明 170 为最小），条目超出视口高度即滚动
+			var panel = new PanelElement().padding(4).id("wh-list").grow(1).size(170, -1);
+			panel.layout(new Column(2));
+			var scroll = new ScrollElement(2).grow(1);
+			panel.add(scroll);
 			var active = mgr.active();
 			for (Warehouse wh : mgr.list()) {
 				boolean isActive = active != null && active.id.equals(wh.id);
@@ -155,25 +162,28 @@ public final class WarehouseScreens {
 				} else {
 					row.color(Theme.active().textPrimary());
 				}
-				list.add(row);
+				scroll.add(row);
 			}
 			if (mgr.list().isEmpty()) {
-				list.add(new LabelElement(Component.translatable("ui.wh.main.empty"))
+				scroll.add(new LabelElement(Component.translatable("ui.wh.main.empty"))
 						.color(Theme.active().textMuted()));
 			}
-			return list;
+			return panel;
 		}
 
 		private PanelElement detailPanel(UiRoot root, WarehouseManagerImpl mgr) {
-			var detail = new PanelElement().padding(4).id("wh-detail").clipContent(true).size(200, 180);
+			// 权重撑满剩余宽度（声明 200 为最小），容器明细超出即滚动
+			var detail = new PanelElement().padding(4).id("wh-detail").grow(1).size(200, -1);
 			detail.layout(new Column(2));
+			var scroll = new ScrollElement(2).grow(1);
+			detail.add(scroll);
 			Warehouse wh = selectedId == null ? null : mgr.get(selectedId);
 			if (wh == null) {
-				detail.add(new LabelElement(Component.translatable("ui.wh.main.no_selection"))
+				scroll.add(new LabelElement(Component.translatable("ui.wh.main.no_selection"))
 						.color(Theme.active().textMuted()));
 				return detail;
 			}
-			detail.add(new LabelElement(Component.literal(wh.id)).color(Theme.active().textAccent()));
+			scroll.add(new LabelElement(Component.literal(wh.id)).color(Theme.active().textAccent()));
 			var ops = PanelElement.plain().padding(2).layout(new Row(4));
 			var active = mgr.active();
 			var useBtn = new ButtonElement(Component.translatable("ui.wh.main.use"))
@@ -198,8 +208,8 @@ public final class WarehouseScreens {
 								}
 								refresh(root);
 							})));
-			detail.add(ops);
-			detail.add(new ButtonElement(Component.translatable("ui.wh.main.reload"))
+			scroll.add(ops);
+			scroll.add(new ButtonElement(Component.translatable("ui.wh.main.reload"))
 					.onClick(() -> {
 						mgr.reload();
 						refresh(root);
@@ -212,7 +222,7 @@ public final class WarehouseScreens {
 						.padding(1);
 				line.color(Theme.active().textPrimary());
 				line.onClick(() -> containerModal(root, mgr, wh, c));
-				detail.add(line);
+				scroll.add(line);
 			}
 			return detail;
 		}
@@ -230,10 +240,9 @@ public final class WarehouseScreens {
 			work.label = c.label;
 
 			var theme = Theme.active();
-			var dialog = new PanelElement().padding(10).layout(new Column(6)).size(300, -1).id("container-edit");
-			dialog.zIndex(101);
-			var scrim = modalScrim(root);
-			root.add(scrim);
+			var overlay = Modal.overlay(root);
+			var dialog = Modal.centeredDialog(root);
+			dialog.padding(10).layout(new Column(6)).size(300, -1).id("container-edit");
 			dialog.add(new LabelElement(Component.translatable("ui.wh.main.container.title",
 					formatPos(c.canonicalPos()))).color(theme.textAccent()));
 
@@ -292,8 +301,8 @@ public final class WarehouseScreens {
 			actions.add(new ButtonElement(Component.translatable("ui.wh.modal.cancel"))
 					.onClick(() -> closeModal(root)));
 			dialog.add(actions);
-			root.add(dialog);
-			registerModalClose(() -> root.remove(dialog));
+			overlay.add(dialog);
+			registerModalClose(() -> root.remove(overlay));
 		}
 
 		// ---- 页签 B：引擎 ----
@@ -367,22 +376,6 @@ public final class WarehouseScreens {
 		}
 
 		// ---- 公共 ----
-
-		private PanelElement modalScrim(UiRoot root) {
-			var theme = Theme.active();
-			var scrim = new PanelElement() {
-				@Override
-				protected void onTick() {
-					size(root.width(), root.height());
-				}
-			}.filled(true).bordered(false)
-					.colors(theme.overlayScrim(), theme.overlayScrim(), theme.overlayScrim(), theme.overlayScrim());
-			scrim.zIndex(100).size(root.width(), root.height()).id("modal-scrim");
-			scrim.onClick(() -> {
-			});
-			registerModalClose(() -> root.remove(scrim));
-			return scrim;
-		}
 
 		private final List<Runnable> modalCleanups = new ArrayList<>();
 

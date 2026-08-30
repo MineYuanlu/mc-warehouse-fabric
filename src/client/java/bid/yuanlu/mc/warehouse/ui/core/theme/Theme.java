@@ -4,15 +4,16 @@ package bid.yuanlu.mc.warehouse.ui.core.theme;
  * 主题 token（UI-PDD §3.5，用户决策：主题形式，首发 CreateDark）。
  * 颜色全部为 ARGB；元素绘制只读 token，不写死颜色。
  */
-public record Theme(
-		String id,
-		int bgPanel, int bgPanelGradient,
-		int border, int borderGradient,
-		int textPrimary, int textMuted, int textAccent,
-		int accent, int accentHover, int accentPressed,
-		int success, int warning, int danger,
-		int overlayScrim,
-		int radius, int padding, int gap, int lineWidth) {
+	public record Theme(
+			String id,
+			int bgPanel, int bgPanelGradient,
+			int border, int borderGradient,
+			int textPrimary, int textMuted, int textAccent,
+			int accent, int accentHover, int accentPressed,
+			int success, int warning, int danger,
+			int overlayScrim,
+			int bgScreen,
+			int radius, int padding, int gap, int lineWidth) {
 
 	/** Create 式程序化深色主题（BoxElement 思路：上下渐变面板 + 双色边框）。 */
 	public static final Theme CREATE_DARK = new Theme(
@@ -23,6 +24,7 @@ public record Theme(
 			0xFF3B6FD6, 0xFF4A82E8, 0xFF2E58A8,
 			0xFF3FBF5A, 0xFFE0A83C, 0xFFE04B4B,
 			0x90000000,
+			0x8C000000,
 			6, 8, 6, 1);
 
 	private static Theme active = CREATE_DARK;
