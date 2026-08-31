@@ -72,7 +72,8 @@ public final class HudPresenter {
 		if (action == null) {
 			return;
 		}
-		var line = Component.translatable("wh.progress." + action);
+		// action 即完整 i18n key（如 wh.progress.moving），不再拼前缀
+		var line = Component.translatable(action);
 		if (itemsMoved > 0) {
 			line.append(Component.translatable("ui.wh.hud.moved", itemsMoved));
 		}
