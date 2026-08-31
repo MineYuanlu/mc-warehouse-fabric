@@ -57,10 +57,13 @@ public final class MarkMode {
 	}
 
 	private static final java.util.function.IntConsumer OPEN_LISTENER =
-			containerId -> get().onScreenOpened();
+			containerId -> get().onScreenOpened(containerId);
 
 	@Nullable
 	private volatile Session session;
+
+	@Nullable
+	private volatile Session lastConfigured;
 
 	@Nullable
 	private volatile Target lastLookedAt;
@@ -69,12 +72,20 @@ public final class MarkMode {
 	private volatile Target pendingCapture;
 
 	/**
+	 * 上一次开屏包的 containerId。handleOpenScreen 因 ensureRunningOnSameThread
+	 * 会在 Netty 与 Render 线程各派发一次（同 containerId，PlayerOpenRefresher 同款守卫）：
+	 * 第一次消费 lastLookedAt，第二次若不去重即误报 no_target。
+	 */
+	private volatile int lastOpenContainerId = -1;
+
+	/**
 	 * 切换式进入/退出（PDD §5.7：再次执行退出）。
 	 *
 	 * @return 新状态；null = 已退出
 	 */
 	@Nullable
 	public Session toggle(IOType type, @Nullable String ruleId, @Nullable String templateId) {
+		lastConfigured = new Session(type, ruleId, templateId); // 记忆最近一次配置（快捷键 mark.toggle 沿用）
 		if (session != null) {
 			exit();
 			return null;
@@ -83,15 +94,29 @@ public final class MarkMode {
 		session = s;
 		lastLookedAt = null;
 		pendingCapture = null;
+		lastOpenContainerId = -1;
 		OpenScreenCapture.register(OPEN_LISTENER);
 		return s;
+	}
+
+	/** 最近一次 toggle 的参数（UI 配置后快捷键 mark.toggle 复用；null = 尚未配置过）。 */
+	@Nullable
+	public Session lastConfigured() {
+		return lastConfigured;
 	}
 
 	public void exit() {
 		session = null;
 		lastLookedAt = null;
 		pendingCapture = null;
+		lastOpenContainerId = -1;
 		OpenScreenCapture.unregister(OPEN_LISTENER);
+	}
+
+	/** 当前标记会话（未激活时 null，UI 层读取用）。 */
+	@Nullable
+	public Session sessionOrNull() {
+		return session;
 	}
 
 	public boolean isActive() {
@@ -144,8 +169,10 @@ public final class MarkMode {
 	// ---- 内部 ----
 
 	/** 开屏包事件（任何 containerId）：绑定最后指向的容器为待采集目标 */
-	private void onScreenOpened() {
+	private void onScreenOpened(int containerId) {
 		if (session == null) return;
+		if (containerId == lastOpenContainerId) return; // 同一次开屏的第二次派发
+		lastOpenContainerId = containerId;
 		Target target = lastLookedAt;
 		lastLookedAt = null; // 防内容混淆：一次开屏只消费一个指向
 		if (target == null) {

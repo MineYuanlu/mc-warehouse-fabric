@@ -84,6 +84,7 @@ public class TransportEngineGameTest implements FabricClientGameTest {
 			check(!reports.isEmpty(), "场景①应有 RunReport");
 			RunReport r1 = reports.getFirst();
 			LOGGER.info("[gt2-1] {} rounds={} moved={}", r1.grade(), r1.rounds(), r1.itemsMoved());
+			snap(context, "l10-1-round-done");
 			check(states.contains(TransportState.GET_TEMP.name()), "应经过 GET_TEMP");
 			check(states.contains(TransportState.GET_INPUT.name()), "应经过 GET_INPUT");
 			check(states.contains(TransportState.PUT_OUTPUT.name()), "应经过 PUT_OUTPUT");
@@ -124,6 +125,7 @@ public class TransportEngineGameTest implements FabricClientGameTest {
 						}));
 			}
 			check(suspendedSeen, "应在反复探索失败后进入 SUSPENDED（states=" + states + "）");
+			snap(context, "l10-2-suspended");
 
 			context.runOnClient(mc -> TransportEngineImpl.get().continueRun());
 			awaitDone(context, h, 1500);
@@ -157,6 +159,15 @@ public class TransportEngineGameTest implements FabricClientGameTest {
 		});
 	}
 
+
+	/** 过程截图（run/screenshots/）：便于人工回看端到端过程；失败不阻断测试 */
+	private static void snap(ClientGameTestContext context, String name) {
+		try {
+			context.takeScreenshot("yuanlu-warehouse-" + name);
+		} catch (Exception e) {
+			LOGGER.warn("screenshot {} failed: {}", name, e.toString());
+		}
+	}
 	private static void check(boolean cond, String msg) {
 		if (!cond) throw new AssertionError(msg);
 	}

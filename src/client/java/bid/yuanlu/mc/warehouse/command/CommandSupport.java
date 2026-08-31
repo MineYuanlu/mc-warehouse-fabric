@@ -20,6 +20,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.BlockHitResult;
 
+import bid.yuanlu.mc.warehouse.util.RelativeCoords;
 import bid.yuanlu.mc.warehouse.api.container.ContainerInfo;
 import bid.yuanlu.mc.warehouse.api.container.IOType;
 import bid.yuanlu.mc.warehouse.api.warehouse.Warehouse;
@@ -71,14 +72,9 @@ final class CommandSupport {
 
 	// ---- 坐标 ----
 
-	/** 解析 "~"/"~-3"/"-12" 形式的坐标 token；失败抛 NumberFormatException */
+	/** 解析 "~"/"~-3"/"-12" 形式的坐标 token；失败抛 NumberFormatException（与 UI 共用 util 实现）。 */
 	static int coord(String token, double origin) {
-		if (token.startsWith("~")) {
-			String off = token.substring(1);
-			double delta = off.isEmpty() ? 0 : Double.parseDouble(off);
-			return (int) Math.floor(origin + delta);
-		}
-		return Integer.parseInt(token);
+		return RelativeCoords.parse(token, origin);
 	}
 
 	/** 从 ctx 读 xKey/yKey/zKey 三个 word 参数为绝对坐标；解析失败返回 null */

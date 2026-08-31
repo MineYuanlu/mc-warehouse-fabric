@@ -5,6 +5,7 @@
 	"client": [
 		"AbstractContainerScreenMixin",
 		"ClientPacketListenerMixin",
+		"LevelRendererMixin",
 		"MultiPlayerGameModeMixin"
 	],
 	"injectors": {

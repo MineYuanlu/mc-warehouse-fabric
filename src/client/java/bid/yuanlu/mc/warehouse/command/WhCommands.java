@@ -15,10 +15,13 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
+import org.jetbrains.annotations.Nullable;
+
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 
+import bid.yuanlu.mc.warehouse.core.selection.SelectionOps;
 import bid.yuanlu.mc.warehouse.api.container.CacheType;
 import bid.yuanlu.mc.warehouse.api.container.ContainerInfo;
 import bid.yuanlu.mc.warehouse.api.container.IOType;
@@ -33,6 +36,8 @@ import bid.yuanlu.mc.warehouse.api.transport.TransportState;
 import bid.yuanlu.mc.warehouse.api.warehouse.Warehouse;
 import bid.yuanlu.mc.warehouse.api.world.WorldDim;
 import bid.yuanlu.mc.warehouse.api.world.WorldDimPos;
+import bid.yuanlu.mc.warehouse.core.selection.SelectionState;
+import bid.yuanlu.mc.warehouse.core.transfer.TransferOverlay;
 import bid.yuanlu.mc.warehouse.core.WarehouseServices;
 import bid.yuanlu.mc.warehouse.core.cache.CacheKey;
 import bid.yuanlu.mc.warehouse.core.config.ConfigIO;
@@ -548,8 +553,22 @@ public final class WhCommands {
 				CommandSupport.err(src, "commands.wh.rule.missing", id);
 				return 0;
 			}
-			CommandSupport.RuleTail tail = CommandSupport.parseRuleTail(greedyArg(ctx));
-			String selSpec = tail.selector();
+			Component err = addEntryCore(wh, rule, greedyArg(ctx));
+			if (err != null) {
+				src.sendError(err);
+				return 0;
+			}
+			CommandSupport.fb(ctx, "commands.wh.rule.entry_added", ChatFormatting.GREEN, id);
+			return 1;
+		}
+
+		/**
+		 * 条目添加核心（UI-PDD §5.3：UI 与命令共用同一解析/校验/落盘路径）。
+		 * 成功返回 null；失败返回已本地化的错误组件（不落盘）。
+		 */
+		static Component addEntryCore(Warehouse wh, ContainerRule rule, String tail) {
+			CommandSupport.RuleTail parsedTail = CommandSupport.parseRuleTail(tail);
+			String selSpec = parsedTail.selector();
 			JsonObject selJson = parseTyped(selSpec);
 			ItemSelector selector = null;
 			String exMsg = "";
@@ -561,23 +580,20 @@ public final class WhCommands {
 				}
 			}
 			if (selector == null) {
-				CommandSupport.err(src, "commands.wh.rule.bad_selector", selSpec + ex());
-				return 0;
+				return Component.translatable("commands.wh.rule.bad_selector", selSpec + ex());
 			}
-			CommandSupport.Opts opts = tail.opts();
+			CommandSupport.Opts opts = parsedTail.opts();
 			QuantitySelector quant = null;
 			if (opts.quantity() != null) {
 				try {
 					JsonObject qJson = parseTyped(opts.quantity());
 					quant = qJson == null ? null : SelectorCodecs.quantityFromJson(qJson);
 				} catch (Throwable e) {
-					CommandSupport.err(src, "commands.wh.rule.bad_quantity",
+					return Component.translatable("commands.wh.rule.bad_quantity",
 							opts.quantity() + " (" + e + ")");
-					return 0;
 				}
 				if (quant == null) {
-					CommandSupport.err(src, "commands.wh.rule.bad_quantity", opts.quantity());
-					return 0;
+					return Component.translatable("commands.wh.rule.bad_quantity", opts.quantity());
 				}
 			}
 			ItemRule entry = new ItemRule(selector, opts.negate(), quant);
@@ -587,17 +603,14 @@ public final class WhCommands {
 				d2err = ConfigValidator.validateRuleOnContainers(wh, rule);
 			} catch (Throwable t) {
 				rule.itemRules.remove(entry); // 校验异常同样回滚，不留脏条目
-				CommandSupport.err(src, "commands.wh.error.generic", String.valueOf(t));
-				return 0;
+				return Component.translatable("commands.wh.error.generic", String.valueOf(t));
 			}
 			if (d2err != null) {
 				rule.itemRules.remove(entry); // D2 严格拒载（PDD §3.7）
-				CommandSupport.err(src, "commands.wh.error.generic", d2err);
-				return 0;
+				return Component.translatable("commands.wh.error.generic", d2err);
 			}
 			manager().save(wh);
-			CommandSupport.fb(ctx, "commands.wh.rule.entry_added", ChatFormatting.GREEN, id);
-			return 1;
+			return null;
 		}
 
 		static int removeEntry(CommandContext<FabricClientCommandSource> ctx) {
@@ -1364,26 +1377,9 @@ public final class WhCommands {
 		}
 
 		static boolean inBox(SelectionState sel, ContainerInfo c) {
-			if (sel.hasBox() && c.pos.isEmpty()) return false;
-			String serverId;
-			try {
-				serverId = WorldSessionTracker.get().currentServerId();
-			} catch (IllegalStateException e) {
-				return false;
-			}
-			if (serverId == null) return false;
-			for (WorldDimPos p : c.pos) {
-				// 绝对化：canonical 相对坐标 → 世界绝对坐标对比选区
-				if (!p.hasWorld()) continue;
-				Warehouse wh = manager().active();
-				if (wh == null) return false;
-				WorldDim dim = new WorldDim(serverId, p.world(), p.dim());
-				BlockPos anchor = wh.anchorOf(dim);
-				if (anchor == null) continue;
-				BlockPos abs = p.plus(anchor).toBlockPos();
-				if (sel.contains(abs.getX(), abs.getY(), abs.getZ())) return true;
-			}
-			return false;
+			// 共享实现（UI-PDD D9 延伸）：与 SelectionPanelScreens 同一 inBox（core/selection/SelectionOps）
+			Warehouse wh = manager().active();
+			return wh != null && SelectionOps.inBox(sel, wh, c);
 		}
 
 		static int planNotImplemented(CommandContext<FabricClientCommandSource> ctx) {
@@ -1723,6 +1719,64 @@ public final class WhCommands {
 		}
 	}
 
+	/**
+	 * UI 层等价 /wh rule add（UI-PDD §5.3）：成功返回 null，否则返回错误组件。
+	 */
+	public static Component addRuleEntryDirect(String ruleId, String tail) {
+		Warehouse wh = manager().active();
+		if (wh == null) return Component.translatable("commands.wh.rule.none");
+		ContainerRule rule = wh.rules.get(ruleId);
+		if (rule == null) return Component.translatable("commands.wh.rule.missing", ruleId);
+		return RuleGroup.addEntryCore(wh, rule, tail);
+	}
+
+	/**
+	 * UI 层等价 /wh rule add 的结构化形态（UI-PDD §5.3）：直接以 {@link ItemRule} 入列，
+	 * 与命令同一 D2 校验与落盘路径。index1based 为 null = 追加；否则替换该位条目（编辑）。
+	 * 成功返回 null，否则返回错误组件（条目不落盘）。
+	 */
+	public static Component upsertRuleEntryDirect(String ruleId, @Nullable Integer index1based, ItemRule entry) {
+		Warehouse wh = manager().active();
+		if (wh == null) return Component.translatable("commands.wh.rule.none");
+		ContainerRule rule = wh.rules.get(ruleId);
+		if (rule == null) return Component.translatable("commands.wh.rule.missing", ruleId);
+		if (index1based != null && (index1based < 1 || index1based > rule.itemRules.size())) {
+			return Component.translatable("commands.wh.rule.bad_index", index1based);
+		}
+		ItemRule previous = index1based == null ? null : rule.itemRules.set(index1based - 1, entry);
+		String d2err;
+		try {
+			d2err = ConfigValidator.validateRuleOnContainers(wh, rule);
+		} catch (Throwable t) {
+			if (previous != null) rule.itemRules.set(index1based - 1, previous);
+			else rule.itemRules.remove(entry);
+			return Component.translatable("commands.wh.error.generic", String.valueOf(t));
+		}
+		if (d2err != null) {
+			if (previous != null) rule.itemRules.set(index1based - 1, previous);
+			else rule.itemRules.remove(entry);
+			return Component.translatable("commands.wh.error.generic", d2err);
+		}
+		manager().save(wh);
+		return null;
+	}
+
+	/**
+	 * UI 层等价 /wh rule remove（1 起下标）：成功返回 null，否则返回错误组件。
+	 */
+	public static Component removeRuleEntryDirect(String ruleId, int index1based) {
+		Warehouse wh = manager().active();
+		if (wh == null) return Component.translatable("commands.wh.rule.none");
+		ContainerRule rule = wh.rules.get(ruleId);
+		if (rule == null) return Component.translatable("commands.wh.rule.missing", ruleId);
+		if (index1based > rule.itemRules.size()) {
+		return Component.translatable("commands.wh.rule.bad_index", index1based);
+		}
+		rule.itemRules.remove(index1based - 1);
+		manager().save(wh);
+		return null;
+	}
+
 	static WarehouseManagerImpl manager() {
 		return WarehouseManagerImpl.get();
 	}
@@ -1732,6 +1786,35 @@ public final class WhCommands {
 		TransportEngine e = WarehouseServices.transportEngine();
 		if (e == null) throw new IllegalStateException("TransportEngine not initialized");
 		return e;
+	}
+
+	/**
+	 * UI 层等价 /wh container add（UI-PDD §5.3）：绝对坐标 → 相对注册，与命令同一
+	 * 重复检测/D2 校验/落盘路径。成功返回 null，否则返回错误组件（不落盘）。
+	 */
+	public static Component addContainerDirect(WorldDim dim, BlockPos abs, IOType type, @Nullable String ruleRef) {
+		Warehouse wh = manager().active();
+		if (wh == null) return Component.translatable("commands.wh.status.none");
+		WorldDimPos rel = CommandSupport.relativePos(manager(), dim, abs);
+		if (rel == null) return Component.translatable("commands.wh.mark.no_anchor");
+		if (wh.containerAt(dim, rel.toBlockPos()) != null) {
+			return Component.translatable("commands.wh.container.already_registered");
+		}
+		if (ruleRef != null && !wh.rules.containsKey(ruleRef)) {
+			return Component.translatable("commands.wh.mark.rule_missing", ruleRef);
+		}
+		ContainerInfo info = new ContainerInfo(type);
+		info.pos.add(rel);
+		if (ruleRef != null) {
+			info.rules.add(ruleRef);
+		}
+		String d2err = ContainerGroup.validateContainer(wh, info);
+		if (d2err != null) {
+			return Component.translatable("commands.wh.error.generic", d2err);
+		}
+		wh.containers.add(info);
+		manager().save(wh);
+		return null;
 	}
 
 	static Warehouse requireActive(FabricClientCommandSource src) {

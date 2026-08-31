@@ -88,6 +88,7 @@ public class ContainerProtocolGameTest implements FabricClientGameTest {
 				return st == null ? -3 : st.getCount();
 			});
 			check(scanned == 32, "扫描快照应含 slot0=diamond×32，实际=" + scanned);
+			snap(context, "l8-chest-open-32-diamonds");
 
 			// 执行整堆取出：QUICK_MOVE 槽位 0（逐击对账推进）
 			context.runOnClient(mc -> {
@@ -110,6 +111,8 @@ public class ContainerProtocolGameTest implements FabricClientGameTest {
 				return chestEmpty && inInventory;
 			});
 			check(gotItem, "quickMove 应把 32 钻石移入玩家背包且箱子槽位清空");
+
+			snap(context, "l8-quickmove-done");
 
 			context.runOnClient(mc -> ContainerProtocol.get().cancel("test done"));
 			context.waitTicks(10);
@@ -142,6 +145,15 @@ public class ContainerProtocolGameTest implements FabricClientGameTest {
 		}
 	}
 
+
+	/** 过程截图（run/screenshots/）：便于人工回看端到端过程；失败不阻断测试 */
+	private static void snap(ClientGameTestContext context, String name) {
+		try {
+			context.takeScreenshot("yuanlu-warehouse-" + name);
+		} catch (Exception e) {
+			LOGGER.warn("screenshot {} failed: {}", name, e.toString());
+		}
+	}
 	private static void check(boolean cond, String msg) {
 		if (!cond) throw new AssertionError(msg);
 	}

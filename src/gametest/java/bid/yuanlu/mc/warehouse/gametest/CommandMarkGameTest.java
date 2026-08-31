@@ -55,7 +55,7 @@ import bid.yuanlu.mc.warehouse.api.container.RuleMode;
 import bid.yuanlu.mc.warehouse.api.transport.RunReport;
 import bid.yuanlu.mc.warehouse.api.world.WorldDim;
 import bid.yuanlu.mc.warehouse.api.world.WorldDimPos;
-import bid.yuanlu.mc.warehouse.command.SelectionState;
+import bid.yuanlu.mc.warehouse.core.selection.SelectionState;
 import bid.yuanlu.mc.warehouse.command.WhCommands;
 import bid.yuanlu.mc.warehouse.core.WarehouseServices;
 import bid.yuanlu.mc.warehouse.core.cache.CacheKey;
@@ -321,6 +321,8 @@ public class CommandMarkGameTest implements FabricClientGameTest {
 		check(registered, "标记注册应在限时内完成");
 		context.waitTicks(10);
 
+		snap(context, "l11-mark-registered");
+
 		ContainerInfo info = WarehouseManagerImpl.get().active().containers.stream()
 				.filter(c -> c.canonicalPos().x() == 8 && c.canonicalPos().z() == 10)
 				.findFirst().orElse(null);
@@ -401,6 +403,8 @@ public class CommandMarkGameTest implements FabricClientGameTest {
 		check(screenSeen, "玩家开箱应出现容器界面");
 		context.waitTicks(6); // 刷新器 tick 绑定（生产循环驱动）
 
+		snap(context, "l11-player-open-screen");
+
 		context.runOnClient(mc -> mc.execute(() -> {
 			if (McScreens.current() instanceof AbstractContainerScreen<?> s) s.onClose();
 		}));
@@ -414,6 +418,7 @@ public class CommandMarkGameTest implements FabricClientGameTest {
 		int items = finalMem == null ? -1 : finalMem.snapshot().slots().values().stream()
 				.mapToInt(ItemStack::getCount).sum();
 		LOGGER.info("[gt3-f2] player-open refresh: {} items", items);
+		snap(context, "l11-refresh-done");
 		check(items == 3, "缓存应含 3 钻石，实际=" + items);
 
 		WarehouseManagerImpl.get().active().containers.remove(infoB);
@@ -493,6 +498,7 @@ public class CommandMarkGameTest implements FabricClientGameTest {
 
 		int inTotal = chestDiamondsAwaited(sp, context, input3);
 		LOGGER.info("[gt3-f3-verify] input3={}", inTotal);
+		snap(context, "l11-f3-input-empty");
 		check(inTotal == 0, "INPUT 应被取空，实际=" + inTotal);
 		LOGGER.info("[gt3] skip-useless-output e2e passed");
 	}
@@ -612,6 +618,14 @@ public class CommandMarkGameTest implements FabricClientGameTest {
 		return c.getContents() instanceof TranslatableContents tc ? tc.getKey() : "?";
 	}
 
+
+	private static void snap(ClientGameTestContext context, String name) {
+		try {
+			context.takeScreenshot("yuanlu-warehouse-" + name);
+		} catch (Exception e) {
+			LOGGER.warn("screenshot {} failed: {}", name, e.toString());
+		}
+	}
 	private static void check(boolean cond, String msg) {
 		if (!cond) {
 			LOGGER.warn("[gt3-check] {} | fb={} err={}", msg,

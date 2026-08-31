@@ -43,7 +43,7 @@ def ensure_fernflower() -> str:
     urllib.request.urlretrieve(FERNFLOWER_URL, FERNFLOWER)
     if not os.path.isfile(FERNFLOWER):
         sys.exit(f"下载失败：{FERNFLOWER}")
-    print(f"✅ 已下载 FernFlower 反编译器到 {FERNFLOWER}")
+    print(f"[ok] 已下载 FernFlower 反编译器到 {FERNFLOWER}")
     return FERNFLOWER
 
 
@@ -123,12 +123,12 @@ def cmd_mc(args) -> int:
     if os.path.isdir(out_dir) and os.listdir(out_dir) and not args.force:
         print(f"已存在 {out_dir}（非空），跳过。用 --force 重新反编译。")
         return 0
-    common = glob.glob(os.path.join(
-        LOOM_CACHE, "minecraftMaven", "net", "minecraft",
-        "minecraft-common-*", "*", "minecraft-common-*.jar"))
-    client = glob.glob(os.path.join(
-        LOOM_CACHE, "minecraftMaven", "net", "minecraft",
-        "minecraft-clientOnly-*", "*", "minecraft-clientOnly-*.jar"))
+    common = sorted(glob.glob(os.path.join(
+            LOOM_CACHE, "minecraftMaven", "net", "minecraft",
+            "minecraft-common-*", "*", "minecraft-common-*.jar")))
+    client = sorted(glob.glob(os.path.join(
+            LOOM_CACHE, "minecraftMaven", "net", "minecraft",
+            "minecraft-clientOnly-*", "*", "minecraft-clientOnly-*.jar")))
     if not common or not client:
         sys.exit(f"未在 {LOOM_CACHE} 找到 common/clientOnly MC jar。"
                  "先跑一次 ./gradlew build 生成 loom 缓存。")
@@ -143,7 +143,7 @@ def cmd_mc(args) -> int:
                 extract_jar(out, out_dir)
     except subprocess.CalledProcessError:
         sys.exit("fernflower 反编译失败")
-    print(f"✅ MC 反编译完成 → {out_dir}")
+    print(f"[ok] MC 反编译完成 → {out_dir}")
     return 0
 
 
@@ -164,7 +164,7 @@ def cmd_dep(args) -> int:
     if sources is not None:
         os.makedirs(out_dir, exist_ok=True)
         extract_jar(sources, out_dir)
-        print(f"✅ 已从 {sources} 解压源码到 {out_dir}")
+        print(f"[ok] 已从 {sources} 解压源码到 {out_dir}")
         return 0
     if normal is None:
         sys.exit(f"Gradle 缓存中未找到 {args.coord}（{GRADLE_CACHE}）。"
@@ -178,7 +178,38 @@ def cmd_dep(args) -> int:
             extract_jar(outputs[0], out_dir)
     finally:
         pass
-    print(f"✅ 已反编译 {normal} → {out_dir}")
+    print(f"[ok] 已反编译 {normal} → {out_dir}")
+    return 0
+
+
+def cmd_file(args) -> int:
+    """反编译不在 Gradle 缓存中的任意 jar（如手动下载的 Modrinth jar）。
+
+    用法：file <jar路径> [artifact名]
+    artifact 名缺省取 jar 文件名去掉版本号后的主干（首个数字/'-'版本段之前）。
+    输出到 refs/dep-src/<artifact>/，非空且未带 --force 则幂等跳过。"""
+    jar = args.jar
+    if not os.path.isfile(jar):
+        sys.exit(f"jar 不存在：{jar}")
+    name = args.artifact or os.path.basename(jar)
+    # 主干名：去掉 .jar 后缀，截掉第一个版本号段（如 foo-1.2.3 → foo）
+    stem = os.path.splitext(name)[0]
+    for sep in ("-", "_"):
+        head = stem.split(sep)[0]
+        if head and any(ch.isdigit() for ch in stem[len(head):len(head) + 2][:2]):
+            stem = head
+            break
+    out_dir = os.path.join(DST, stem)
+    if os.path.isdir(out_dir) and os.listdir(out_dir) and not args.force:
+        print(f"已存在 {out_dir}（非空），跳过。用 --force 重新生成。")
+        return 0
+    with tempfile.TemporaryDirectory() as tmp:
+        outputs = decompile_with_fernflower([jar], tmp)
+        if len(outputs) != 1:
+            sys.exit(f"fernflower 输出异常：{outputs}")
+        os.makedirs(out_dir, exist_ok=True)
+        extract_jar(outputs[0], out_dir)
+    print(f"[ok] 已反编译 {jar} → {out_dir}")
     return 0
 
 
@@ -192,9 +223,14 @@ def main() -> int:
     sub.add_parser("mc", help="全量反编译 Minecraft 到 refs/dep-src/minecraft/")
     p_dep = sub.add_parser("dep", help="反编译/解压单个依赖")
     p_dep.add_argument("coord", help="group:artifact:version")
+    p_file = sub.add_parser("file", help="反编译任意 jar（不在 Gradle 缓存中的）")
+    p_file.add_argument("jar", help="jar 文件路径")
+    p_file.add_argument("artifact", nargs="?",
+                        help="输出目录名（refs/dep-src/<artifact>/），缺省由文件名推断")
     args = parser.parse_args()
     try:
-        return {"discover": cmd_discover, "mc": cmd_mc, "dep": cmd_dep}[args.mode](args)
+        return {"discover": cmd_discover, "mc": cmd_mc, "dep": cmd_dep,
+                "file": cmd_file}[args.mode](args)
     except BrokenPipeError:
         return 0
 

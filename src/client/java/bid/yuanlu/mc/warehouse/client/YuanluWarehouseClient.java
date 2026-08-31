@@ -69,6 +69,13 @@ public final class YuanluWarehouseClient implements ClientModInitializer {
 		ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
 				WhCommands.register(dispatcher));
 		EventChatBridge.attach();
+		bid.yuanlu.mc.warehouse.ui.mc.UiPlatform.init();
+		bid.yuanlu.mc.warehouse.core.highlight.HighlightManager.get().init();
+		bid.yuanlu.mc.warehouse.ui.app.highlight.HighlightRenderer.get().register();
+		bid.yuanlu.mc.warehouse.ui.app.presenter.HudPresenter.get().attach();
+		bid.yuanlu.mc.warehouse.ui.app.hud.HudRootFactory.register();
+		bid.yuanlu.mc.warehouse.ui.app.UiKeybinds.register();
+		bid.yuanlu.mc.warehouse.ui.app.UiDevEntry.register();
 		LOGGER.info("yuanlu-warehouse client initialized");
 	}
 

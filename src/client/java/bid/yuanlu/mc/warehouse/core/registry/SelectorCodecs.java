@@ -1,6 +1,7 @@
 package bid.yuanlu.mc.warehouse.core.registry;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -109,6 +110,22 @@ public final class SelectorCodecs {
 		var codec = (SelectorCodec<QuantitySelector>) QUANTITY_BY_TYPE.get(type);
 		if (codec == null) throw new IllegalArgumentException("Unknown quantity selector type: " + type);
 		return codec.fromJson(json);
+	}
+
+	// ---- 枚举（UI 结构化编辑器的类型清单用）----
+
+	/** 已注册物品选择器 type 名（注册序）。 */
+	public static List<String> itemTypeNames() {
+		synchronized (ITEM_BY_TYPE) {
+			return List.copyOf(ITEM_BY_TYPE.keySet());
+		}
+	}
+
+	/** 已注册数量选择器 type 名（注册序）。 */
+	public static List<String> quantityTypeNames() {
+		synchronized (QUANTITY_BY_TYPE) {
+			return List.copyOf(QUANTITY_BY_TYPE.keySet());
+		}
 	}
 
 	private static String requireType(JsonObject json) {
