@@ -39,6 +39,7 @@ import bid.yuanlu.mc.warehouse.core.engine.transport.TransportEngineImpl;
 import bid.yuanlu.mc.warehouse.core.event.WarehouseEvents;
 import bid.yuanlu.mc.warehouse.core.registry.WarehouseRegistryImpl;
 import bid.yuanlu.mc.warehouse.core.warehouse.WarehouseManagerImpl;
+import bid.yuanlu.mc.warehouse.core.WarehouseServices;
 import bid.yuanlu.mc.warehouse.api.item.ContainerRule;
 import bid.yuanlu.mc.warehouse.api.item.ItemRule;
 import bid.yuanlu.mc.warehouse.core.world.WorldNameMapper;
@@ -105,7 +106,8 @@ public class TransportEngineGameTest implements FabricClientGameTest {
 
 			// ---- 场景②：损坏容器 → SUSPENDED → continue 跳过 ----
 			BlockPos input2 = near(context, -2, 0, -3);
-			BlockPos airTarget = near(context, 8, 40, 8); // 空中无方块
+			// 须在 NoOp 到位距离内（4.5 格）的非容器方块；远距目标在真距离判定下永不到位
+			BlockPos airTarget = near(context, 2, 0, 2);
 			String wh2 = h.buildWorldSetup(context, singleplayer, input2, output, temp, airTarget);
 			List<TransportState> suspendStates = new java.util.ArrayList<>();
 			WarehouseEvents.TRANSPORT_STATE.register((s, d) -> {
@@ -263,6 +265,7 @@ public class TransportEngineGameTest implements FabricClientGameTest {
 					WarehouseManagerImpl.setInstance(mgr);
 					TransportEngineImpl engine = new TransportEngineImpl(mgr, store, config);
 					TransportEngineImpl.setInstance(engine);
+					WarehouseServices.setCacheStore(store); // 场景隔离 invalidateAll 依赖此注册（同生产入口装配）
 					engineRef = engine;
 					if (mgr.exists("gt2-a")) mgr.delete("gt2-a");
 					if (mgr.exists("gt2-b")) mgr.delete("gt2-b");
@@ -380,6 +383,7 @@ public class TransportEngineGameTest implements FabricClientGameTest {
 		void teardown() {
 			TransportEngineImpl.setInstance(null);
 			WarehouseManagerImpl.setInstance(null);
+			WarehouseServices.setCacheStore(null);
 			engineRef = null;
 		}
 	}

@@ -50,8 +50,8 @@ import bid.yuanlu.mc.warehouse.impl.selector.IdSelector;
  * 场景②：group:1 → 目标 1×64=64（100 钻 → OUTPUT 64 / TEMP 36）；
  * 场景③：fill_slots:26 → 目标 (27-26)×64=64；
  * 场景④：percent:5 → 目标 ⌊27×64×5/100⌋=86；
- * 场景⑤：跨维度 INPUT（下界高优先）——出口/队列口径一致，仅在 overworld 范围内收敛
- * （input_empty 结束而非 no_progress 误报）；
+ * 场景⑤：跨维度 INPUT（下界高优先，NoOp 能力外 FAILED → 引擎跳过）——跳过后不阻塞
+ * 出口判定，仅在 overworld 范围内收敛（input_empty 结束而非 no_progress 误报）；
  * 场景⑥：双箱 LEFT/RIGHT 相邻构成大箱子，ContainerInfo 含两半坐标 → 引擎经 canonical
  * 半边开 54 格 UI 全量取空。
  */
@@ -232,7 +232,8 @@ public class SelectorsQuantitiesMultiBlockGameTest implements FabricClientGameTe
 			ContainerInfo out = cont(IOType.OUTPUT, output, Priority.ZERO);
 			out.rules.add(rule.id);
 			wh.containers.add(out);
-			// 下界「容器」：最高优先、本维度不可达——不应阻塞出口判定（跨维度搬运属二阶段寻路）
+			// 下界「容器」：最高优先、NoOp 能力外（FAILED 重试耗尽 → 引擎跳过）——
+			// 跳过后不阻塞出口判定（跨维度搬运属二阶段寻路）
 			ContainerInfo nether = new ContainerInfo(IOType.INPUT);
 			nether.priority = new Priority(99, 99);
 			nether.pos.add(new WorldDimPos(dim().worldName(), "minecraft:the_nether", 0, 99, 0));
@@ -252,12 +253,13 @@ public class SelectorsQuantitiesMultiBlockGameTest implements FabricClientGameTe
 
 	// ---- 场景⑥：双箱（多格容器） ----
 
+	// dy 不得 ≥3：NoOp 到位距离 4.5 格，(3,3,±1) 距玩家 ≈4.72 会永远 MOVING
 	private static void doubleChest(ClientGameTestContext context, TestSingleplayerContext sp,
 			TransportEngineGameTest.Harness h) {
-		BlockPos halfA = near(context, 2, 3, -1);
-		BlockPos halfB = near(context, 3, 3, -1);
-		BlockPos output = near(context, 2, 3, 1);
-		BlockPos temp = near(context, 3, 3, 1);
+		BlockPos halfA = near(context, 2, 2, -1);
+		BlockPos halfB = near(context, 3, 2, -1);
+		BlockPos output = near(context, 2, 2, 1);
+		BlockPos temp = near(context, 3, 2, 1);
 		// LEFT 连接 facing 顺时针（北向的东邻）→ A=LEFT 在西、B=RIGHT 在东构成大箱子
 		AtomicBoolean done = new AtomicBoolean(false);
 		sp.getServer().runOnServer(server -> {
@@ -266,14 +268,19 @@ public class SelectorsQuantitiesMultiBlockGameTest implements FabricClientGameTe
 					.setValue(ChestBlock.FACING, Direction.NORTH);
 			level.setBlock(halfA, base.setValue(ChestBlock.TYPE, ChestType.LEFT), 3);
 			level.setBlock(halfB, base.setValue(ChestBlock.TYPE, ChestType.RIGHT), 3);
+			level.setBlock(output, Blocks.CHEST.defaultBlockState(), 3);
+			level.setBlock(temp, Blocks.CHEST.defaultBlockState(), 3);
+			// 本场景坐标与 l14-3 完全撞位：同方块 setBlock 保留 BE 遗留物品，先清空再填
+			clearContents(level, halfA);
+			clearContents(level, halfB);
+			clearContents(level, output);
+			clearContents(level, temp);
 			if (level.getBlockEntity(halfA) instanceof RandomizableContainerBlockEntity a) {
 				a.setItem(0, new ItemStack(Items.DIAMOND, 50));
 			}
 			if (level.getBlockEntity(halfB) instanceof RandomizableContainerBlockEntity b) {
 				b.setItem(0, new ItemStack(Items.DIAMOND, 50));
 			}
-			level.setBlock(output, Blocks.CHEST.defaultBlockState(), 3);
-			level.setBlock(temp, Blocks.CHEST.defaultBlockState(), 3);
 			done.set(true);
 		});
 		for (int i = 0; i < 200 && !done.get(); i++) context.waitTick();
@@ -370,6 +377,7 @@ public class SelectorsQuantitiesMultiBlockGameTest implements FabricClientGameTe
 	private static void fill(ServerLevel level, BlockPos pos, Map<Item, Integer> items) {
 		level.setBlock(pos, Blocks.CHEST.defaultBlockState(), 3);
 		if (level.getBlockEntity(pos) instanceof RandomizableContainerBlockEntity chest) {
+			clearContents(level, pos);
 			int slot = 0;
 			for (Map.Entry<Item, Integer> e : items.entrySet()) {
 				int left = e.getValue();
@@ -378,6 +386,15 @@ public class SelectorsQuantitiesMultiBlockGameTest implements FabricClientGameTe
 					chest.setItem(slot++, new ItemStack(e.getKey(), n));
 					left -= n;
 				}
+			}
+		}
+	}
+
+	/** 清空容器 BE 全部槽位（同方块 setBlock 保留 BE，撞位场景须显式清） */
+	private static void clearContents(ServerLevel level, BlockPos pos) {
+		if (level.getBlockEntity(pos) instanceof RandomizableContainerBlockEntity chest) {
+			for (int i = 0; i < chest.getContainerSize(); i++) {
+				chest.setItem(i, ItemStack.EMPTY);
 			}
 		}
 	}
