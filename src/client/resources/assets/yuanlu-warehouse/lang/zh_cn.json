@@ -1,5 +1,5 @@
 {
-  "commands.wh.help": "Yuanlu Warehouse 仓库 — 完整命令见 doc/PDD.md §10。分组：list/create/remove/use/status/show/anchor/start/stop/continue/restart/abort/rule/container/select/transfer/world/config/reload",
+  "commands.wh.help": "Yuanlu Warehouse 仓库 — 完整命令见 doc/commands.md。分组：list/create/remove/use/status/show/anchor/start/stop/continue/restart/abort/rule/container/select/transfer/world/config/reload",
   "commands.wh.list.empty": "尚无仓库，用 /wh create <名称> 创建。",
   "commands.wh.list.entry": "%s %s — 容器：%s，规则：%s",
   "commands.wh.list.active": "[激活中]",

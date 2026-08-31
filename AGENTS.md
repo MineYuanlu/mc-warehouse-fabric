@@ -1,6 +1,6 @@
 # Yuanlu Warehouse — AGENTS.md
 
-Minecraft Fabric 模组，**纯客户端**自动化仓库管理（服务端可选装增强）。设计文档 `doc/PDD.md`；命令手册 `doc/commands.md`。
+Minecraft Fabric 模组，**纯客户端**自动化仓库管理（服务端可选装增强）。设计文档 `doc/design/`（按模块拆分，见 `doc/design/README.md`）；命令手册 `doc/commands.md`。
 
 ## Build & Run
 
@@ -93,5 +93,5 @@ python3 tools/gen_refs.py discover          # 列出 gradle/loom cache 的 jar �
 
 ## 设计参考
 
-- `doc/PDD.md`：数据模型、状态机、传输引擎、插件系统 API 与一阶段范围（v0.3）。
-- `doc/plan.md`：分层进度（L0–L11 全部完成）、已定决策 D1–D6、**技术锚点表**（MC 26.1 已验证的 API 用法）与各层 E2E 实测教训。实现前先读对应章节。
+- `doc/design/`：持久性设计文档（原 PDD + UI-PDD 按模块拆分，**章节号不变**——代码注释中的「PDD §x.x」引用按 `doc/design/README.md` 的对照表定位）。数据模型（data-model.md）、传输引擎（transport-engine.md）、交互协议（interaction-protocol.md）、插件 API（plugin-api.md）、设计决策与 MC 26.1 API 教训（design-decisions.md）等。实现前先读对应模块。
+- `doc/README.md`：文档索引与维护原则（设计文档不记进度；阶段性文档删后由 `doc/archive/INDEX.md` 索引 git 历史）。

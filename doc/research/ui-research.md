@@ -305,7 +305,7 @@ props.persistForMillis(int) / props.fadeOut()
 
 - **布局**：直接用 vanilla `layouts/` 包（LinearLayout/GridLayout/FrameLayout）+ "init() 全量重建"约定，不引入 Taffy/Yoga。理由：本 mod 的 Screen 群规模小（个位数屏幕），LDLib2 的脏驱动 Flexbox 是为大型复杂 UI 服务的；`AbstractSimiScreen` 的做法已被 vanilla 生态验证。
 - **绘制**：全部走 `GuiGraphicsExtractor`；面板用"BoxElement 思路"纯顶点色渐变（免贴图）+ 必要时 `blitSprite` 九宫格；**不引入 SDF shader**（26.x 自定义 RenderPipeline 在 GUI 层成本高，收益仅圆角）。
-- **世界高亮**：`Gizmos` API 一行提交，`HighlightManager` 维护状态、渲染帧统一 emit；`collectPerFrameGizmos()` try-with-resources 即可，**不需要 PDD 预设的 mixin**（PDD §8.7 应更新）。
+- **世界高亮**：`Gizmos` API 一行提交，`HighlightManager` 维护状态、渲染帧统一 emit；`collectPerFrameGizmos()` try-with-resources 即可，**不需要 PDD 预设的 mixin**（该修订已落库于 `doc/design/container-detection.md` §8.7）。
 - **HUD**：`HudElementRegistry.addLast` + `HudElement.extractRenderState`；与 Screen 共用同一套轻量控件绘制代码（LDLib2"HUD=Screen 同构"思想，但只共享绘制/布局，不共享输入——HUD 输入用 Fabric screen event / mixin 另议）。
 
 ### 6.2 引擎最小件（自研清单）
@@ -322,7 +322,7 @@ props.persistForMillis(int) / props.fadeOut()
 - UI 只经 `api/` + `WarehouseEvents`；命令层与 UI 层共用同一执行序列（`WhCommands` 各 Group 的调用体是现成范本）。
 - i18n：全部 `Component.translatable`，key 前缀新增 `ui.wh.*`（与 `commands.wh.*` 并行），en_us/zh_cn 成对。
 - 跨版本：一切 Screen 访问走 `util/McScreens` 探测模式；26.1→26.2 漂移点（GuiGraphicsExtractor→26.2 又有 `Hud` 改名等）在 universal jar 策略下由编译目标 26.1 决定，运行于 26.2 需关注 Wurst7 报告中列出的 4 个漂移点。
-- 性能红线（`doc/plan.md`）：UI 全部在客户端线程渲染/提取，逻辑状态更新经事件订阅（同线程），无需额外同步；高亮数据经 on-demand 不可变状态模式传递。
+- 性能红线（设计决策红线，见 `doc/design/design-decisions.md` §15.12）：UI 全部在客户端线程渲染/提取，逻辑状态更新经事件订阅（同线程），无需额外同步；高亮数据经 on-demand 不可变状态模式传递。
 
 ### 6.4 风险清单
 
