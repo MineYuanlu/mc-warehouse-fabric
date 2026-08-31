@@ -98,8 +98,8 @@ LDLib2 的 XML/LSS 服务于"给外部用户写 UI"的产品需求；本 mod 无
 ### D3 元素树可序列化作为插件 UI 扩展的前置
 预留注册点（plugin-api.md §9.3）未来开放时，插件以数据（而非代码）描述 UI 片段，规避"插件冻结期 api/ 变更"风险。当前只保证 L1 元素树无 MC client 类型泄漏，使序列化可行。
 
-### D4 为什么坚持"resize 全量重建"而不做增量布局？
-vanilla 约定（`rebuildWidgets`）+ Create/LDLib2 共同验证；本 mod 屏幕规模小（个位数），全量重建成本可忽略；增量布局（Taffy 脏驱动）是为 LDLib2 级别的 UI 规模服务的，属于过度设计（调研 §3.3 评价）。
+### D4 为什么不做增量布局（以及 resize 的实际策略）？
+布局求解坚持"构建时一次性求解 + 脏标记重排"，不引入增量布局引擎——vanilla 约定（`rebuildWidgets`）+ Create/LDLib2 共同验证；本 mod 屏幕规模小（个位数），重建成本可忽略；增量布局（Taffy 脏驱动）是为 LDLib2 级别的 UI 规模服务的，属于过度设计（调研 §3.3 评价）。**修订**：L2 `ScreenHost.resize()` 实际覆写为**不重建整树**——根元素保留，仅更新根尺寸、由 `UiRoot` 逐帧尺寸比对触发重排，保住 hover/focus/拖拽中间态（HUD 拖拽配置屏尤其受益）；语义不变（resize 后布局仍正确），只是不丢树。
 
 ### D5 为什么不用 Flexbox/Taffy/Yoga？
 同 D4。L1 的 Row/Column/Grid/Anchor 覆盖本 mod 全部布局形态（列表/表单/网格/HUD 角落），纯 Java 可 JUnit；布局器是可替换的 `Layout` 策略。**增补**：实机反馈（固定宽度内容折断、列表无法利用大窗口）催生了轻量 flex 语义——`grow` 主轴权重 + `ScrollElement` 滚动视口（ui-engine.md §3.4），仍为零依赖自研（约百行）；完整 Flexbox（shrink/wrap/justify/交叉轴对齐）与 Taffy 级约束求解依然不做。
@@ -120,7 +120,7 @@ vanilla 不向 HUD 分发鼠标/键盘输入（MouseHandler 只派发给当前 S
 命令文案（语法说明式）与 UI 文案（按钮/标签式）粒度和措辞习惯不同；强行复用会让两边的改动互相牵制。状态/档位类共用 key（`wh.state.*`/`wh.grade.*`）保持一致。
 
 ### D11 为什么"构建时求解 + 全量重建"能覆盖多尺寸/多比例/多分辨率窗口？
-（ui-engine.md §3.7 的决策记录）三重保障：①引擎只工作在 GUI 缩放坐标系，物理分辨率/DPI 由 vanilla 吸收，GUI Scale 的本质只是"可视区大小变化"；②布局器是流式的（Column/Grid/Anchor 对父级约束求解），不存在写死的屏幕坐标，宽高比变化自然适应；③resize/窗口变化触发全量重建（vanilla 约定），HUD 走每帧尺寸比对+下帧重建（LDLib2 模式）。这与 Create（居中重算）、EMI（缓存重算）、MaLiLib（init 现算）的实践一致——mod 生态没有任何一家做运行期百分比/DPI 缩放，本引擎也不做。代价：极小可视区（高 GUI Scale）下靠滚动消化而非缩放，属可接受取舍。
+（ui-engine.md §3.7 的决策记录）三重保障：①引擎只工作在 GUI 缩放坐标系，物理分辨率/DPI 由 vanilla 吸收，GUI Scale 的本质只是"可视区大小变化"；②布局器是流式的（Column/Grid/Anchor 对父级约束求解），不存在写死的屏幕坐标，宽高比变化自然适应；③resize 时 L2 host 保留根元素仅重排（D4 修订），HUD 走每帧尺寸比对+下帧重建（LDLib2 模式）。这与 Create（居中重算）、EMI（缓存重算）、MaLiLib（init 现算）的实践一致——mod 生态没有任何一家做运行期百分比/DPI 缩放，本引擎也不做。代价：极小可视区（高 GUI Scale）下靠滚动消化而非缩放，属可接受取舍。
 
 ### D12 为什么 HUD 设置做成 Screen 而不是"HUD 上的编辑模式"？
 同一原因链：HUD 无输入（D8）→ 编辑交互必须发生在 Screen 里 → 干脆让设置屏显示实时 HUD 预览并在其上编辑（拖拽/开关/排序都是 Screen 内常规事件）。额外收益：同一 `HudRoot` 元素在 HudHost 与设置屏画布两处渲染，天然验证了 L1"同树多挂载"的设计假设，为插件 HUD 区块提供实现样板。

@@ -41,6 +41,7 @@ public interface SelectorCodec<T> {
     String type();
     JsonObject toJson(T value);
     T fromJson(JsonObject json);
+    Class<T> implType();     // 反序列化分发用：实现类 → codec 的索引（json "type" 之外的另一半映射）
 }
 ```
 

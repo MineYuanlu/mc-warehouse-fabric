@@ -23,7 +23,7 @@ public abstract class UiElement {
 }
 ```
 
-- **生命周期**：`onAttached/onDetached`（进/出树）+ `onThemeChanged`；无独立 init——**挂载即构建**（Screen 侧沿用 vanilla "resize 时全量重建" 约定，见 design-decisions.md D4）。
+- **生命周期**：**挂载即构建**，无独立 init、无 onAttached/onDetached/onThemeChanged 回调（进/出树仅标记布局脏；`add/remove` 即时生效，元素自驱逻辑写在 `tick` 轮询或 `Value` 监听里——两回调为待定增强，见 todos）。Screen 侧 resize 策略见 §3.7 与 design-decisions.md D4。
 - **命中测试** `hitTest(px, py)`：先 `visible && contains(px,py)`（含父链 scissor 交集预判），再按 `zIndex` 降序递归子级。**每帧提取前算一次 hover 结果并缓存**（LDLib2 模式），输入事件只查缓存。
 - **提取式渲染**：`extract(UiDraw g)` 递归——`g.pushClip(本元素)` → 自绘 → 按 zIndex 升序递归子级 → `g.popClip()`。L1 元素**禁止在 extract 中改状态**（26.x 提取模型约束，主渲染数据必须先于帧就绪）。
 
@@ -88,9 +88,9 @@ public record Theme(String id,
     int radius, int padding, int gap, int lineWidth)
 ```
 
-- 颜色绘制全部走"BoxElement 思路"的纯顶点色渐变（`UiDraw.fillRectGradient` + `outline`），**零贴图资源**；`blitSprite` 留给原版图标类元素。
-- 换主题 = 换 `Theme` 实例；元素绘制只读 token，不写死颜色（样式不做级联系统，token 直连——design-decisions.md D6）。
-- 悬浮渐变动画：元素级 `Value<Float> hoverProgress`，tick 步进（0.125/tick 折返，AppleSkin 模式），绘制时插值两 token 色。
+- 颜色绘制全部走"BoxElement 思路"的纯顶点色渐变（`UiDraw.fillRectGradient` + `outline`），**零贴图资源**；`blitSprite`/`blit` 留给原版图标类元素。
+- 换主题 = 换 `Theme` 实例；元素绘制只读 token，不写死颜色（样式不做级联系统，token 直连——design-decisions.md D6）。token 清单含 `accentHover` 与 `accentPressed`（按压态）。
+- 悬浮渐变动画（`Value<Float> hoverProgress` tick 插值两 token 色，AppleSkin 模式）为规划项未接线——当前按钮用 vanilla 精灵静态悬浮态（见 todos）。
 
 ### 3.6 动画
 
@@ -117,7 +117,7 @@ public record Theme(String id,
 **本引擎策略：全部坐标在"构建时"针对当前根尺寸一次性求解，运行期零布局重算**：
 
 1. 引擎只感知 GUI 缩放坐标，不感知物理分辨率/DPI（缩放由 vanilla 完成）。GUI Scale 不同 = 可视区域尺寸不同，同一套布局逻辑天然适应。
-2. **Screen**：根元素在 `ScreenHost.init()` 构建，构建时 `UiDraw.screenWidth/Height` 即当前值；resize → vanilla `rebuildWidgets` → 全量重建（D4）。宽高比变化不影响——布局器是流式的。**业务面板禁止写死绝对屏幕坐标**（评审 checklist 项）；列表/详情等自适应区域一律用 `grow(1)` 撑满 + `ScrollElement` 滚动（§3.4），不手工 `min(上限, 屏高-边距)` 派生。
+2. **Screen**：根元素在 `ScreenHost.init()` 构建，构建时 `UiDraw.screenWidth/Height` 即当前值。resize → vanilla `resize()` 被 L2 host 覆写为**不重建**——根元素保留，仅更新根尺寸并由 `UiRoot.update` 的逐帧尺寸比对触发重排（保住 hover/focus/拖拽中间态；语义同 D4 的"resize 后布局仍正确"，只是不丢树）。**业务面板禁止写死绝对屏幕坐标**（评审 checklist 项）；列表/详情等自适应区域一律用 `grow(1)` 撑满 + `ScrollElement` 滚动（§3.4），不手工 `min(上限, 屏高-边距)` 派生。
 3. **HUD**：`HudRoot` 用 Anchor 定角 + 配置偏移，区块纵向排布；`HudHost` 每帧比对缓存尺寸，变化则下一帧重建（LDLib2 模式，重建成本 = 十几个文本元素，可忽略）。
 4. **极端小可视区**（高 GUI Scale）：面板超出时靠列表元素自带的滚动消化，**不做 DPI 式 UI 缩放**（Create/EMI/MaLiLib 通例，mod 生态没有动态缩放 UI 的先例与需求）。
 5. 百分比仅以"派生 token"形式存在（如 `Theme.panelWidth = min(360, screen*0.6)`，构建时求值），不引入通用百分比布局语法——LDLib2 的 PERCENT 是其 Taffy 体系的伴生品，我们没有布局引擎。
@@ -148,7 +148,8 @@ public interface UiDraw {                       // 2D 绘制门面（~20 方法�
 ```
 
 - 姿态栈用 JOML `Matrix3x2fStack` 语义（`pushPose/translate/scale`）——JOML 是库不是 MC 类，L1 可依赖其类型；L2 映射到 `GuiGraphicsExtractor.pose()`。
-- `Identifier`：L1 侧定义同名值类型（record），L2 转换——避免 L1 import MC 资源类。
+- 资源标识（精灵/纹理）在 `UiDraw` 全程用 **`String` id**（如 `"widget/button"`、`"textures/gui/container/generic_54.png"`），L2 内部转 MC Identifier——L1 不 import MC 资源类，也不引入自定义 Identifier 值类型。
+- **剪贴板端口** `ClipboardPort`（`ui/core/draw/`）：static `copy(String)/paste()`，L2 注入 provider（无 client 环境的 JVM 测试 no-op）——文本框复制粘贴用。
 - 文本富样式首版不支持（纯色 + Component 透传）；需要分色 token 高亮时（搜索框语法着色）用多段 `text` 拼。
 
 ### 4.2 挂载点
@@ -163,15 +164,13 @@ public interface UiDraw {                       // 2D 绘制门面（~20 方法�
 
 ```java
 public interface WorldHighlighter {
-    void beginFrame();                                  // try-with-resources 打开 Gizmos 收集窗口
-    void box(AABB box, int strokeArgb, int fillArgb, float lineWidth, boolean throughWalls);
-    void line(Vec3 a, Vec3 b, int argb, float width);
-    void label(String text, Vec3 pos, int argb);
-    void endFrame();
+    WorldFrame beginFrame();                              // try-with-resources 打开 Gizmos 收集窗口（NOOP 实现供无 client 测试）
+    // WorldFrame 上：box / line / quad（半透明面，双面渲染）/ label
+    void setAlwaysOnTop(boolean on);                     // throughWalls 语义
 }
 ```
 
-26.1 实现 = `Gizmos.cuboid/line/billboardText` 直通；`throughWalls` → `setAlwaysOnTop()`。**不需要高亮专用 mixin**（transport-engine.md §5.8 的实现方式据此描述；现有 LevelRendererMixin 仅是 renderLevel HEAD 的事件钩子，见 container-detection.md §8.7）。
+26.1 实现 = `Gizmos.cuboid/line/billboardText` 直通；`quad` 用自定义 `DoubleSidedFillGizmo`（原版 `debug_filled_box` 管线背面剔除，选区盒半透明面需双面可见）。**不需要高亮专用 mixin**——renderLevel HEAD 事件钩子（`LevelRendererMixin` → `UiHooks.firePerFrameWorld`，container-detection.md §8.7）驱动 L3 `HighlightRenderer` 每帧读快照 emit。
 
 ### 4.4 Mc261UiPlatform 与版本探测
 

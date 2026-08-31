@@ -69,12 +69,15 @@ needCount ≤ ⌈nowCount/2⌉ ? pickupHalf 后 placeOne 放回 (⌈nowCount/2�
 
 ```
 executeMove(move):
-  1. 确保容器会话有效（Screen 已开且身份一致，syncId 门控生效），否则重新走 §6.1
+  1. 确保容器会话有效（Screen 已开且身份一致，syncId 门控生效），否则失败为 UI_CLOSED_EXTERNAL
+     （执行中途丢屏不做 §6.1 重开续跑——半途计划作废，由引擎 SUSPENDED 处理）
   2. 按 transport-engine.md §5.3 计划粒度调用上述原语/算法执行
-  3. 对账：confirmTimeoutTicks 内观察到以下之一方为成功：
-     a. ScreenHandler revision/stateId 发生变化且槽位内容符合预期增量；
-     b. 服务端纠正包（预测被拒绝时客户端槽位被回滚）。
-     超时无变化 → 操作超时异常（失效该容器缓存 + SUSPENDED）
+  3. 对账（D3）：confirmTimeoutTicks 内观察受监视槽位/光标内容变化并保持 2 tick 稳定窗口：
+     a. 槽位内容符合预期增量 → 成功；
+     b. 槽位被回滚至点击前状态 → CLICK_CORRECTED（服务端纠正/拒绝该操作）；
+     c. 超时无变化 → 操作超时异常。
+     b/c 均失效该容器缓存并 SUSPENDED。
+     注：不依赖客户端 stateId——26.1 实测其不随服务端包更新，不能作对账信号。
   4. 计划推进只以对账后的状态为准；客户端预测值不作为任何决策输入
 ```
 

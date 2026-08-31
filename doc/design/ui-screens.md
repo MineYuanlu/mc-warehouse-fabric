@@ -15,15 +15,15 @@
 
 | 区块 | 内容 | 交互 |
 |---|---|---|
-| 列表 | 每仓库一行：名称、容器数、规则数、世界/维度标记 | 点击选中；双击 = 激活 |
+| 列表 | 每仓库一行：名称、容器数、规则数 | 点击选中；双击 = 激活（世界/维度标记待补，见 todos） |
 | 操作条 | [新建] [激活] [删除] [重载配置] | 激活当前仓库按钮置绿（Create 互斥指示灯模式）；删除需二次确认对话框（危险色） |
-| 详情侧栏 | 选中仓库概览：anchor、容器明细表（IOType 徽标/规则/缓存/优先级）、`RunReport` 最近一次结果 | 容器行点击 → 弹出编辑浮层（改 type/mode、绑/解规则、清缓存，等价 `container type/mode/rules/memory`） |
+| 详情侧栏 | 选中仓库概览：anchor、容器明细表（IOType 徽标/规则/缓存/优先级）；`RunReport` 最近一次结果在引擎页状态卡渲染 | 容器行点击 → 弹出编辑浮层（改 type/mode、绑/解规则、清缓存，等价 `container type/mode/rules/memory`） |
 
 **页签 B：引擎控制**
 
-- 状态卡：`TransportState` + 动作级进度（PROGRESS 事件两粒度分别渲染，transport-engine.md §5.9）+ 进度条（ui-engine.md §3.6 数值滚动）。
-- 控制按钮组：[开始]/[暂停]/[继续]/[重启]/[终止]——按状态机合法迁移禁用不合法项（按钮 disabled + tooltip 说明，等价 `start/stop/continue/restart/abort`）。
-- 跨仓库搬运入口（等价 `transfer`）：src/dst 双下拉 + 开始/停止。
+- 状态卡：`TransportState` + 动作级进度（PROGRESS 事件两粒度分别渲染，transport-engine.md §5.9）+ `RunReport` 最近一次结果；进度条（ui-engine.md §3.6 数值滚动）待接线（见 todos）。
+- 控制按钮组：[开始]/[暂停]/[继续]/[重启]/[终止]——按状态机合法迁移禁用不合法项（等价 `start/stop/continue/restart/abort`；disabled 项的 tooltip 说明待补，见 todos）。
+- 跨仓库搬运入口（等价 `transfer`）：src/dst 双循环选择器（`CycleSelector`，与"互斥按钮组"同族的循环式控件）+ 开始/停止。
 - 引擎页补全项：pathfinder 选择（`--pathfinder` 覆盖）、运行状态详情、anchor 设定、容器增删、标记模式 Modal（带完整参数开启/退出，参数经 `lastConfigured` 记忆供快捷键沿用）。
 
 数据源：`WarehouseManager`（读 `list()/active()`）+ `WarehouseEvents`（TRANSPORT_STATE/PROGRESS/RUN_FINISHED/WAREHOUSE_CHANGED → Presenter `Value`）。
@@ -36,7 +36,7 @@
 - **共享操作核心**：`core/selection/SelectionOps`——inBox 判定 / countInBox / expand / dominantAxis（视线主轴），
   命令层 `SelectGroup.inBox` 与选区面板同一实现（消除双实现漂移）；`~` 相对坐标解析同样抽取为
   `util/RelativeCoords` 共用（`CommandSupport.coord` 委托）。
-- **选区盒渲染**：`WorldHighlighter` 画三轴三色线框 + 角块高亮 + 半透明面（Litematica `renderSelectionBox` 分层配色语义：主体 X 红/Y 绿/Z 蓝，角块 pos1 红 pos2 蓝，选中角统一 accent 色），见 ui-highlight.md §7。
+- **选区盒渲染**：`WorldHighlighter` 画三轴三色线框 + 角块高亮 + 半透明面（Litematica `renderSelectionBox` 分层配色语义：主体 X 红/Y 绿/Z 蓝；角块当前统一 accent 青色，pos1 红/pos2 蓝双色区分待补，见 todos），见 ui-highlight.md §7。
 - **选区面板**（Screen）：pos1/pos2 三种设定形态（脚下 / 准星 / XYZ 输入框支持 `~` 相对语法）；
   expand 行 = 次数输入 + 六方向按钮（等价 `select expand <count> <dir>`）；信息行 = world/dim、体积、
   选区内容器数；批量操作（`set-type`：IOType 互斥组 + mode 回落默认、`set-rule` 加/解、`set-cache`）+ [应用到选区]。
@@ -58,7 +58,9 @@
 - **命令语法兜底**：tail 语法输入保留为 Modal 形态（复用 `WhCommands.addRuleEntryDirect`），
   服务高级用户与粘贴既有命令的场景。
 
-### 5.4 HUD 元素（详见 §6）与高亮渲染（详见 ui-highlight.md §7）都是 L3 组件，共享 ui-engine.md §3.3 的 Presenter 机制。
+### 5.4 Presenter 与共享数据组件
+
+HUD 元素（详见 §6）与高亮渲染（详见 ui-highlight.md §7）都是 L3 组件，共享 ui-engine.md §3.3 的 `Value` 绑定机制。当前唯一的 Presenter 是 `HudPresenter`（订阅 WarehouseEvents → `Value` 更新，同时喂 HUD 与引擎页状态卡——"跨 UI 持续显示"即由此达成）；其余屏（仓库/选区/规则/世界/配置）数据量小、无跨屏复用需求，直接读 manager/mapper（打开时拉取 + 操作后刷新），不设 Presenter 中间层——屏多了再按需抽取。
 
 ### 5.5 世界映射页与配置页（等价 world/config 两组命令）
 
@@ -85,14 +87,14 @@
 | 区块 | 数据源 | 说明 |
 |---|---|---|
 | 仓库行 | `WarehouseManager.active()` | 当前仓库名 + 容器数；无激活仓库时提示"打开 UI" |
-| 状态行 | `TRANSPORT_STATE` | `TransportState` 中文化 + 运行时长 |
-| 进度行 | `PROGRESS`（动作级）+ 轮次计数 | 动作描述（搬移/扫描/取物/放置）+ 微型进度条（ui-engine.md §3.6） |
+| 状态行 | `TRANSPORT_STATE` | `TransportState` 中文化（运行时长待补，见 todos） |
+| 进度行 | `PROGRESS`（动作级）+ 轮次计数 + ITEM_MOVED 累计 | 动作描述（搬移/扫描/取物/放置）；微型进度条待接线（见 todos） |
 | 选区行 | `SelectionState` | 未设时隐藏；`pos1 (x,y,z) → pos2 (x,y,z)  WxHxD` |
-| 标记行 | `MarkMode.Session` | 标记模式中显示 session 参数与"右键注册容器"提示 |
-| 报告行 | `RUN_FINISHED` | 结束后 8s 内显示 `RunGrade` + 摘要（`persistForMillis` 语义由 HUD 元素自行计时） |
-| 快捷键提示 | ui-interaction.md §8 表 | 仅在选区/标记模式或按下 alt 时显示 |
+| 标记行 | `MarkMode.Session` | 标记模式中显示 session 参数（type/rule）；templateId 与操作提示待补（见 todos） |
+| 报告行 | `RUN_FINISHED` | 结束后 8s 内显示 `RunGrade` + 摘要（160 tick 计时由 HUD 侧自持） |
+| 快捷键提示 | ui-interaction.md §8 表 | 仅在选区/标记模式或按下 alt 时显示（待实现，见 todos） |
 
-**渲染纪律**（AppleSkin 模式）：无数据区块直接跳过；区块内容按 tick 缓存（`tickCounter` 键）；文字行数裁剪上限（配置，默认 8 行）；文字渲染带背景 token（半透明底 + 文字，MaLiLib `renderText` 对齐语义）。
+**渲染纪律**（AppleSkin 模式）：无数据区块直接跳过；区块内容每 tick 刷新字符串、经 `Value.set` 的等值去重避免无谓重排（tickCounter 键缓存为其等价实现）；文字行数裁剪上限（`maxLines`，默认 8）；每角共享一个半透明背景框（角落包装面板，区块按 order 纵向排布其中）。
 
 ### 6.2 HUD 设置屏（编辑模式）
 

@@ -60,9 +60,11 @@ stateDiagram-v2
     PUT_TEMP --> SUSPENDED : 异常
 
     SUSPENDED --> ENTRY : 玩家选择「重头开始」(/wh restart)
-    SUSPENDED --> GET_TEMP : 玩家选择「断点继续」(/wh continue)
+    SUSPENDED --> ENTRY : 玩家选择「断点继续」(/wh continue)
     SUSPENDED --> [*] : 玩家选择「退出搬运」(/wh abort)
 ```
+
+> continue/restart 均经 ENTRY 重入（重新做入口决策与队列构建），区别在轮次标志是否重置；continue 会把挂起时在途/出错的容器记入 skip 集合，本轮不再访问（`/wh stop` 后 continue 同样跳过在途容器——无损恢复为待修项，见 todos）。「断点」指轮次与统计延续，非阶段断点恢复。
 
 **出口条件**：
 
@@ -187,6 +189,8 @@ roundHadNewExplore: boolean // 本轮是否有新容器被首次成功探索
 
 **异常类型**：
 
+> 实现以 `ContainerSession.Failure` 枚举为准：`CONTAINER_GONE`（容器消失）、`NOT_OPENED`（容器打不开）、`UI_MISMATCH`（身份不符）、`OPERATION_TIMEOUT`（操作超时）、`UI_CLOSED_EXTERNAL`（UI 被外部关闭）、`REACH_FAILED`（reach 预检不过，含玩家中途远离）、`CLICK_CORRECTED`（服务端纠正包，见 interaction-protocol.md §6.2）、`PLAYER_GONE`（玩家离线）。
+
 | 异常               | 触发条件                                            | 处理方式                             |
 | ------------------ | --------------------------------------------------- | ------------------------------------ |
 | 容器消失           | 坐标处无方块或方块实体类型与预期不符                | 暂停，提示玩家                       |
@@ -195,9 +199,12 @@ roundHadNewExplore: boolean // 本轮是否有新容器被首次成功探索
 | UI 身份不匹配      | Screen 标题/槽位数/方块实体与 Detector 判定不符     | 暂停，提示玩家                       |
 | 操作超时           | click 后 confirmTimeoutTicks 内无服务端对账（interaction-protocol.md §6.2） | 失效该容器缓存 + 暂停 |
 | UI 被外部关闭      | 对账完成前 Screen 关闭（按 E、死亡、踢出界面）      | **绝不视为成功**，暂停               |
+| 服务端纠正         | 点击后槽位被回滚至点击前状态（CLICK_CORRECTED）     | 暂停，提示玩家                       |
 | 反复探索失败       | 同一容器连续 ≥ exploreFailMax 次                    | 暂停，提示玩家                       |
 | 玩家死亡           | 死亡掉落风险                                        | 终止本轮搬运，要求人工确认后 restart |
 | 断线/切世界/切维度 | worldId 变化或连接中断（world-identity.md §4.1）    | 终止搬运                             |
+
+> 死亡在实现中经「容器屏关闭 → UI_CLOSED_EXTERNAL」路径呈现为暂停（等效要求人工确认）；切维度无独立检测，跨维度容器按探索失败口径处理——目标语义（终止并报告）保留为待修项。
 
 > **口径注记**：探索类异常（容器消失、容器打不开、探索路径上的 UI 身份不匹配）取 §5.3③ 口径——单次「跳过 + 计数」，同一容器累计达 `exploreFailMax`（configuration.md §11.4）方触发「反复探索失败」行暂停；表中其余行的「暂停」立即生效。
 
@@ -206,9 +213,9 @@ roundHadNewExplore: boolean // 本轮是否有新容器被首次成功探索
 ```
 暂停后玩家处理完现场，可选：
   1. 重头开始 → /wh restart（重置状态与轮次标志，重新 ENTRY）
-  2. 断点继续 → /wh continue（将出错容器标记 skip，继续当前轮次）
+  2. 断点继续 → /wh continue（沿用轮次统计，经 ENTRY 重入；挂起时在途/出错容器记入 skip，本轮不再访问）
   3. 退出搬运 → /wh abort
-注：/wh stop 仅暂停（可 /wh continue 无损恢复，不跳过容器）。
+注：/wh stop 同样经 SUSPENDED 暂停；continue 重入时在途容器会进 skip 集合（与"无损恢复，不跳过容器"的目标语义有差，待修）。
 ```
 
 ## 5.6 多仓库流转
@@ -223,6 +230,8 @@ roundHadNewExplore: boolean // 本轮是否有新容器被首次成功探索
 
 实现方式：`transfer` 命令将源仓库的**所有容器临时视为 INPUT**（无视其原本的 ioType），将目标仓库的**所有容器临时视为 OUTPUT**（无视其原本的 ioType），然后启动标准状态机流程。搬运完成后恢复原配置。（更泛化的阶段序列策略化为待定扩展，见 design-decisions.md §15.11。）
 
+实现机制（`TransferOverlay`）：向 WarehouseManager 压入一张源+目标仓库的**叠加视图**（overlay id = `<src>__to__<dst>`），叠加期间激活仓库切换为该视图、`save()` 静默跳过（不落盘）；`RUN_FINISHED` 时自动弹栈恢复原激活状态，`/wh transfer stop` 手动弹出；SUSPENDED → continue 期间叠加视图保持存活。
+
 其他多仓库场景（如仓库间平衡、管道式流转）暂不考虑，留待后续扩展。
 
 ## 5.7 范围选择
@@ -235,13 +244,15 @@ roundHadNewExplore: boolean // 本轮是否有新容器被首次成功探索
 /wh select pos1 [--look]        # 设置第一角点：默认取玩家站位；--look 取准星指向方块(player.pick)
 /wh select pos2 [--look]        # 设置第二角点（同上）
 /wh select expand <n> <dir>     # 向指定方向扩展选区
-/wh select show                 # 高亮显示当前选区
+/wh select show                 # 打印当前选区两角坐标与体积
 /wh select clear                # 清除选区
-/wh select set-type <INPUT|OUTPUT|TEMP|IGNORE>  # 批量设置框选内所有容器的类型
+/wh select set-type <INPUT|OUTPUT|TEMP|IGNORE>  # 批量设置框选内所有（已注册）容器的类型
 /wh select set-rule <rule-id>   # 批量关联规则
 /wh select set-cache <NONE|MEMORY|DISK>          # 批量设置缓存类型
 /wh select plan                 # 交由 AgentPlanner 自动配置（AgentPlanner 未内置实现，命令为 stub）
 ```
+
+> 批量操作只作用于**已注册**且位于选区内的容器（不做方块枚举发现）；选区的世界内可视化是常开的 Gizmo 选区盒（§5.8 + 快捷键 `wh.select.show` 切换），`select show` 仅输出坐标文本。区域扫描（枚举选区内方块生成新 ContainerInfo）未实现，见 todos。
 
 **标记模式（mark mode）**：
 
@@ -273,13 +284,12 @@ roundHadNewExplore: boolean // 本轮是否有新容器被首次成功探索
 | IGNORE_OUTLINED | 灰色 | IGNORE 容器轮廓          |
 | HAS_SPACE       | 青色 | 容器有空位（运行时临时） |
 | FULL            | 白色 | 容器已满（运行时临时）   |
-| UNKNOWN         | 紫色 | 未扫描过的容器           |
 
 **实现方式**：
 
-`HighlightManager`（core/highlight/）维护一个 `Map<CacheKey, HighlightType>`，引擎在每个 tick 更新此映射，渲染器读取并绘制（相对坐标转绝对后渲染）。渲染管线经 MC 26.1+ Gizmos API 提交（公开 API 收集窗口，见 ui-highlight.md §7；无需高亮专用 mixin）。
+`HighlightManager`（core/highlight/）每客户端 tick（及 `WAREHOUSE_CHANGED`）从**激活仓库配置**构建不可变快照 `List<Entry(AABB, HighlightType)>`（当前 (serverId, worldName, dim) 内、按 IOType 映射类型色，相对坐标经 anchor 解析为绝对 AABB）；渲染帧只读快照提交 Gizmos 管线（ui-highlight.md §7，无需高亮专用 mixin）。引擎不参与数据喂入——`HIGHLIGHT_CHANGED` 事件保留为未来运行时状态色的接入信号。
 
-（HAS_SPACE/FULL/UNKNOWN 三种状态色与运行时联动为待定扩展，见 design-decisions.md §15.11——定义了却不赋值等于没定义，要么实现要么不列。）
+（HAS_SPACE/FULL 两种状态色与运行时联动为待定扩展，见 design-decisions.md §15.11——定义了却不赋值等于没定义，要么实现要么不列。）
 
 ## 5.9 事件系统
 
@@ -297,7 +307,7 @@ public final class WarehouseEvents {
 }
 ```
 
-命令层订阅这些事件输出聊天栏文字；UI 层（ui-screens.md §6 HUD）同样订阅并渲染，插件可做统计/通知等扩展。
+命令层订阅这些事件输出聊天栏文字（`EventChatBridge`：ERROR/RUN_FINISHED 恒输出，TRANSPORT_STATE 仅 `debug=true` 时输出，避免状态机自循环刷屏）；UI 层（ui-screens.md §6 HUD）同样订阅并渲染，插件可做统计/通知等扩展。
 
 PROGRESS 采用两级粒度：**阶段级**状态（§5.1 TransportState）+ **动作级**描述（MOVING / SCANNING / PICKING / PUTTING），UI 可分别渲染。
 

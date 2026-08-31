@@ -97,7 +97,7 @@ interface ContainerInteraction {
 
 | 容器类型           | 检测方式                                                     | 特殊处理                   |
 | ------------------ | ------------------------------------------------------------ | -------------------------- |
-| 箱子/大箱子/陷阱箱 | matchesBlock 方块实体 + GenericContainerScreen，槽位数 27/54 | 大箱子自动检测双格并关联   |
+| 箱子/大箱子/陷阱箱 | matchesBlock 方块实体 + GenericContainerScreen（GENERIC_9x1..9x6 菜单族，槽位数取 9 的正倍数守卫——27/54 为常规值，主身份是 BE+菜单族+标题；大箱双格菜单标题放宽仅对 54 格） | 大箱子自动检测双格并关联   |
 | 木桶               | 方块实体识别 + 同屏类                                        | 27 格                      |
 | 漏斗/投掷器/发射器 | 方块实体 + 特定槽位数                                        | —                          |
 | 熔炉/高炉/烟熏炉   | FurnaceScreen                                                | 三格特殊（§8.2 角色表）    |
@@ -126,6 +126,8 @@ interface ContainerInteraction {
 | --------------------- | ----------------------- | -------------------------------------------------------------------------------------- |
 | `AbstractContainerScreen` | `onClose()` (HEAD)   | 容器 UI 关闭时自动刷新 ContainerMemory（校验会话绑定，data-model.md §3.8）             |
 | `ClientPacketListener` | `handleOpenScreen`     | 开屏包捕获：syncId 门控的打开确认（interaction-protocol.md §6.1）+ 标记模式两段式捕获 + 手动开箱刷新 F2 ② 信号（transport-engine.md §5.4） |
+| `ClientPacketListener` | `handleContainerClose` | 关屏包：丢弃未配对的开屏候选（防止残留界面误绑下一次会话）                             |
+| `ClientPacketListener` | `handleBlockEvent`     | 方块事件：箱子/末影箱/潜影盒开合动画信号——手动开箱刷新 F2 ③ 验证（transport-engine.md §5.4） |
 | `LevelRenderer`       | `renderLevel` (HEAD)    | per-frame Gizmos 收集窗口事件钩子（`UiHooks.firePerFrameWorld`）——UI 世界高亮渲染管线，见 ui-highlight.md §7 |
 | `MultiPlayerGameMode` | `useItemOn`             | 玩家右键点击方块捕获：手动开箱刷新 F2 ① 信号（transport-engine.md §5.4）               |
 

@@ -114,6 +114,8 @@ config/yuanlu-warehouse/
 
 全局配置分为 `ModConfig`（模组级）和 `ServerEntry`（服务器级）两部分。按服务器地址分层（键值即 serverId，world-identity.md §4.1），查找顺序：`servers[server].dimensions[dim]` → `servers[server]` 级默认 → 全局默认。worldName→worldId 映射独立存于 world-map.json（world-identity.md §4.3），不在此文件。
 
+**config.json v1→v2 迁移**（自动）：顶层 `worlds` 键改名为 `servers`（语义同步 world-identity.md 的 serverId 三层化），其余键不变。
+
 | 配置项                                   | 类型    | 默认值    | 说明                                                  |
 | ---------------------------------------- | ------- | --------- | ----------------------------------------------------- |
 | debug                                    | boolean | false     | 是否输出调试日志                                      |
