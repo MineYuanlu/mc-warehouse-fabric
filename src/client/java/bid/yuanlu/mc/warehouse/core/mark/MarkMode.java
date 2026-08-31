@@ -173,6 +173,13 @@ public final class MarkMode {
 		if (session == null) return;
 		if (containerId == lastOpenContainerId) return; // 同一次开屏的第二次派发
 		lastOpenContainerId = containerId;
+		if (pendingCapture != null) {
+			// §5.7 防内容混淆：已有等待采集时又开新容器，两者的等待一并取消
+			pendingCapture = null;
+			lastLookedAt = null;
+			say(Minecraft.getInstance().player, "commands.wh.mark.capture_cancelled", ChatFormatting.RED);
+			return;
+		}
 		Target target = lastLookedAt;
 		lastLookedAt = null; // 防内容混淆：一次开屏只消费一个指向
 		if (target == null) {

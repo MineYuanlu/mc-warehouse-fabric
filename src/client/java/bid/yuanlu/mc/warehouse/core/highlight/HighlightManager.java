@@ -23,16 +23,16 @@ import net.minecraft.client.Minecraft;
  * <p>
  * 颜色语义：INPUT 红 / OUTPUT 绿 / TEMP 黄 / IGNORE 灰。
  * HAS_SPACE/FULL 为引擎运行时临时态，待引擎接线后加入（PDD 旧项目教训：
- * 未赋值的状态不列——当前 {@link HighlightType} 仅含可赋值项）。
+ * 未赋值的状态不列——typeOf 只含可赋值项）。
  */
 public final class HighlightManager {
 
+	/** 配置驱动的容器高亮类型；引擎运行时状态色（HAS_SPACE/FULL）为 §15.11 待定项 */
 	public enum HighlightType {
 		INPUT_OUTLINED(0xFFFF5555),
 		OUTPUT_OUTLINED(0xFF55FF55),
 		TEMP_OUTLINED(0xFFFFFF55),
-		IGNORE_OUTLINED(0xFFAAAAAA),
-		UNKNOWN(0xFFC368F0);
+		IGNORE_OUTLINED(0xFFAAAAAA);
 
 		public final int strokeArgb;
 
@@ -86,7 +86,7 @@ public final class HighlightManager {
 		snapshot = List.copyOf(out);
 	}
 
-	private static @Nullable HighlightType typeOf(IOType ioType) {
+	private static HighlightType typeOf(IOType ioType) {
 		return switch (ioType) {
 			case INPUT -> HighlightType.INPUT_OUTLINED;
 			case OUTPUT -> HighlightType.OUTPUT_OUTLINED;

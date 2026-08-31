@@ -444,7 +444,9 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 
 	private void startNavigation(ContainerInfo c) {
 		activeNavigator = resolveNavigator();
-		Goal goal = new Goal(absPos(c), Math.max(2.5, config.reachLimit - 1), null);
+		// 到位判定距离与 PRECHECK 的 reachLimit 对齐：小于它会让 NoOp 在
+		// reachLimit-1~reachLimit 区间先报 ARRIVED 再被 REACH_FAILED 打断
+		Goal goal = new Goal(absPos(c), Math.max(2.5, config.reachLimit), null);
 		activeNavigator.start(goal);
 		navStarted = true;
 		fireProgress(MOVING_ACTION);
@@ -453,7 +455,7 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 	private PathStatus navigateStep(ContainerInfo c) {
 		if (!navStarted) {
 			startNavigation(c);
-			return PathStatus.MOVING; // NoOp 下一个 tick 即 ARRIVED
+			return PathStatus.MOVING;
 		}
 		Navigator nav = activeNavigator;
 		if (nav == null) return PathStatus.ARRIVED;
@@ -561,6 +563,7 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 			session.execute(plan.steps);
 			plannedExpected = plan.expectedMoved;
 			stageLog.addAll(plan.moves);
+			sessionPlanned.addAll(plan.moves); // §5.9 ITEM_MOVED：容器完成时逐条上报
 			fireProgress(plan.picking ? PICKING_ACTION : PUTTING_ACTION);
 		}
 
