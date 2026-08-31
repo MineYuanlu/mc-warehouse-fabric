@@ -107,6 +107,7 @@
   "commands.wh.config.unknown_key": "Unknown config key: %s",
   "commands.wh.config.bad_value": "Value \"%s\" is invalid for %s",
   "wh.nav.noop.goto": "Please walk to: %s %s (%s)",
+  "wh.nav.noop.unreachable": "Cannot reach %s %s (%s): current pathfinder only supports the current world/dimension, skipped",
   "wh.state.idle": "idle",
   "wh.state.ENTRY": "starting",
   "wh.state.GET_TEMP": "taking from TEMP",

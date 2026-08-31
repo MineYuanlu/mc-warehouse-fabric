@@ -31,13 +31,13 @@ Goal {
 }
 ```
 
-- **跨维度语义**：target 含 WorldDim，Navigator 必须自行处理维度切换（如经传送门）；NoOp 实现直接提示玩家自行前往
+- **跨维度语义**：target 含 WorldDim，Navigator 必须自行处理维度切换（如经传送门）；能否前往各世界/维度是 Navigator 自身的能力——引擎不做整体限制，去不了的返回 FAILED、重试耗尽后由引擎跳过该容器
 - **重试协议归引擎**：FAILED 后由引擎决定重试（同一 Goal 最多 navRetryMax 次，每次重新调用 start()）；Navigator 不做内部重试、不持有目标队列——避免「控制器索引 ↔ 执行器内部队列」双账本脱钩（design-decisions.md §15.10）
 
 ## 7.2 默认实现： NoOpNavigator
 
-- `start()`: 输出 i18n 提示「请前往: (worldId, dim, x, y, z)」，返回 `PathResult(success=true)`
-- `tick()`: 检测玩家位置，同维度且距目标 < acceptableDistance 返回 `ARRIVED`，否则返回 `MOVING`
+- `start()`: 输出 i18n 提示「请前往: (worldId, dim, x, y, z)」，返回 `PathResult(success=true)`；目标不可达时提示「无法前往」（按目标去重，重试不重复报）
+- `tick()`: 检测玩家位置，**同世界且同维度**、距目标 < acceptableDistance 返回 `ARRIVED`，否则返回 `MOVING`；目标在其他世界/维度时直接返回 `FAILED`（能力边界 = 当前世界 + 当前维度）
 - 由玩家自行前往目标，引擎不做任何自动移动
 
 ## 7.3 扩展寻路器（未内置，经 Registry 注册）

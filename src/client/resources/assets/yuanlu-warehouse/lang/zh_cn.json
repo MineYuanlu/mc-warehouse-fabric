@@ -107,6 +107,7 @@
   "commands.wh.config.unknown_key": "未知配置项：%s",
   "commands.wh.config.bad_value": "值“%s”对 %s 无效",
   "wh.nav.noop.goto": "请前往：%s %s (%s)",
+  "wh.nav.noop.unreachable": "无法前往 %s %s (%s)：当前寻路器仅支持当前世界/维度，已跳过",
   "wh.state.idle": "空闲",
   "wh.state.ENTRY": "启动中",
   "wh.state.GET_TEMP": "从 TEMP 取出",
