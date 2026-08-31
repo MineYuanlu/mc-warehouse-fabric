@@ -53,7 +53,7 @@ stateDiagram-v2
 
     DONE --> [*] : 搬运完成（一次性，输出 RunReport）
 
-    ENTRY --> SUSPENDED : 异常（容器打不开/消失/寻路失败）
+    ENTRY --> SUSPENDED : 异常（容器打不开/消失）
     GET_TEMP --> SUSPENDED : 异常
     GET_INPUT --> SUSPENDED : 异常
     PUT_OUTPUT --> SUSPENDED : 异常
@@ -88,6 +88,8 @@ stateDiagram-v2
 **访问队列（基于缓存的阶段预筛）**：
 
 每个取出/放入阶段开始时，先基于**缓存**构建本阶段的访问队列（不预先开箱扫描）：
+
+- 队列包含激活仓库中该 IO 类型的**全部容器**（跨世界/跨维度一律不做过滤）——激活仓库后应能访问所有世界的所有维度，能否前往是各 Navigator 自身的能力（navigation.md §7），去不了的经 FAILED 重试耗尽后跳过并报错；
 
 - 未探索过的容器（探索本身即收益）；
 - 缓存显示「有可操作内容」的容器——取出阶段=存在可取出物品；放入阶段=存在可放入空间。
@@ -194,7 +196,7 @@ roundHadNewExplore: boolean // 本轮是否有新容器被首次成功探索
 | 异常               | 触发条件                                            | 处理方式                             |
 | ------------------ | --------------------------------------------------- | ------------------------------------ |
 | 容器消失           | 坐标处无方块或方块实体类型与预期不符                | 暂停，提示玩家                       |
-| 寻路失败           | Navigator FAILED 且重试次数耗尽（navigation.md §7.1）| 暂停，提示玩家                       |
+| 寻路失败           | Navigator FAILED 且重试次数耗尽（navigation.md §7.1）| 跳过该容器并报错，继续整体搬运 |
 | 容器打不开         | WAIT_SCREEN 超时（interaction-protocol.md §6.1）    | 暂停，提示玩家                       |
 | UI 身份不匹配      | Screen 标题/槽位数/方块实体与 Detector 判定不符     | 暂停，提示玩家                       |
 | 操作超时           | click 后 confirmTimeoutTicks 内无服务端对账（interaction-protocol.md §6.2） | 失效该容器缓存 + 暂停 |

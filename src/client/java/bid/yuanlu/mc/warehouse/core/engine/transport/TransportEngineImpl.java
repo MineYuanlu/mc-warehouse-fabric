@@ -116,6 +116,9 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 	private int queueIdx;
 	@Nullable
 	private Navigator activeNavigator;
+	/** 当前 goal 对应的容器；换容器须重新 startNavigation，否则 navigator 仍按旧目标判到位 */
+	@Nullable
+	private ContainerInfo navTarget;
 	private int navRetries;
 	private boolean navStarted;
 
@@ -309,8 +312,14 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 						startNavigation(c);
 						continue;
 					}
-					suspend(c, "wh.error.nav_failed");
-					return;
+					// 重试耗尽：跳过该容器并报错，不暂停整体搬运——
+					// 能否前往是 Navigator 的能力问题（§7.1，如 NoOp 去不了其他世界/维度）
+					LOGGER.warn("nav failed after {} retries, skip container at {}", config.navRetryMax,
+							c.canonicalPos());
+					skippedKeys.add(key);
+					WarehouseEvents.ERROR.invoker().onError(posString(c), "wh.error.nav_failed");
+					queueIdx++;
+					continue;
 				}
 				case ARRIVED -> {
 					beginOpen(c);
@@ -338,7 +347,8 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 		List<ContainerInfo> q = new ArrayList<>();
 		for (ContainerInfo c : wh.containers) {
 			if (c.ioType != io) continue;
-			if (!sameDimHere(c.canonicalPos())) continue;
+			// 不做世界/维度过滤（§5.3 底线）：激活仓库后全部容器进队，
+			// 能否前往是 Navigator 自己的能力（去不了的 FAILED 重试耗尽后跳过并报错）
 			q.add(c);
 		}
 		// 缓存预筛（§5.3 访问队列）：未探索一律进队；已探索按缓存口径剔除
@@ -407,7 +417,6 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 		if (wh == null) return false;
 		for (ContainerInfo c : wh.containers) {
 			if (c.ioType != io) continue;
-			if (!sameDimHere(c.canonicalPos())) continue; // 出口/聚合口径与访问队列一致（仅本维度）
 			if (skippedKeys.contains(keyOf(c))) continue; // 已跳过不算未知
 			if (!cache.isExplored(keyOf(c), c.cacheType)) return true;
 		}
@@ -419,7 +428,7 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 		if (wh == null) return false;
 		for (ContainerInfo c : wh.containers) {
 			if (c.ioType != io) continue;
-			if (!sameDimHere(c.canonicalPos())) continue; // 出口/聚合口径与访问队列一致（仅本维度）
+			if (skippedKeys.contains(keyOf(c))) continue; // 已跳过不算可确认空间
 			var mem = cache.getValid(keyOf(c), c.cacheType);
 			if (mem != null && hasAnyFreeSpace(mem.snapshot())) return true;
 		}
@@ -443,7 +452,9 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 	}
 
 	private void startNavigation(ContainerInfo c) {
+		if (activeNavigator != null) activeNavigator.cancel();
 		activeNavigator = resolveNavigator();
+		navTarget = c;
 		// 到位判定距离与 PRECHECK 的 reachLimit 对齐：小于它会让 NoOp 在
 		// reachLimit-1~reachLimit 区间先报 ARRIVED 再被 REACH_FAILED 打断
 		Goal goal = new Goal(absPos(c), Math.max(2.5, config.reachLimit), null);
@@ -453,7 +464,8 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 	}
 
 	private PathStatus navigateStep(ContainerInfo c) {
-		if (!navStarted) {
+		if (!navStarted || navTarget != c) {
+			navRetries = 0; // 新目标重新计重试
 			startNavigation(c);
 			return PathStatus.MOVING;
 		}
@@ -474,10 +486,6 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 	private static String currentDimId() {
 		var level = Minecraft.getInstance().level;
 		return level == null ? "unknown" : level.dimension().identifier().toString();
-	}
-
-	private static boolean sameDimHere(WorldDimPos pos) {
-		return currentDimId().equals(pos.dim());
 	}
 
 	// ---- 开箱与会话 ----
@@ -680,7 +688,7 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 	private boolean hasUnexploredOutput(Warehouse wh) {
 		for (ContainerInfo c : wh.containers) {
 			if (c.ioType != IOType.OUTPUT) continue;
-			if (!sameDimHere(c.canonicalPos())) continue; // 跨维度容器不在本轮可达范围
+			if (skippedKeys.contains(keyOf(c))) continue; // 已跳过不算未知
 			if (!cache.isExplored(keyOf(c), c.cacheType)) return true;
 		}
 		return false;
@@ -917,7 +925,7 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 		if (wh == null) return true;
 		for (ContainerInfo c : wh.containers) {
 			if (c.ioType != io) continue;
-			if (!sameDimHere(c.canonicalPos())) continue; // 出口/聚合口径与访问队列一致（仅本维度）
+			if (skippedKeys.contains(keyOf(c))) continue; // 已跳过不阻塞「全满」判定
 			var mem = cache.getValid(keyOf(c), c.cacheType);
 			if (mem == null) return false; // 未探索视为不满足
 			if (hasAnyFreeSpace(mem.snapshot())) {
@@ -963,7 +971,7 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 		boolean any = false;
 		for (ContainerInfo c : wh.containers) {
 			if (c.ioType != io) continue;
-			if (!sameDimHere(c.canonicalPos())) continue; // 出口/聚合口径与访问队列一致（仅本维度）
+			if (skippedKeys.contains(keyOf(c))) continue; // 已跳过不阻塞「全空」判定
 			any = true;
 			var mem = cache.getValid(keyOf(c), c.cacheType);
 			if (mem == null) return false; // 未探索→不满足
@@ -988,6 +996,7 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 		pack.aggregate().forEach((k, v) -> maxed.put(k.copyWithCount(k.getMaxStackSize()), v));
 		for (ContainerInfo c : wh.containers) {
 			if (c.ioType != IOType.OUTPUT && c.ioType != IOType.TEMP) continue;
+			if (skippedKeys.contains(keyOf(c))) continue; // 已跳过不算还能收下
 			var mem = cache.getValid(keyOf(c), c.cacheType);
 			if (mem == null) return true; // 未探索还有可能收下
 			var demands = RuleApplicator.planPut(c, resolveRules(wh, c), mem.snapshot(), maxed);
@@ -1003,6 +1012,7 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 		state = s;
 		navRetries = 0;
 		navStarted = false;
+		navTarget = null;
 		switch (s) {
 			case GET_TEMP -> prepareQueue(IOType.TEMP, true);
 			case GET_INPUT -> prepareQueue(IOType.INPUT, true);
@@ -1043,6 +1053,7 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 
 	private void discardSessionQuietly() {
 		ContainerProtocol.get().cancel("discard");
+		if (activeNavigator != null) activeNavigator.cancel();
 		sessionPlanned.clear();
 		plannedExpected = 0;
 	}
@@ -1066,6 +1077,7 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 		sessionInfo = null;
 		sessionExploredNow = false;
 		navStarted = false;
+		navTarget = null;
 		navRetries = 0;
 		pathfinderOverride = null;
 		cache.beginRound();
@@ -1100,16 +1112,26 @@ public final class TransportEngineImpl implements bid.yuanlu.mc.warehouse.api.tr
 
 	/** 相对坐标→绝对坐标（有 anchor 时）；无解析能力时原样返回 */
 	private WorldDimPos absPos(ContainerInfo c) {
+		WorldDimPos abs = absPosOrNull(c);
+		return abs != null ? abs : c.canonicalPos();
+	}
+
+	/**
+	 * 相对坐标→绝对坐标；当前会话解析不出（world 缺失/无对应 anchor）返回 null。
+	 * 解析不出时 {@link #absPos} 回退原相对坐标原样传入 Goal——是否可达由
+	 * Navigator 按 world/dim 自行判定（NoOp 直接 FAILED），引擎不做整体限制。
+	 */
+	@Nullable
+	private WorldDimPos absPosOrNull(ContainerInfo c) {
 		Warehouse wh = manager.active();
-		if (wh == null) return c.canonicalPos();
+		if (wh == null) return null;
 		String serverId;
 		try {
 			serverId = bid.yuanlu.mc.warehouse.core.world.WorldSessionTracker.get().currentServerId();
 		} catch (IllegalStateException e) {
-			return c.canonicalPos();
+			return null;
 		}
-		var abs = wh.resolveAbsolute(serverId, c.canonicalPos());
-		return abs != null ? abs : c.canonicalPos();
+		return wh.resolveAbsolute(serverId, c.canonicalPos());
 	}
 
 	private static String posString(WorldDimPos p) {
